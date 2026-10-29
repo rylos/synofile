@@ -364,4 +364,6 @@ export default {
   "{op} di «{x}»": "{op} de « {x} »",
   "«3 h fa» invece di «29 ott 21:45»": "« il y a 3 h » au lieu de « 29 oct. 21:45 »",
   "«Mantieni entrambi» salva il nuovo come {n}": "« Conserver les deux » enregistre le nouveau sous {n}",
+  "Riduci": "Zoom arrière", "Ingrandisci": "Zoom avant", "Adatta alla finestra": "Ajuster à la fenêtre",
+  "Dimensione totale": "Taille totale",
 };

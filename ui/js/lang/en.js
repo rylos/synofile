@@ -127,4 +127,6 @@ export default {
   "Estrazione completata": "Extraction complete", "Estrazione": "Extraction", "Zip (deflate)": "Zip (deflate)",
   "Zip senza compressione": "Zip, no compression", "L'archivio è protetto da password": "The archive is password-protected",
   "Password": "Password", "Estrai": "Extract",
+  "Riduci": "Zoom out", "Ingrandisci": "Zoom in", "Adatta alla finestra": "Fit to window",
+  "Dimensione totale": "Total size",
 };

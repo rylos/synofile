@@ -364,4 +364,6 @@ export default {
   "{op} di «{x}»": "{op} van ‘{x}’",
   "«3 h fa» invece di «29 ott 21:45»": "‘3 u geleden’ in plaats van ‘29 okt 21:45’",
   "«Mantieni entrambi» salva il nuovo come {n}": "‘Beide behouden’ slaat het nieuwe op als {n}",
+  "Riduci": "Uitzoomen", "Ingrandisci": "Inzoomen", "Adatta alla finestra": "Aanpassen aan venster",
+  "Dimensione totale": "Totale grootte",
 };

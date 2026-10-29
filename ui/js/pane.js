@@ -749,11 +749,21 @@ export class Pane {
     }
     if (list.length > 1) {
       const files = list.filter((e) => !isDirLike(e));
-      const bytes = files.reduce((a, e) => a + e.size, 0);
+      const dirs = list.filter(isDirLike);
+      // Folder sizes join the total once computed (Calcola, or earlier).
+      const known = dirs.map((e) => this.dirSizes.get(e.path)).filter(Boolean);
+      const done = known.length === dirs.length;
+      const bytes = files.reduce((a, e) => a + e.size, 0) + known.reduce((a, u) => a + u.bytes, 0);
+      const partial = known.some((u) => u.partial);
+      const inside = known.reduce((a, u) => [a[0] + u.files, a[1] + Math.max(0, u.dirs - 1)], [0, 0]);
       this.infoEl.innerHTML = `<div class="preview-box">${svg("copy", "i")}</div><h3>${count(list.length, "elemento selezionato", "elementi selezionati", int)}</h3>
-        <dl class="facts"><dt>${t("File")}</dt><dd>${int(files.length)}</dd><dt>${t("Cartelle")}</dt><dd>${int(list.length - files.length)}</dd><dt>${t("Dimensione file")}</dt><dd>${size(bytes)}</dd></dl>
-        <div class="actions"><button class="btn small calc">${t("Calcola dimensione totale")}</button></div>`;
-      $(".calc", this.infoEl).onclick = () => this.app.computeSizes(this, list);
+        <dl class="facts"><dt>${t("File")}</dt><dd>${int(files.length)}</dd><dt>${t("Cartelle")}</dt><dd>${int(dirs.length)}</dd>
+        ${dirs.length && done
+          ? `<dt>${t("Dimensione totale")}</dt><dd>${size(bytes)}${partial ? "+" : ""} <span style="color:var(--faint)">(${int(bytes)} B)</span></dd>
+             <dt>${t("Contenuto")}</dt><dd>${count(files.length + inside[0], "file", "file", int)}, ${count(inside[1], "cartella", "cartelle", int)}</dd>`
+          : `<dt>${t("Dimensione file")}</dt><dd>${size(bytes)}${known.length ? "+" : ""}</dd>`}</dl>
+        ${dirs.length && !done ? `<div class="actions"><button class="btn small calc">${t("Calcola dimensione totale")}</button></div>` : ""}`;
+      $(".calc", this.infoEl)?.addEventListener("click", () => this.app.computeSizes(this, list));
       return;
     }
     const e = list[0];

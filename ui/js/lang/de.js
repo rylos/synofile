@@ -364,4 +364,6 @@ export default {
   "{op} di «{x}»": "{op}: „{x}“",
   "«3 h fa» invece di «29 ott 21:45»": "„vor 3 Std.“ statt „29. Okt. 21:45“",
   "«Mantieni entrambi» salva il nuovo come {n}": "„Beide behalten“ speichert das neue als {n}",
+  "Riduci": "Verkleinern", "Ingrandisci": "Vergrößern", "Adatta alla finestra": "An Fenster anpassen",
+  "Dimensione totale": "Gesamtgröße",
 };

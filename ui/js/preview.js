@@ -7,6 +7,7 @@ import { esc, size, dateTime } from "./format.js";
 import { svg, iconHTML, kindLabel, previewKind } from "./icons.js";
 import { h, $ } from "./ui.js";
 import { isHeic, heicURL } from "./heic.js";
+import { imageViewer } from "./zoom.js";
 
 export function quickLook(pane, onDownload) {
   const files = pane.visible.filter((e) => e.kind !== "d" && !e.link_dir);
@@ -15,6 +16,12 @@ export function quickLook(pane, onDownload) {
   let index = Math.max(0, files.indexOf(start));
   const dlg = h(`<dialog class="quick"><div class="ql">
     <div class="ql-head"><div class="t"><b></b><small></small></div>
+      <div class="ql-zoom" hidden>
+        <button class="icon-btn zout" title="${t("Riduci")} (−)">${svg("zoomOut")}</button>
+        <button class="pct" title="100% (1)"></button>
+        <button class="icon-btn zin" title="${t("Ingrandisci")} (+)">${svg("zoomIn")}</button>
+        <button class="icon-btn zfit" title="${t("Adatta alla finestra")} (0)">${svg("fit")}</button>
+      </div>
       <button class="icon-btn dl" title="${t("Scarica")}">${svg("download")}</button>
       <button class="icon-btn open" title="${t("Apri in una nuova scheda del browser")}">${svg("external")}</button>
       <button class="icon-btn close" title="${t("Chiudi")} (Esc)">${svg("close")}</button></div>
@@ -23,6 +30,17 @@ export function quickLook(pane, onDownload) {
   </div></dialog>`);
   document.body.append(dlg);
   const body = $(".ql-body", dlg);
+  const zoomBar = $(".ql-zoom", dlg);
+  let viewer = null;
+  // Images go on a stage the viewer can zoom and pan.
+  const stage = (url) => {
+    const el = h(`<div class="ql-stage"><img alt=""${url ? ` src="${url}"` : ""}></div>`);
+    body.append(el);
+    const img = el.querySelector("img");
+    viewer = imageViewer(el, img, (scale) => ($(".pct", zoomBar).textContent = `${Math.round(scale * 100)}%`));
+    zoomBar.hidden = false;
+    return img;
+  };
   const show = async () => {
     const e = files[index];
     pane.selectPath(e.path);
@@ -32,23 +50,26 @@ export function quickLook(pane, onDownload) {
     $(".next", dlg).hidden = index === files.length - 1;
     const src = api.view(e.path);
     const kind = previewKind(e);
+    viewer?.destroy();
+    viewer = null;
+    zoomBar.hidden = true;
     body.innerHTML = "";
     if (kind === "image" && isHeic(e.name)) {
       // Synology's thumbnail, if any, while the full photo decodes.
-      body.append(h(`<img alt=""${e.thumb ? ` src="${api.thumb(e.path, true)}"` : ""}>`));
+      const img = stage(e.thumb ? api.thumb(e.path, true) : "");
       if (!e.thumb) body.append(h(`<div class="ql-wait">${t("Caricamento…")}</div>`));
       try {
-        const u = await heicURL(e, 2560);
+        const u = await heicURL(e, 4096);
         if (files[index] !== e) return;
         body.querySelector(".ql-wait")?.remove();
-        body.querySelector("img").src = u;
+        img.src = u;
       } catch {
         if (files[index] === e && !e.thumb) nothing(e);
       }
     } else if (kind === "image") {
-      body.append(h(`<img src="${e.thumb && /\.(heic|heif)$/i.test(e.name) ? api.thumb(e.path, true) : src}" alt="">`));
-      body.querySelector("img").onerror = () => {
-        if (e.thumb) body.querySelector("img").src = api.thumb(e.path, true);
+      const img = stage(src);
+      img.onerror = () => {
+        if (e.thumb && !img.src.includes("thumb")) img.src = api.thumb(e.path, true);
         else nothing(e);
       };
     } else if (kind === "video") {
@@ -73,6 +94,9 @@ export function quickLook(pane, onDownload) {
     } else nothing(e);
   };
   const nothing = (e, why) => {
+    viewer?.destroy();
+    viewer = null;
+    zoomBar.hidden = true;
     body.innerHTML = `<div class="nopreview">${iconHTML(e, "keep")}<div>${esc(why || t("Nessuna anteprima per questo tipo di file"))}</div></div>`;
   };
   const move = (d) => {
@@ -85,18 +109,27 @@ export function quickLook(pane, onDownload) {
   $(".prev", dlg).onclick = () => move(-1);
   $(".next", dlg).onclick = () => move(1);
   $(".close", dlg).onclick = () => dlg.close();
+  $(".zin", dlg).onclick = () => viewer?.zoomIn();
+  $(".zout", dlg).onclick = () => viewer?.zoomOut();
+  $(".zfit", dlg).onclick = () => viewer?.fit();
+  $(".pct", dlg).onclick = () => viewer?.actual();
   $(".dl", dlg).onclick = () => onDownload([files[index]]);
   $(".open", dlg).onclick = () => open(api.view(files[index].path), "_blank");
   dlg.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "ArrowRight" || e.key === "ArrowDown") move(1), e.preventDefault();
     else if (e.key === "ArrowLeft" || e.key === "ArrowUp") move(-1), e.preventDefault();
+    else if (viewer && (e.key === "+" || e.key === "=")) viewer.zoomIn(), e.preventDefault();
+    else if (viewer && (e.key === "-" || e.key === "_")) viewer.zoomOut(), e.preventDefault();
+    else if (viewer && e.key === "0") viewer.fit(), e.preventDefault();
+    else if (viewer && e.key === "1") viewer.actual(), e.preventDefault();
     else if (e.key === " " && e.target.tagName !== "VIDEO" && e.target.tagName !== "AUDIO") dlg.close(), e.preventDefault();
   });
   dlg.addEventListener("click", (e) => {
-    if (e.target === body) dlg.close();
+    if (e.target === body || (e.target.classList.contains("ql-stage") && !e.target.classList.contains("pannable"))) dlg.close();
   });
   dlg.addEventListener("close", () => {
+    viewer?.destroy();
     body.innerHTML = "";
     dlg.remove();
     pane.focus();
