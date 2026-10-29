@@ -101,11 +101,13 @@ export function closeMenu() {
 
 // ---- dialogs ----
 export function dialog(html, { wide = false, cls = "" } = {}) {
-  const dlg = h(`<dialog class="dlg ${wide ? "wide" : ""} ${cls}">${html}</dialog>`);
+  const dlg = h(`<dialog class="dlg ${wide ? "wide" : ""} ${cls}" tabindex="-1">${html}</dialog>`);
   document.body.append(dlg);
   dlg.addEventListener("close", () => setTimeout(() => dlg.remove(), 50));
   dlg.addEventListener("keydown", (e) => e.stopPropagation());
   dlg.showModal();
+  // no button should look pressed on opening; callers focus their fields
+  dlg.focus();
   return dlg;
 }
 

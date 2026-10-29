@@ -453,7 +453,7 @@ dialog.dlg.wide { max-width: min(94vw, 760px); }
 
 /* settings */
 .settings { display: flex; min-height: 430px; }
-.settings nav { width: 170px; border-right: 1px solid var(--border); padding: 8px; flex: none; }
+.settings nav { width: 170px; border-right: 1px solid var(--border); padding: 8px; flex: none; display: flex; flex-direction: column; }
 .settings nav button { display: flex; width: 100%; gap: 8px; align-items: center; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; text-align: left; color: var(--muted); }
 .settings nav button.on { background: var(--accent-soft); color: var(--text); }
 .settings section { flex: 1; padding: 4px 18px 10px; overflow: auto; max-height: 64vh; }
@@ -694,3 +694,9 @@ dialog:focus-visible, .scroller:focus-visible { outline: none; }
 .workspace.split .filter-box { width: 130px; }
 .workspace.split .filter-box .mode, .workspace.split .toolbar .sep { display: none; }
 .workspace.split .crumbs { min-width: 120px; }
+
+.settings .credits { margin-top: auto; padding: 16px 6px 2px; color: var(--muted); font-size: 11px; opacity: .75; text-align: center; line-height: 1.6; }
+.settings .credits .author { display: inline-flex; align-items: center; gap: 6px; }
+.settings .credits a { display: inline-flex; color: inherit; }
+.settings .credits a:hover { color: var(--text); }
+.settings .credits svg { width: 13px; height: 13px; fill: currentColor; }

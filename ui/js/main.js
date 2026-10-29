@@ -946,6 +946,7 @@ class App {
       const me = await api.whoami();
       if (this.staleBuild(me.asset)) return;
       this.user = me.user;
+      this.version = me.version;
       if (!me.setup) this.banner(`${t("Permessi del pacchetto da attivare, una volta dopo ogni installazione o aggiornamento:")} <code>sudo /var/packages/synofile/target/bin/synofile setup</code> ${t("poi riavvia SynoFile dal Centro pacchetti.")}`, true);
       else if (!me.daemon) this.banner(t("Il servizio dei trasferimenti non è attivo: avvia SynoFile dal Centro pacchetti."));
     } catch (e) {
