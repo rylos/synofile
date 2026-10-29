@@ -263,7 +263,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .view { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; outline: none; }
 .list-head {
   flex: none; display: grid; align-items: center;
-  height: 28px; padding: 0 12px; gap: 12px;
+  /* the rows' own box: 4px margin, 1px border, 12px padding; the scrollbar is added on the right */
+  height: 28px; padding: 0 17px; gap: 12px;
   border-bottom: 1px solid var(--border); color: var(--faint);
   font-size: 11px; text-transform: uppercase; letter-spacing: .05em; user-select: none;
 }

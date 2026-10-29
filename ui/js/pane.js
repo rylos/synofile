@@ -537,6 +537,7 @@ export class Pane {
   }
 
   renderHead() {
+    this.barWidth = null;
     const grid = this.view === "list";
     this.headEl.hidden = !grid;
     if (!grid) return;
@@ -575,6 +576,12 @@ export class Pane {
     } else if (empty) empty.remove();
 
     if (this.view === "grid") return this.paintGrid(full);
+    // the header stops where the rows do: before the scrollbar
+    const bar = s.offsetWidth - s.clientWidth;
+    if (bar !== this.barWidth) {
+      this.barWidth = bar;
+      this.headEl.style.paddingRight = `${17 + bar}px`;
+    }
     const rh = this.rowHeight();
     this.rowsEl.className = "rows";
     this.rowsEl.style.height = list.length * rh + "px";
