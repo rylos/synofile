@@ -322,14 +322,15 @@ class App {
   renderSidebar() {
     const el = $("#sidebar");
     const cur = this.pane?.path || "/";
-    const item = (path, name, gl, sub = "", extra = "") => {
+    const item = (path, name, gl, sub = "", extra = "", fav = null) => {
       const active = cur === path || (path !== "/" && cur.startsWith(path + "/") && !extra.includes("nested"));
-      return `<button class="side-item ${active ? "active" : ""}" data-path="${esc(path)}"><i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
+      const favAttrs = fav === null ? "" : ` data-fav="${fav}" draggable="true"`;
+      return `<button class="side-item ${active ? "active" : ""}" data-path="${esc(path)}"${favAttrs}><i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
     };
     let html = "";
     const favs = prefs.favorites || [];
-    html += `<div class="side-title">${t("Preferiti")}</div>`;
-    if (favs.length) html += favs.map((f) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), "", "nested")).join("");
+    html += `<div class="side-title fav-title">${t("Preferiti")}</div>`;
+    if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), "", "nested", i)).join("");
     else html += `<div class="hint" style="padding:2px 10px 6px">${t("Ctrl+D aggiunge la cartella aperta")}</div>`;
     const volumes = new Map();
     for (const s of this.shares) {
@@ -354,16 +355,80 @@ class App {
       b.onauxclick = (e) => e.button === 1 && this.newTab(b.dataset.path, false);
       b.oncontextmenu = (e) => {
         e.preventDefault();
-        this.sideMenu(b.dataset.path, e.clientX, e.clientY);
+        this.sideMenu(b.dataset.path, e.clientX, e.clientY, b.dataset.fav === undefined ? null : +b.dataset.fav);
       };
       this.makeDropTarget(b, () => b.dataset.path);
     });
+    this.bindFavoriteDrag(el);
   }
 
-  sideMenu(path, x, y) {
+  /** Favourites reorder by dragging; a folder dropped on their title becomes one. */
+  bindFavoriteDrag(el) {
+    const FAV = "application/x-synofile-fav";
+    const clear = () => el.querySelectorAll(".fav-before, .fav-after").forEach((x) => x.classList.remove("fav-before", "fav-after"));
+    el.querySelectorAll("[data-fav]").forEach((b) => {
+      b.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData(FAV, b.dataset.fav);
+        e.dataTransfer.effectAllowed = "move";
+      });
+      b.addEventListener("dragover", (e) => {
+        if (!e.dataTransfer.types.includes(FAV)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const r = b.getBoundingClientRect();
+        clear();
+        b.classList.add(e.clientY < r.top + r.height / 2 ? "fav-before" : "fav-after");
+      });
+      b.addEventListener("dragleave", () => b.classList.remove("fav-before", "fav-after"));
+      b.addEventListener("drop", (e) => {
+        if (!e.dataTransfer.types.includes(FAV)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const after = b.classList.contains("fav-after");
+        clear();
+        const from = +e.dataTransfer.getData(FAV);
+        let to = +b.dataset.fav + (after ? 1 : 0);
+        if (from < to) to--;
+        this.moveFavorite(from, to);
+      });
+      b.addEventListener("dragend", clear);
+    });
+    const title = el.querySelector(".fav-title");
+    title.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer.types.includes("application/x-synofile")) return;
+      e.preventDefault();
+      title.classList.add("drop");
+    });
+    title.addEventListener("dragleave", () => title.classList.remove("drop"));
+    title.addEventListener("drop", (e) => {
+      title.classList.remove("drop");
+      const raw = e.dataTransfer.getData("application/x-synofile");
+      if (!raw) return;
+      e.preventDefault();
+      const known = new Set((prefs.favorites || []).map((f) => f.path));
+      const dirs = JSON.parse(raw).paths.filter((p) => !known.has(p) && this.allPanes().some((pane) => pane.visible.some((x) => x.path === p && isDirLike(x))));
+      if (dirs.length) save({ favorites: [...(prefs.favorites || []), ...dirs.map((p) => ({ path: p, name: baseName(p) }))] });
+    });
+  }
+
+  moveFavorite(from, to) {
+    const favs = [...(prefs.favorites || [])];
+    if (from < 0 || from >= favs.length) return;
+    to = Math.max(0, Math.min(favs.length - 1, to));
+    if (from === to) return;
+    const [moved] = favs.splice(from, 1);
+    favs.splice(to, 0, moved);
+    save({ favorites: favs });
+  }
+
+  sideMenu(path, x, y, favIndex = null) {
     const fav = (prefs.favorites || []).some((f) => f.path === path);
     const share = this.shares.find((s) => "/" + s.name === path);
+    const last = (prefs.favorites || []).length - 1;
     openMenu(x, y, [
+      favIndex !== null && favIndex > 0 && { label: t("Sposta su"), icon: "up", action: () => this.moveFavorite(favIndex, favIndex - 1) },
+      favIndex !== null && favIndex < last && { label: t("Sposta giù"), icon: "up", action: () => this.moveFavorite(favIndex, favIndex + 1) },
+      favIndex !== null && (favIndex > 0 || favIndex < last) && "-",
       { label: t("Apri"), icon: "forward", action: () => this.pane.go(path) },
       { label: t("Apri in una nuova scheda"), icon: "plus", action: () => this.newTab(path) },
       this.isSplit() && { label: t("Apri nell'altro pannello"), icon: "split", action: () => this.other().go(path) },

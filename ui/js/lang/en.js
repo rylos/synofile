@@ -1,5 +1,7 @@
 // English for every Italian string of the interface (see i18n.js).
 export default {
+  "Sposta su": "Move up",
+  "Sposta giù": "Move down",
   // common
   "OK": "OK", "Annulla": "Cancel", "Chiudi": "Close", "Fatto": "Done", "Crea": "Create", "Apri": "Open", "Dettagli": "Details",
   "Nome": "Name", "Nuovo nome": "New name", "Nome non valido": "Invalid name", "di": "of", "NAS": "NAS", "Volume": "Volume",

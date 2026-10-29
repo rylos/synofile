@@ -1,5 +1,7 @@
 // nl: every Italian string of the interface (see ui/js/i18n.js). Started from the English.
 export default {
+  "Sposta su": "Omhoog",
+  "Sposta giù": "Omlaag",
   "Passa al tema scuro": "Naar het donkere thema",
   "Passa al tema chiaro": "Naar het lichte thema",
   "file|pl": "bestanden",

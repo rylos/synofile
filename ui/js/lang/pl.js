@@ -1,5 +1,7 @@
 // pl: every Italian string of the interface (see ui/js/i18n.js). Started from the English.
 export default {
+  "Sposta su": "Przenieś w górę",
+  "Sposta giù": "Przenieś w dół",
   "Passa al tema scuro": "Przełącz na motyw ciemny",
   "Passa al tema chiaro": "Przełącz na motyw jasny",
   "file|pl": {"few": "pliki", "many": "plików", "other": "pliku"},

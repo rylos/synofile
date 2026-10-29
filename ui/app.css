@@ -199,7 +199,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
   display: flex; align-items: center; gap: 9px;
   width: 100%; text-align: left; position: relative;
   padding: 6px 10px; border: 0; border-radius: 7px;
-  background: transparent; cursor: pointer; color: var(--text);
+  background: transparent; cursor: default; color: var(--text);
 }
 .side-item:hover { background: var(--surface-2); }
 .side-item.active { background: var(--accent-soft); }
@@ -701,3 +701,7 @@ dialog:focus-visible, .scroller:focus-visible { outline: none; }
 .settings .credits a { display: inline-flex; color: inherit; }
 .settings .credits a:hover { color: var(--text); }
 .settings .credits svg { width: 13px; height: 13px; fill: currentColor; }
+
+.side-item.fav-before { box-shadow: inset 0 2px 0 var(--accent); }
+.side-item.fav-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.side-title.drop { color: var(--accent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 6px; }

@@ -1,5 +1,7 @@
 // fr: every Italian string of the interface (see ui/js/i18n.js). Started from the English.
 export default {
+  "Sposta su": "Monter",
+  "Sposta giù": "Descendre",
   "Passa al tema scuro": "Passer au thème sombre",
   "Passa al tema chiaro": "Passer au thème clair",
   "file|pl": "fichiers",
