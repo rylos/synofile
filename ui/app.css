@@ -106,7 +106,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .icon-btn {
   width: 30px; height: 30px; flex: none;
   display: inline-grid; place-items: center;
-  border: 1px solid transparent; border-radius: 7px;
+  border: 1px solid transparent; border-radius: 7px; padding: 0;
   background: transparent; cursor: pointer; color: var(--muted);
 }
 .icon-btn:hover { background: var(--surface-2); border-color: var(--border); color: var(--text); }
@@ -155,10 +155,10 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .tab.active::before { content: ""; position: absolute; left: 10px; right: 10px; top: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
 .tab .tab-icon { font-family: "eza-icons"; font-size: 14px; color: var(--t-blue); flex: none; }
 .tab .tab-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab .tab-close { width: 20px; height: 20px; border-radius: 5px; border: 0; background: transparent; color: var(--faint); display: grid; place-items: center; cursor: pointer; opacity: .6; flex: none; margin-left: auto; }
+.tab .tab-close { width: 20px; height: 20px; padding: 0; border-radius: 5px; border: 0; background: transparent; color: var(--faint); display: grid; place-items: center; cursor: pointer; opacity: .6; flex: none; margin-left: auto; }
 .tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
 .tab .tab-close:hover { background: var(--surface-3); color: var(--text); }
-.tab .tab-close svg { width: 12px; height: 12px; }
+.tab .tab-close svg { width: 12px; height: 12px; display: block; }
 .tab.drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
 .tab-new { margin-bottom: 4px; }
 .tabbar-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; height: 100%; }

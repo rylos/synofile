@@ -17,8 +17,8 @@ fn main() {
     let mut out = String::from("pub static TABLES: &[(&str, &str)] = &[\n");
     for name in entries {
         let code = name.trim_end_matches(".json");
-        let path = format!("{}/src/lang/{name}", std::env::var("CARGO_MANIFEST_DIR").unwrap());
-        writeln!(out, "    ({code:?}, include_str!({path:?})),").unwrap();
+        // resolved when the crate compiles, so a moved checkout still builds
+        writeln!(out, "    ({code:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/src/lang/{name}\"))),").unwrap();
     }
     out.push_str("];\n");
     std::fs::write(format!("{}/lang_tables.rs", std::env::var("OUT_DIR").unwrap()), out).unwrap();
