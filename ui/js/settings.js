@@ -3,7 +3,8 @@
 import { prefs, save, DEFAULTS } from "./prefs.js";
 import { t } from "./i18n.js";
 import { svg } from "./icons.js";
-import { dialog, $, h } from "./ui.js";
+import { dialog, $, h, pickFolder } from "./ui.js";
+import { esc } from "./format.js";
 
 const SECTIONS = [
   ["look", "palette", "Aspetto"],
@@ -60,6 +61,9 @@ function body(section) {
       return (
         row("Cartelle prima", "Come eza --group-directories-first", sw("foldersFirst")) +
         row("Mostra i file nascosti", "Quelli che iniziano con un punto (Ctrl+H)", sw("showHidden")) +
+        row("File nascosti in fondo", "Quando sono visibili, dopo gli altri", sw("hiddenLast")) +
+        row("Ricorda vista e ordinamento per cartella", "Altrimenti valgono gli ultimi usati, per tutte", sw("perFolder")) +
+        row("Evidenzia le date di oggi", "Nella colonna Modificato", sw("todayHighlight")) +
         row("Dimensioni binarie", "KiB, MiB, GiB (1024) invece di KB, MB, GB (1000)", sw("binarySizes")) +
         row("Date relative", "«3 h fa» invece di «29 ott 21:45»", sw("relativeDates")) +
         row("Colonna Permessi", "", sw("columns.mode")) +
@@ -71,7 +75,10 @@ function body(section) {
       return (
         row("Apri con un clic", "Altrimenti con il doppio clic", sw("singleClick")) +
         row("Tasti Vim", "j/k per scorrere, h per salire, l per aprire, gg e G", sw("vimKeys")) +
-        row("Conferma prima di eliminare", "", sw("confirmDelete"))
+        row("Conferma prima di eliminare", "", sw("confirmDelete")) +
+        row("All'avvio apri", "", sel("startIn", [["last", "Le ultime schede"], ["shares", "Cartelle condivise"], ["folder", "La cartella scelta"]])) +
+        row("Nuove schede in", "Ctrl+T e il + della barra delle schede", sel("newTabIn", [["current", "Cartella corrente"], ["shares", "Cartelle condivise"], ["folder", "La cartella scelta"]])) +
+        row("Cartella scelta", "", `<button class="btn small pick-start">${prefs.startFolder ? `<span style="font-family:var(--mono)">${esc(prefs.startFolder)}</span>` : t("Scegli…")}</button>`)
       );
     case "transfers":
       return (
@@ -112,6 +119,15 @@ export function openSettings(start = "look") {
         if (input.dataset.k === "notify" && v && "Notification" in window) Notification.requestPermission();
       };
     });
+    const pick = $(".pick-start", section);
+    if (pick) {
+      pick.onclick = async () => {
+        const path = await pickFolder({ title: t("Cartella scelta"), start: prefs.startFolder || "/", ok: t("Usa questa cartella") });
+        if (!path) return;
+        save({ startFolder: path });
+        show(s);
+      };
+    }
   };
   dlg.querySelectorAll("nav button").forEach((b) => (b.onclick = () => show(b.dataset.s)));
   $(".x", dlg).onclick = () => dlg.close();

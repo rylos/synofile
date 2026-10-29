@@ -130,4 +130,9 @@ export default {
   "Riduci": "Zoom out", "Ingrandisci": "Zoom in", "Adatta alla finestra": "Fit to window",
   "Dimensione totale": "Total size",
   "Apri come cartella": "Open as folder", "Archivio · sola lettura": "Archive · read-only", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Inside an archive only single files download: for the rest use “Copy to…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archives open read-only: to change one, extract it", "Riprova": "Retry", "{s} estratti": "{s} unpacked",
+  "All'avvio apri": "On start open", "Altrimenti valgono gli ultimi usati, per tutte": "Otherwise the last ones used apply to all", "Cartella corrente": "Current folder",
+  "Cartella scelta": "Chosen folder", "Ctrl+T e il + della barra delle schede": "Ctrl+T and the + of the tab bar", "Evidenzia le date di oggi": "Highlight today's dates",
+  "File nascosti in fondo": "Hidden files last", "La cartella scelta": "The chosen folder", "Le ultime schede": "The last tabs",
+  "Nella colonna Modificato": "In the Modified column", "Nuove schede in": "New tabs open in", "Quando sono visibili, dopo gli altri": "When shown, after the others",
+  "Ricorda vista e ordinamento per cartella": "Remember view and sort for each folder", "Scegli…": "Choose…", "Usa questa cartella": "Use this folder",
 };

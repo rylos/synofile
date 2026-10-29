@@ -367,4 +367,9 @@ export default {
   "Riduci": "Pomniejsz", "Ingrandisci": "Powiększ", "Adatta alla finestra": "Dopasuj do okna",
   "Dimensione totale": "Całkowity rozmiar",
   "Apri come cartella": "Otwórz jako folder", "Archivio · sola lettura": "Archiwum · tylko do odczytu", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Z archiwum można pobierać tylko pojedyncze pliki: dla reszty użyj „Kopiuj do…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archiwa otwierają się tylko do odczytu: aby je zmienić, wyodrębnij je", "Riprova": "Ponów", "{s} estratti": "{s} po rozpakowaniu",
+  "All'avvio apri": "Przy starcie otwórz", "Altrimenti valgono gli ultimi usati, per tutte": "W przeciwnym razie ostatnio użyte obowiązują dla wszystkich", "Cartella corrente": "Bieżący folder",
+  "Cartella scelta": "Wybrany folder", "Ctrl+T e il + della barra delle schede": "Ctrl+T i + na pasku kart", "Evidenzia le date di oggi": "Wyróżnij dzisiejsze daty",
+  "File nascosti in fondo": "Ukryte pliki na końcu", "La cartella scelta": "Wybrany folder", "Le ultime schede": "Ostatnie karty",
+  "Nella colonna Modificato": "W kolumnie Zmodyfikowano", "Nuove schede in": "Nowe karty w", "Quando sono visibili, dopo gli altri": "Gdy są widoczne, po pozostałych",
+  "Ricorda vista e ordinamento per cartella": "Zapamiętaj widok i sortowanie dla każdego folderu", "Scegli…": "Wybierz…", "Usa questa cartella": "Użyj tego folderu",
 };

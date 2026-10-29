@@ -19,6 +19,7 @@ const COLS = {
 };
 
 const isHidden = (e) => e.name.startsWith(".");
+const isToday = (sec) => sec > 0 && new Date(sec * 1000).toDateString() === new Date().toDateString();
 const isDirLike = (e) => e.kind === "d" || e.link_dir;
 
 export class Pane {
@@ -147,6 +148,12 @@ export class Pane {
     }
     const previous = this.path;
     this.path = path;
+    if (prefs.perFolder) {
+      // the folder's own view and sort, else the last ones used
+      const own = prefs.folderViews[path];
+      this.view = own?.view || prefs.view;
+      this.sort = { ...(own?.sort || prefs.sort) };
+    }
     this.clearFilter(false);
     this.sel.clear();
     this.cursor = 0;
@@ -273,6 +280,10 @@ export class Pane {
         const d = (isDirLike(b) ? 1 : 0) - (isDirLike(a) ? 1 : 0);
         if (d) return d;
       }
+      if (prefs.hiddenLast) {
+        const d = (isHidden(a) ? 1 : 0) - (isHidden(b) ? 1 : 0);
+        if (d) return d;
+      }
       return cmp(a, b) * dir;
     });
     this.visible = list;
@@ -282,7 +293,7 @@ export class Pane {
   setSort(key) {
     if (this.sort.key === key) this.sort.dir = -this.sort.dir;
     else this.sort = { key, dir: key === "mtime" || key === "size" ? -1 : 1 };
-    this.app.rememberSort(this.sort);
+    this.app.rememberSort(this.sort, this);
     const cur = this.visible[this.cursor]?.path;
     this.refilter();
     const i = this.visible.findIndex((e) => e.path === cur);
@@ -292,7 +303,7 @@ export class Pane {
 
   setView(view) {
     this.view = view;
-    this.app.rememberView(view);
+    this.app.rememberView(view, this);
     this.render();
     this.ensureVisible();
   }
@@ -635,7 +646,7 @@ export class Pane {
         return `<div class="cell ${c.cls}">${this.sizeHTML(e.size)}</div>`;
       }
       case "mtime":
-        return `<div class="cell ${c.cls}" title="${esc(dateTime(e.mtime))}">${esc(prefs.relativeDates ? relative(e.mtime) : ezaDate(e.mtime))}</div>`;
+        return `<div class="cell ${c.cls}${prefs.todayHighlight && isToday(e.mtime) ? " today" : ""}" title="${esc(dateTime(e.mtime))}">${esc(prefs.relativeDates ? relative(e.mtime) : ezaDate(e.mtime))}</div>`;
       case "kind":
         return `<div class="cell" style="color:var(--muted)">${esc(kindLabel(e))}</div>`;
     }

@@ -48,7 +48,7 @@ class App {
     loadLocal();
     if (window.self !== window.top) document.body.classList.add("embedded");
     $("#tab-new").innerHTML = svg("plus");
-    $("#tab-new").onclick = () => this.newTab(this.pane?.path || "/");
+    $("#tab-new").onclick = () => this.newTab(this.newTabPath());
     $("#open-settings").innerHTML = svg("settings");
     $("#theme-toggle").onclick = () => this.toggleTheme();
     this.renderThemeButton();
@@ -69,10 +69,12 @@ class App {
   restoreTabs() {
     const saved = prefs.tabs;
     let list = saved?.list?.length ? saved.list : [{ panes: [{ path: "/" }] }];
+    if (prefs.startIn === "shares") list = [{ panes: [{ path: "/" }] }];
+    else if (prefs.startIn === "folder") list = [{ panes: [{ path: prefs.startFolder || "/" }] }];
     const q = new URLSearchParams(location.search);
     if (q.get("path")) list = [{ panes: [{ path: q.get("path"), view: q.get("view") || undefined }] }];
     for (const s of list) this.tabs.push(new Tab(this, s));
-    const cur = this.tabs[Math.min(saved?.current || 0, this.tabs.length - 1)];
+    const cur = this.tabs[prefs.startIn === "last" ? Math.min(saved?.current || 0, this.tabs.length - 1) : 0];
     this.switchTab(cur);
     for (const tab of this.tabs) for (const p of tab.panes) p.load().then(() => p.render());
   }
@@ -86,6 +88,13 @@ class App {
 
   get pane() {
     return this.current?.pane;
+  }
+
+  /** Where Ctrl+T and the + of the tab bar open (Settings → Behaviour). */
+  newTabPath() {
+    if (prefs.newTabIn === "shares") return "/";
+    if (prefs.newTabIn === "folder") return prefs.startFolder || "/";
+    return this.pane?.path || "/";
   }
 
   newTab(path = "/", activate = true) {
@@ -246,13 +255,26 @@ class App {
     pane.renderInfo();
   }
 
-  rememberSort(sort) {
+  rememberSort(sort, pane) {
     save({ sort: { ...sort } });
+    this.rememberFolder(pane);
   }
 
-  rememberView(view) {
+  rememberView(view, pane) {
     save({ view });
+    this.rememberFolder(pane);
     this.saveTabs();
+  }
+
+  /** With "remember for each folder": this folder's view and sort, the 500 latest. */
+  rememberFolder(pane) {
+    if (!prefs.perFolder || !pane || pane.path === "/") return;
+    const all = { ...prefs.folderViews };
+    delete all[pane.path];
+    all[pane.path] = { view: pane.view, sort: { ...pane.sort } };
+    const keys = Object.keys(all);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 500))) delete all[k];
+    save({ folderViews: all });
   }
 
   /** Dark ⇄ light; "as the system" becomes the opposite of what it shows now. */
@@ -859,7 +881,7 @@ class App {
       { label: t("Carica file…"), icon: "upload", key: "Ctrl+U", disabled, action: () => this.pickUpload("files", pane) },
       { label: t("Carica cartella…"), icon: "upload", disabled, action: () => this.pickUpload("folder", pane) },
       "-",
-      { label: t("Nuova scheda"), icon: "plus", key: "Ctrl+T", action: () => this.newTab(pane.path) },
+      { label: t("Nuova scheda"), icon: "plus", key: "Ctrl+T", action: () => this.newTab(this.newTabPath()) },
     ]);
   }
 
@@ -916,7 +938,7 @@ class App {
         fn();
       };
       // tabs and app-wide keys work even while typing in the filter
-      if (ctrl && !e.shiftKey && k.toLowerCase() === "t") return run(() => this.newTab(pane.path));
+      if (ctrl && !e.shiftKey && k.toLowerCase() === "t") return run(() => this.newTab(this.newTabPath()));
       if (ctrl && e.shiftKey && k.toLowerCase() === "t") return run(() => this.reopenTab());
       if (ctrl && k.toLowerCase() === "w") return run(() => this.closeTab());
       if ((ctrl && k === "Tab") || (ctrl && k === "PageDown") || (ctrl && k === "PageUp")) return run(() => this.cycleTab(k === "PageUp" || e.shiftKey ? -1 : 1));

@@ -367,4 +367,9 @@ export default {
   "Riduci": "Zoom arrière", "Ingrandisci": "Zoom avant", "Adatta alla finestra": "Ajuster à la fenêtre",
   "Dimensione totale": "Taille totale",
   "Apri come cartella": "Ouvrir comme dossier", "Archivio · sola lettura": "Archive · lecture seule", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dans une archive, seuls les fichiers isolés se téléchargent : pour le reste, utilisez « Copier vers… »", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Les archives s'ouvrent en lecture seule : pour les modifier, extrayez-les", "Riprova": "Réessayer", "{s} estratti": "{s} décompressés",
+  "All'avvio apri": "Au démarrage, ouvrir", "Altrimenti valgono gli ultimi usati, per tutte": "Sinon les derniers utilisés valent pour tous", "Cartella corrente": "Dossier actuel",
+  "Cartella scelta": "Dossier choisi", "Ctrl+T e il + della barra delle schede": "Ctrl+T et le + de la barre d'onglets", "Evidenzia le date di oggi": "Mettre en évidence les dates du jour",
+  "File nascosti in fondo": "Fichiers cachés à la fin", "La cartella scelta": "Le dossier choisi", "Le ultime schede": "Les derniers onglets",
+  "Nella colonna Modificato": "Dans la colonne Modifié", "Nuove schede in": "Nouveaux onglets dans", "Quando sono visibili, dopo gli altri": "Quand ils sont visibles, après les autres",
+  "Ricorda vista e ordinamento per cartella": "Mémoriser l'affichage et le tri pour chaque dossier", "Scegli…": "Choisir…", "Usa questa cartella": "Utiliser ce dossier",
 };

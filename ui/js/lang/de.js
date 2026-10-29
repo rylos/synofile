@@ -367,4 +367,9 @@ export default {
   "Riduci": "Verkleinern", "Ingrandisci": "Vergrößern", "Adatta alla finestra": "An Fenster anpassen",
   "Dimensione totale": "Gesamtgröße",
   "Apri come cartella": "Als Ordner öffnen", "Archivio · sola lettura": "Archiv · schreibgeschützt", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "In einem Archiv lassen sich nur einzelne Dateien herunterladen: für den Rest „Kopieren nach…“ verwenden", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archive werden schreibgeschützt geöffnet: zum Ändern zuerst extrahieren", "Riprova": "Wiederholen", "{s} estratti": "{s} entpackt",
+  "All'avvio apri": "Beim Start öffnen", "Altrimenti valgono gli ultimi usati, per tutte": "Sonst gelten die zuletzt verwendeten für alle", "Cartella corrente": "Aktueller Ordner",
+  "Cartella scelta": "Gewählter Ordner", "Ctrl+T e il + della barra delle schede": "Strg+T und das + der Tableiste", "Evidenzia le date di oggi": "Heutige Daten hervorheben",
+  "File nascosti in fondo": "Versteckte Dateien zuletzt", "La cartella scelta": "Den gewählten Ordner", "Le ultime schede": "Die letzten Tabs",
+  "Nella colonna Modificato": "In der Spalte Geändert", "Nuove schede in": "Neue Tabs öffnen in", "Quando sono visibili, dopo gli altri": "Wenn sichtbar, nach den anderen",
+  "Ricorda vista e ordinamento per cartella": "Ansicht und Sortierung pro Ordner merken", "Scegli…": "Wählen…", "Usa questa cartella": "Diesen Ordner verwenden",
 };

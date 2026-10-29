@@ -30,6 +30,13 @@ export const DEFAULTS = {
   notify: true,
   favorites: [],
   tabs: null,
+  perFolder: false, // view and sort remembered for each folder
+  folderViews: {}, // path → { view, sort }
+  hiddenLast: false,
+  todayHighlight: false,
+  startIn: "last", // last, shares, folder
+  newTabIn: "current", // current, shares, folder
+  startFolder: "",
 };
 
 const LOCAL = "synofile.prefs";

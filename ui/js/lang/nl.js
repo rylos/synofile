@@ -367,4 +367,9 @@ export default {
   "Riduci": "Uitzoomen", "Ingrandisci": "Inzoomen", "Adatta alla finestra": "Aanpassen aan venster",
   "Dimensione totale": "Totale grootte",
   "Apri come cartella": "Openen als map", "Archivio · sola lettura": "Archief · alleen-lezen", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "In een archief kun je alleen losse bestanden downloaden: gebruik voor de rest ‘Kopiëren naar…’", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archieven openen alleen-lezen: pak ze uit om ze te wijzigen", "Riprova": "Opnieuw proberen", "{s} estratti": "{s} uitgepakt",
+  "All'avvio apri": "Bij het starten openen", "Altrimenti valgono gli ultimi usati, per tutte": "Anders gelden de laatst gebruikte voor alle", "Cartella corrente": "Huidige map",
+  "Cartella scelta": "Gekozen map", "Ctrl+T e il + della barra delle schede": "Ctrl+T en de + van de tabbalk", "Evidenzia le date di oggi": "Datums van vandaag markeren",
+  "File nascosti in fondo": "Verborgen bestanden achteraan", "La cartella scelta": "De gekozen map", "Le ultime schede": "De laatste tabbladen",
+  "Nella colonna Modificato": "In de kolom Gewijzigd", "Nuove schede in": "Nieuwe tabbladen in", "Quando sono visibili, dopo gli altri": "Wanneer zichtbaar, na de andere",
+  "Ricorda vista e ordinamento per cartella": "Weergave en sortering per map onthouden", "Scegli…": "Kiezen…", "Usa questa cartella": "Deze map gebruiken",
 };

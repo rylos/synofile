@@ -367,4 +367,9 @@ export default {
   "Riduci": "Reduzir", "Ingrandisci": "Ampliar", "Adatta alla finestra": "Ajustar à janela",
   "Dimensione totale": "Tamanho total",
   "Apri come cartella": "Abrir como pasta", "Archivio · sola lettura": "Arquivo · somente leitura", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dentro de um arquivo compactado só é possível baixar arquivos individuais: para o resto use “Copiar para…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Arquivos compactados abrem somente para leitura: para alterá-los, extraia-os", "Riprova": "Tentar novamente", "{s} estratti": "{s} descompactados",
+  "All'avvio apri": "Ao iniciar, abrir", "Altrimenti valgono gli ultimi usati, per tutte": "Caso contrário, os últimos usados valem para todas", "Cartella corrente": "Pasta atual",
+  "Cartella scelta": "Pasta escolhida", "Ctrl+T e il + della barra delle schede": "Ctrl+T e o + da barra de abas", "Evidenzia le date di oggi": "Destacar as datas de hoje",
+  "File nascosti in fondo": "Arquivos ocultos no final", "La cartella scelta": "A pasta escolhida", "Le ultime schede": "As últimas abas",
+  "Nella colonna Modificato": "Na coluna Modificado", "Nuove schede in": "Novas abas em", "Quando sono visibili, dopo gli altri": "Quando visíveis, depois dos outros",
+  "Ricorda vista e ordinamento per cartella": "Lembrar visualização e ordenação para cada pasta", "Scegli…": "Escolher…", "Usa questa cartella": "Usar esta pasta",
 };

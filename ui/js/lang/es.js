@@ -367,4 +367,9 @@ export default {
   "Riduci": "Alejar", "Ingrandisci": "Acercar", "Adatta alla finestra": "Ajustar a la ventana",
   "Dimensione totale": "Tamaño total",
   "Apri come cartella": "Abrir como carpeta", "Archivio · sola lettura": "Archivo · solo lectura", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dentro de un archivo solo se descargan archivos sueltos: para el resto usa «Copiar en…»", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Los archivos comprimidos se abren en solo lectura: para cambiarlos, extráelos", "Riprova": "Reintentar", "{s} estratti": "{s} descomprimidos",
+  "All'avvio apri": "Al iniciar, abrir", "Altrimenti valgono gli ultimi usati, per tutte": "Si no, los últimos usados valen para todas", "Cartella corrente": "Carpeta actual",
+  "Cartella scelta": "Carpeta elegida", "Ctrl+T e il + della barra delle schede": "Ctrl+T y el + de la barra de pestañas", "Evidenzia le date di oggi": "Resaltar las fechas de hoy",
+  "File nascosti in fondo": "Archivos ocultos al final", "La cartella scelta": "La carpeta elegida", "Le ultime schede": "Las últimas pestañas",
+  "Nella colonna Modificato": "En la columna Modificado", "Nuove schede in": "Nuevas pestañas en", "Quando sono visibili, dopo gli altri": "Cuando se muestran, después de los demás",
+  "Ricorda vista e ordinamento per cartella": "Recordar vista y orden para cada carpeta", "Scegli…": "Elegir…", "Usa questa cartella": "Usar esta carpeta",
 };
