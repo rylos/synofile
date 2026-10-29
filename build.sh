@@ -27,7 +27,6 @@ cp -r ui "$work/pkg/ui"
 # DSM serves the interface without Cache-Control, so browsers keep old files
 # on heuristics: every URL carries the build, and an upgrade loads afresh
 sed -i "s|href=\"app.css\"|href=\"app.css?v=$asset\"|; s|src=\"js/main.js\"|src=\"js/main.js?v=$asset\"|" "$work/pkg/ui/index.html"
-sed -i "s|index.html\"|index.html?v=$asset\"|" "$work/pkg/ui/synofile.js"
 sed -i "s|fonts/eza-icons.woff2\"|fonts/eza-icons.woff2?v=$asset\"|" "$work/pkg/ui/app.css"
 find "$work/pkg/ui/js" -name '*.js' -exec sed -i \
     -e "s|\(from \"\./[^\"]*\.js\)\"|\1?v=$asset\"|g" \

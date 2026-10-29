@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SynoFile</title>
+<script>
+  // the theme before the first paint, from the preferences this browser keeps
+  try {
+    var theme = JSON.parse(localStorage.getItem("synofile.prefs") || "{}").theme || "dark";
+    if (theme === "system") theme = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+  } catch (e) {}
+</script>
+<style>html { background: #14171c; } html[data-theme="light"] { background: #e6e7ed; }</style>
 <link rel="icon" href="images/icon_32.png">
 <link rel="stylesheet" href="app.css">
 </head>
