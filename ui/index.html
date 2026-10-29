@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SynoFile</title>
+<link rel="icon" href="images/icon_32.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="tabbar" id="tabbar">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <button class="tab-new icon-btn" id="tab-new" title="Nuova scheda (Ctrl+T)"></button>
+    <div class="tabbar-actions">
+      <button class="xfer-btn" id="xfer-btn" title="Trasferimenti">
+        <svg class="ring" viewBox="0 0 36 36"><circle class="ring-track" cx="18" cy="18" r="15"/><circle class="ring-fill" id="xfer-ring" cx="18" cy="18" r="15"/></svg>
+        <span class="xfer-icon" id="xfer-icon"></span>
+        <span class="xfer-count" id="xfer-count"></span>
+      </button>
+      <button class="icon-btn theme-btn" id="theme-toggle"></button>
+      <button class="icon-btn" id="open-settings" title="Impostazioni (Ctrl+,)"></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav class="sidebar" id="sidebar" aria-label="Posizioni"></nav>
+    <main class="workspace" id="workspace"></main>
+  </div>
+</div>
+
+<div class="xfer-drawer" id="xfer-drawer" hidden>
+  <div class="drawer-head">
+    <span>Trasferimenti</span>
+    <div>
+      <button class="btn small" id="xfer-clear">Pulisci completati</button>
+      <button class="icon-btn" id="xfer-drawer-close" title="Chiudi"></button>
+    </div>
+  </div>
+  <div class="drawer-list" id="xfer-list"></div>
+</div>
+
+<div class="menu" id="menu" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="drop-overlay" id="drop-overlay" hidden><div>Rilascia per caricare in <b id="drop-target"></b></div></div>
+<input type="file" id="upload-files" multiple hidden>
+<input type="file" id="upload-folder" webkitdirectory hidden>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

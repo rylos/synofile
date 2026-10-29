@@ -1,0 +1,34 @@
+#!/bin/sh
+# Starts and stops the transfer daemon (synofile daemon). The interface is
+# served by DSM's web server through ui/api.cgi; without the daemon it
+# still browses, but copies, moves and deletions cannot start.
+
+BIN="/var/packages/synofile/target/bin/synofile"
+VAR="${SYNOPKG_PKGVAR:-/var/packages/synofile/var}"
+PID="$VAR/daemon.pid"
+
+running() {
+    [ -s "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null
+}
+
+case "$1" in
+    start)
+        running && exit 0
+        "$BIN" daemon </dev/null >>"$VAR/daemon.log" 2>&1 &
+        echo $! >"$PID"
+        exit 0
+        ;;
+    stop)
+        # running transfers stop with it: their workers notice and clean up
+        running && kill "$(cat "$PID")"
+        rm -f "$PID"
+        exit 0
+        ;;
+    status)
+        running && exit 0
+        exit 3
+        ;;
+    *)
+        exit 1
+        ;;
+esac

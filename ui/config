@@ -1,0 +1,17 @@
+{
+    "synofile.js": {
+        "SYNO.SDS.SynoFile.Instance": {
+            "type": "app",
+            "title": "SynoFile",
+            "desc": "File manager for the shared folders",
+            "appWindow": "SYNO.SDS.SynoFile.Instance",
+            "icon": "images/icon_{0}.png",
+            "allUsers": false,
+            "allowMultiInstance": false,
+            "hidden": false,
+            "depend": [],
+            "texts": "texts",
+            "preloadTexts": ["app:title"]
+        }
+    }
+}

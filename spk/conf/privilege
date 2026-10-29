@@ -1,0 +1,16 @@
+{
+    "defaults": {
+        "run-as": "package"
+    },
+    "tool": [{
+        "relpath": "bin/synofile",
+        "user": "package",
+        "group": "package",
+        "permission": "0750"
+    }, {
+        "relpath": "bin/synofile-worker",
+        "user": "package",
+        "group": "package",
+        "permission": "0755"
+    }]
+}
