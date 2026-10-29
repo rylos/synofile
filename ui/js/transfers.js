@@ -42,6 +42,10 @@ const PHASES = {
 const LIMITS = [0, 5, 10, 25, 50, 100, 200, 500];
 
 const finished = (j) => ["done", "failed", "cancelled"].includes(j.state);
+// "done" where every item failed reads as a failure, with the first reason
+const allFailed = (j) => j.state === "done" && j.progress.errors > 0 && j.progress.errors >= j.progress.files_done;
+const shownState = (j) => (allFailed(j) ? "failed" : j.state);
+const firstError = (j) => j.errors?.[0]?.msg || "";
 const active = (j) => !finished(j);
 
 export function init(theApp) {
@@ -170,7 +174,9 @@ function onUpdate(job) {
 function announce(job) {
   const op = OP[job.op] || OP.copy;
   app?.refreshAfter(job);
-  if (job.state === "done") {
+  if (allFailed(job)) {
+    toast(`${title(job)}: ${firstError(job) || t(STATE.failed)}`, { kind: "error", action: t("Dettagli"), onAction: () => openDialog(job.id), timeout: 9000 });
+  } else if (job.state === "done") {
     const errs = job.progress.errors;
     toast(`${t(op.done)}${errs ? " · " + count(errs, "errore", "errori", int) : ""}`, {
       kind: errs ? "error" : "ok",
@@ -391,6 +397,7 @@ class JobDialog {
         <button class="btn b-start" hidden>${t("Avvia ora")}</button>
         <button class="btn b-pause"></button>
         <button class="btn b-cancel">${svg("stop")} ${t("Annulla")}</button>
+        <button class="btn b-retry" hidden>${svg("refresh")} ${t("Riprova")}</button>
         <button class="btn b-open" hidden>${svg("external")} ${t("Apri destinazione")}</button>
         <button class="btn primary b-close" hidden>${t("Chiudi")}</button>
       </div></dialog>`);
@@ -405,6 +412,18 @@ class JobDialog {
     $(".b-cancel", this.dlg).onclick = () => control(this.job, "cancel");
     $(".b-start", this.dlg).onclick = () => control(this.job, "start");
     $(".b-pause", this.dlg).onclick = () => control(this.job, this.job.state === "paused" ? "resume" : "pause");
+    $(".b-retry", this.dlg).onclick = () => {
+      // the same job again: the NAS gives it a new id
+      const old = this.job;
+      this.dlg.close();
+      api.control(old.id, "retry").then(() => {
+        since = 0;
+        poll().then(() => {
+          const next = [...jobs.values()].filter((j) => j.op === old.op && active(j)).sort((a, b) => b.created - a.created)[0];
+          if (next) openDialog(next.id);
+        });
+      }).catch(errorToast);
+    };
     $(".b-open", this.dlg).onclick = () => {
       this.dlg.close();
       app.openPath(this.job.info.dest);
@@ -445,10 +464,11 @@ class JobDialog {
     const d = this.dlg;
     const op = OP[job.op] || OP.copy;
     const r = route(job);
-    $(".ttl", d).textContent = finished(job) ? (job.state === "done" ? t(op.done) : title(job)) : t(op.running);
+    const state = shownState(job);
+    $(".ttl", d).textContent = finished(job) ? (state === "done" ? t(op.done) : title(job)) : t(op.running);
     const chip = $(".chip", d);
-    chip.className = "chip " + job.state;
-    chip.textContent = t(STATE[job.state]);
+    chip.className = "chip " + state;
+    chip.textContent = t(STATE[state]);
     $(".from", d).textContent = r.from;
     $(".from", d).title = job.info.sources.join("\n");
     $(".to", d).textContent = r.to || "";
@@ -563,7 +583,8 @@ class JobDialog {
           setTimeout(() => $("input", form)?.focus());
         }
       } else {
-        sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(job.state === "done" ? t(op.done) : `${t(STATE[job.state])}: ${job.msg}`)}</b>${esc(parts.join(" · "))}</div>`;
+        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : `${t(STATE[job.state])}: ${job.msg}`;
+        sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`;
       }
     } else sum.hidden = true;
 
@@ -574,6 +595,7 @@ class JobDialog {
     $(".b-start", d).hidden = job.state !== "queued" || job.source === "local";
     $(".b-close", d).hidden = !finished(job);
     $(".b-open", d).hidden = !finished(job) || !job.info.dest;
+    $(".b-retry", d).hidden = !job.interrupted;
     $(".xf-foot .left", d).style.visibility = finished(job) || job.op === "delete" ? "hidden" : "visible";
     const sel = $(".limit", d);
     const mb = Math.round((job.limit || 0) / 1024 / 1024);

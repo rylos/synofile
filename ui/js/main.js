@@ -6,6 +6,7 @@ import { prefs, save, loadLocal, loadRemote, onChange } from "./prefs.js";
 import { t, count, loadTable } from "./i18n.js";
 import { esc, size, int, baseName, parentOf, joinPath } from "./format.js";
 import { svg, glyph, shareGlyph, previewKind, isArchive, archiveStem, FOLDER_GLYPH } from "./icons.js";
+import { isBrowsable, archiveOf, readOnlyToast } from "./archive.js";
 import { $, h, toast, errorToast, openMenu, confirmBox, promptBox, pickFolder, copyText, dialog } from "./ui.js";
 import { Pane } from "./pane.js";
 import * as transfers from "./transfers.js";
@@ -456,7 +457,7 @@ class App {
   // ---------- opening ----------
   open(pane, entry) {
     if (!entry) return;
-    if (isDirLike(entry)) return pane.go(entry.path);
+    if (isDirLike(entry) || (isBrowsable(entry) && !pane.archive)) return pane.go(entry.path);
     if (previewKind(entry) !== "other") return this.quickLook(pane);
     this.download([entry]);
   }
@@ -470,6 +471,8 @@ class App {
 
   download(entries) {
     if (!entries.length) return;
+    // out of an archive only single files: the rest is extracted
+    if (archiveOf(entries[0].path) && (entries.length > 1 || isDirLike(entries[0]))) return toast(t("Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»"), { kind: "error" });
     const a = document.createElement("a");
     a.href = api.download(entries.map((e) => e.path));
     a.download = "";
@@ -481,6 +484,7 @@ class App {
 
   // ---------- archives ----------
   compress(pane) {
+    if (pane.archive) return readOnlyToast();
     const list = pane.targets().filter((e) => !e.share);
     if (!list.length || pane.path === "/") return;
     const base = list.length === 1 ? (isDirLike(list[0]) ? list[0].name : archiveStem(list[0].name)) : baseName(pane.path) || t("Archivio");
@@ -534,6 +538,7 @@ class App {
   }
 
   setClipboard(op, pane) {
+    if (op === "cut" && pane.archive) return readOnlyToast();
     const list = pane.targets().filter((e) => !e.share);
     if (!list.length) return;
     this.clipboard = { op, paths: list.map((e) => e.path), from: pane.path };
@@ -553,6 +558,13 @@ class App {
 
   transfer(op, paths, dest) {
     if (!paths.length || !dest || dest === "/") return;
+    if (archiveOf(dest)) return readOnlyToast();
+    const from = archiveOf(paths[0]);
+    if (from) {
+      // out of an archive: those items are extracted, never moved
+      if (paths.some((p) => archiveOf(p)?.root !== from.root)) return;
+      return transfers.start({ op: "extract", sources: [from.root], members: paths.map((p) => archiveOf(p).inner), dest, conflict: prefs.conflict === "ask" ? "rename" : prefs.conflict });
+    }
     if (paths.some((p) => dest === p || dest.startsWith(p + "/"))) return toast(t("Una cartella non può finire dentro sé stessa"), { kind: "error" });
     if (op === "move" && paths.every((p) => parentOf(p) === dest)) return;
     transfers.start({ op, sources: paths, dest });
@@ -578,6 +590,7 @@ class App {
   }
 
   async remove(pane, permanent = false) {
+    if (pane.archive) return readOnlyToast();
     const list = pane.targets().filter((e) => !e.share);
     if (!list.length) return;
     const inBin = pane.path.split("/").includes("#recycle");
@@ -600,6 +613,7 @@ class App {
   }
 
   async renamePrompt(pane, e) {
+    if (pane.archive) return readOnlyToast();
     const name = await promptBox({
       title: t("Rinomina"),
       label: t("Nuovo nome"),
@@ -624,6 +638,7 @@ class App {
 
   async newFolder(pane = this.pane) {
     if (pane.path === "/") return;
+    if (pane.archive) return readOnlyToast();
     const name = await promptBox({ title: t("Nuova cartella"), label: t("Nome"), value: t("Nuova cartella"), icon: "folderPlus", ok: t("Crea"), validate: (v) => (!v.trim() || v.includes("/") ? t("Nome non valido") : null) });
     if (!name) return;
     try {
@@ -673,6 +688,7 @@ class App {
 
   pickUpload(kind, pane = this.pane) {
     if (pane.path === "/") return toast(t("Apri prima una cartella condivisa"));
+    if (pane.archive) return readOnlyToast();
     this.uploadDest = pane.path;
     $(kind === "folder" ? "#upload-folder" : "#upload-files").click();
   }
@@ -720,6 +736,7 @@ class App {
         if (op === "ask") return this.dropMenu(ev, paths, d);
         this.transfer(op, paths, d);
       } else if (ev.dataTransfer.types.includes("Files")) {
+        if (archiveOf(d)) return readOnlyToast();
         const items = await fromDataTransfer(ev.dataTransfer);
         upload(d, items, () => this.refreshFolders([d]));
       }
@@ -776,12 +793,13 @@ class App {
     const atRoot = pane.path === "/";
     const canPaste = this.clipboard && !atRoot;
     if (!entry) {
+      const atRootOrRo = atRoot || !!pane.archive;
       return openMenu(x, y, [
-        !atRoot && { label: t("Nuova cartella"), icon: "folderPlus", key: "Ctrl+Shift+N", action: () => this.newFolder(pane) },
-        !atRoot && { label: t("Carica file…"), icon: "upload", key: "Ctrl+U", action: () => this.pickUpload("files", pane) },
-        !atRoot && { label: t("Carica cartella…"), icon: "upload", action: () => this.pickUpload("folder", pane) },
-        canPaste && "-",
-        canPaste && { label: t(this.clipboard.op === "cut" ? "Incolla (sposta {n})" : "Incolla ({n})", { n: this.clipboard.paths.length }), icon: "paste", key: "Ctrl+V", action: () => this.paste(pane) },
+        !atRootOrRo && { label: t("Nuova cartella"), icon: "folderPlus", key: "Ctrl+Shift+N", action: () => this.newFolder(pane) },
+        !atRootOrRo && { label: t("Carica file…"), icon: "upload", key: "Ctrl+U", action: () => this.pickUpload("files", pane) },
+        !atRootOrRo && { label: t("Carica cartella…"), icon: "upload", action: () => this.pickUpload("folder", pane) },
+        canPaste && !pane.archive && "-",
+        canPaste && !pane.archive && { label: t(this.clipboard.op === "cut" ? "Incolla (sposta {n})" : "Incolla ({n})", { n: this.clipboard.paths.length }), icon: "paste", key: "Ctrl+V", action: () => this.paste(pane) },
         "-",
         { label: t("Seleziona tutto"), key: "Ctrl+A", action: () => pane.selectAll() },
         { label: prefs.showHidden ? t("Nascondi i file nascosti") : t("Mostra i file nascosti"), icon: prefs.showHidden ? "eyeOff" : "eye", key: "Ctrl+H", action: () => this.toggleHidden() },
@@ -789,49 +807,53 @@ class App {
         "-",
         !atRoot && { label: t("Copia percorso della cartella"), icon: "link", action: () => copyText(pane.path) },
         !atRoot && { label: t("Aggiungi ai preferiti"), icon: "star", key: "Ctrl+D", action: () => this.toggleFavorite(pane.path) },
-        !atRoot && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(pane.path) },
+        !atRootOrRo && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(pane.path) },
         { label: t("Aggiorna"), icon: "refresh", key: "F5", action: () => pane.reload() },
       ]);
     }
     const dir = isDirLike(entry);
     const share = !!entry.share;
     const other = this.other();
+    // inside an archive: read-only, and folders come out by copying
+    const ro = !!pane.archive;
+    const enter = !many && !ro && isBrowsable(entry);
     openMenu(x, y, [
       many ? { title: count(list.length, "elemento selezionato", "elementi selezionati", int) } : null,
-      !many && { label: dir ? t("Apri") : t("Anteprima"), icon: dir ? "forward" : "eye", key: dir ? "Invio" : "Spazio", action: () => this.open(pane, entry) },
+      !many && { label: dir || enter ? t("Apri") : t("Anteprima"), icon: dir || enter ? "forward" : "eye", key: dir || enter ? "Invio" : "Spazio", action: () => this.open(pane, entry) },
+      enter && { label: t("Apri in una nuova scheda"), icon: "plus", action: () => this.newTab(entry.path) },
       !many && dir && { label: t("Apri in una nuova scheda"), icon: "plus", key: "Ctrl+Invio", action: () => this.newTab(entry.path) },
       !many && dir && other && { label: t("Apri nell'altro pannello"), icon: "split", action: () => other.go(entry.path) },
-      { label: many || dir ? t("Scarica (.zip)") : t("Scarica"), icon: "download", action: () => this.download(list) },
-      !many && isArchive(entry) && "-",
-      !many && isArchive(entry) && { label: t("Estrai in «{x}»", { x: archiveStem(entry.name) }), icon: "archive", action: () => this.extract(pane, entry, "folder") },
-      !many && isArchive(entry) && { label: t("Estrai qui"), icon: "archive", action: () => this.extract(pane, entry, "here") },
-      !many && isArchive(entry) && { label: t("Estrai in…"), icon: "archive", action: () => this.extract(pane, entry, "pick") },
-      !share && { label: t("Comprimi in .zip…"), icon: "archive", action: () => this.compress(pane) },
+      (!ro || (!many && !dir)) && { label: many || dir ? t("Scarica (.zip)") : t("Scarica"), icon: "download", action: () => this.download(list) },
+      !many && !ro && isArchive(entry) && "-",
+      !many && !ro && isArchive(entry) && { label: t("Estrai in «{x}»", { x: archiveStem(entry.name) }), icon: "archive", action: () => this.extract(pane, entry, "folder") },
+      !many && !ro && isArchive(entry) && { label: t("Estrai qui"), icon: "archive", action: () => this.extract(pane, entry, "here") },
+      !many && !ro && isArchive(entry) && { label: t("Estrai in…"), icon: "archive", action: () => this.extract(pane, entry, "pick") },
+      !share && !ro && { label: t("Comprimi in .zip…"), icon: "archive", action: () => this.compress(pane) },
       "-",
       !share && { label: t("Copia"), icon: "copy", key: "Ctrl+C", action: () => this.setClipboard("copy", pane) },
-      !share && { label: t("Taglia"), icon: "cut", key: "Ctrl+X", action: () => this.setClipboard("cut", pane) },
-      dir && canPaste && !many && { label: t("Incolla dentro"), icon: "paste", action: () => this.paste(pane, entry.path) },
+      !share && !ro && { label: t("Taglia"), icon: "cut", key: "Ctrl+X", action: () => this.setClipboard("cut", pane) },
+      dir && canPaste && !many && !ro && { label: t("Incolla dentro"), icon: "paste", action: () => this.paste(pane, entry.path) },
       !share && { label: t("Copia in…"), icon: "copy", key: other ? "F5" : "", action: () => (other ? this.toOtherPane("copy") : this.copyTo(pane, "copy")) },
-      !share && { label: t("Sposta in…"), icon: "move", key: other ? "F6" : "", action: () => (other ? this.toOtherPane("move") : this.copyTo(pane, "move")) },
+      !share && !ro && { label: t("Sposta in…"), icon: "move", key: other ? "F6" : "", action: () => (other ? this.toOtherPane("move") : this.copyTo(pane, "move")) },
       !share && other && { label: t("Scegli cartella…"), icon: "move", action: () => this.copyTo(pane, "copy") },
       "-",
-      !many && !share && { label: t("Rinomina"), icon: "rename", key: "F2", action: () => this.renamePrompt(pane, entry) },
-      !share && { label: pane.recycle && !pane.path.includes("#recycle") ? t("Sposta nel Cestino") : t("Elimina"), icon: "trash", key: "Canc", danger: true, action: () => this.remove(pane) },
-      !share && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
+      !many && !share && !ro && { label: t("Rinomina"), icon: "rename", key: "F2", action: () => this.renamePrompt(pane, entry) },
+      !share && !ro && { label: pane.recycle && !pane.path.includes("#recycle") ? t("Sposta nel Cestino") : t("Elimina"), icon: "trash", key: "Canc", danger: true, action: () => this.remove(pane) },
+      !share && !ro && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
       "-",
       dir && { label: t("Calcola dimensione"), icon: "drive", action: () => this.computeSizes(pane, list) },
       { label: t("Copia percorso"), icon: "link", key: "Ctrl+Shift+C", action: () => this.copyPaths(list, "nas") },
       { label: t("Copia percorso di rete (\\\\NAS)"), icon: "link", action: () => this.copyPaths(list, "smb") },
       { label: t("Copia indirizzo smb://"), icon: "link", action: () => this.copyPaths(list, "url") },
       !many && dir && { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(entry.path) },
-      !many && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(dir ? entry.path : parentOf(entry.path)) },
+      !many && !ro && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(dir ? entry.path : parentOf(entry.path)) },
       { label: t("Proprietà"), icon: "info", key: "Ctrl+I", action: () => !prefs.info && this.toggleInfo() },
     ]);
   }
 
   newMenu(pane, anchor) {
     const r = anchor.getBoundingClientRect();
-    const disabled = pane.path === "/";
+    const disabled = pane.path === "/" || !!pane.archive;
     openMenu(r.left, r.bottom + 4, [
       { label: t("Nuova cartella"), icon: "folderPlus", key: "Ctrl+Shift+N", disabled, action: () => this.newFolder(pane) },
       { label: t("Carica file…"), icon: "upload", key: "Ctrl+U", disabled, action: () => this.pickUpload("files", pane) },

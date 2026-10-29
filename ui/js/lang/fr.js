@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "« Conserver les deux » enregistre le nouveau sous {n}",
   "Riduci": "Zoom arrière", "Ingrandisci": "Zoom avant", "Adatta alla finestra": "Ajuster à la fenêtre",
   "Dimensione totale": "Taille totale",
+  "Apri come cartella": "Ouvrir comme dossier", "Archivio · sola lettura": "Archive · lecture seule", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dans une archive, seuls les fichiers isolés se téléchargent : pour le reste, utilisez « Copier vers… »", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Les archives s'ouvrent en lecture seule : pour les modifier, extrayez-les", "Riprova": "Réessayer", "{s} estratti": "{s} décompressés",
 };

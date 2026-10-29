@@ -8,6 +8,7 @@
 #[macro_use]
 mod lang;
 mod api;
+mod archive;
 mod auth;
 mod caps;
 mod cgi;

@@ -129,4 +129,5 @@ export default {
   "Password": "Password", "Estrai": "Extract",
   "Riduci": "Zoom out", "Ingrandisci": "Zoom in", "Adatta alla finestra": "Fit to window",
   "Dimensione totale": "Total size",
+  "Apri come cartella": "Open as folder", "Archivio · sola lettura": "Archive · read-only", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Inside an archive only single files download: for the rest use “Copy to…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archives open read-only: to change one, extract it", "Riprova": "Retry", "{s} estratti": "{s} unpacked",
 };

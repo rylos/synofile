@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "„Zachowaj oba” zapisuje nowy jako {n}",
   "Riduci": "Pomniejsz", "Ingrandisci": "Powiększ", "Adatta alla finestra": "Dopasuj do okna",
   "Dimensione totale": "Całkowity rozmiar",
+  "Apri come cartella": "Otwórz jako folder", "Archivio · sola lettura": "Archiwum · tylko do odczytu", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Z archiwum można pobierać tylko pojedyncze pliki: dla reszty użyj „Kopiuj do…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archiwa otwierają się tylko do odczytu: aby je zmienić, wyodrębnij je", "Riprova": "Ponów", "{s} estratti": "{s} po rozpakowaniu",
 };

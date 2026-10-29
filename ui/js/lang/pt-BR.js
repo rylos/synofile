@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "“Manter ambos” salva o novo como {n}",
   "Riduci": "Reduzir", "Ingrandisci": "Ampliar", "Adatta alla finestra": "Ajustar à janela",
   "Dimensione totale": "Tamanho total",
+  "Apri come cartella": "Abrir como pasta", "Archivio · sola lettura": "Arquivo · somente leitura", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dentro de um arquivo compactado só é possível baixar arquivos individuais: para o resto use “Copiar para…”", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Arquivos compactados abrem somente para leitura: para alterá-los, extraia-os", "Riprova": "Tentar novamente", "{s} estratti": "{s} descompactados",
 };

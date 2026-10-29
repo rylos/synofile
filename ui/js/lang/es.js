@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "«Conservar ambos» guarda el nuevo como {n}",
   "Riduci": "Alejar", "Ingrandisci": "Acercar", "Adatta alla finestra": "Ajustar a la ventana",
   "Dimensione totale": "Tamaño total",
+  "Apri come cartella": "Abrir como carpeta", "Archivio · sola lettura": "Archivo · solo lectura", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "Dentro de un archivo solo se descargan archivos sueltos: para el resto usa «Copiar en…»", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Los archivos comprimidos se abren en solo lectura: para cambiarlos, extráelos", "Riprova": "Reintentar", "{s} estratti": "{s} descomprimidos",
 };

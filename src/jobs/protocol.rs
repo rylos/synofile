@@ -15,6 +15,8 @@ pub enum Op {
     Compress,
     /// an archive into a folder
     Extract,
+    /// after a restart: the temporary files of an interrupted job go
+    Cleanup,
 }
 
 /// What to do when the destination already has an item of that name.
@@ -63,6 +65,9 @@ pub struct Spec {
     /// extract: the archive's password
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+    /// extract: only these items (paths inside the archive), each into dest
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<String>,
 }
 
 /// The message of a job that failed for want of the archive's password.

@@ -87,6 +87,32 @@ pub fn send_file(out: &mut impl Write, req: &Request, path: &Path, inline: bool)
     Ok(())
 }
 
+/// The output of a command (a file out of an archive) as a download or a
+/// preview. No ranges: the stream cannot seek.
+pub fn send_command(out: &mut impl Write, mut cmd: std::process::Command, path: &str, size: u64, mtime: i64, inline: bool) -> Result<(), ApiError> {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    let content_type = if inline { mime(name) } else { "application/octet-stream" };
+    let disposition = cgi::disposition(if inline { "inline" } else { "attachment" }, name);
+    let length = size.to_string();
+    let modified = mtime.to_string();
+    let mut child = cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()?;
+    let mut headers = vec![
+        ("Content-Type", content_type),
+        ("Content-Disposition", disposition.as_str()),
+        ("Content-Length", length.as_str()),
+        ("X-Mtime", modified.as_str()),
+    ];
+    if inline {
+        headers.push(("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"));
+    }
+    cgi::head(out, 200, &headers)?;
+    let copied = io::copy(&mut child.stdout.take().unwrap().take(size), out);
+    let _ = child.kill();
+    let _ = child.wait();
+    copied?;
+    Ok(())
+}
+
 /// Several items as one zip stream, stored (no compression: the network is
 /// the slow part), names relative to their folder.
 pub fn send_zip(out: &mut impl Write, roots: &[PathBuf], filename: &str) -> Result<(), ApiError> {

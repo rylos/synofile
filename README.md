@@ -37,6 +37,9 @@ Synology ACLs.
 - **Upload** files and whole folders, by drop or from a dialog, in chunks
   that resume after a network error; **download** a file, or folders and
   selections as a `.zip` stream.
+- **Archives open like folders**: zip, 7z, rar, tar and tar.gz/bz2/xz/zst,
+  iso. Browse them, preview and download their files, copy items out (they
+  are extracted). Read-only; Space shows what is inside at a glance.
 - **Compress** to `.zip` and **extract** zip, 7z, rar, tar, gz, bz2, xz, iso
   and more, password-protected archives included.
 - **Delete into DSM's own Recycle Bin**, the way File Station does.
@@ -65,6 +68,11 @@ Copies, moves, deletions, archives and uploads all go through one dialog:
 
 Transfers run on the NAS: they go on when the browser closes, and the dialog,
 opened again from the transfers button (Ctrl+J), shows the whole history.
+A transfer fails at once, with the reason, when the destination is not
+writable. A cancelled one leaves no partial files or empty folders behind.
+If the package restarts (an update, a reboot), unfinished transfers are not
+resumed on their own: their partial files are removed and they come back as
+interrupted, with **Retry**.
 
 <p align="center">
   <img src="docs/img/transfer.png" alt="A copy with its speed chart" width="49%">
@@ -130,8 +138,10 @@ reads (`user.syno.recycle.dtime`), DSM's events. With the Recycle Bin off, or
 inside it, deletion is permanent, and the interface says so first.
 
 Archives are written by SynoFile itself (a streaming zip writer: deflate,
-zip64, UTF-8 names, Unix modes); extraction uses the NAS's 7-Zip, and
-`unrar` for RAR.
+zip64, UTF-8 names, Unix modes); listing and extraction use the NAS's 7-Zip,
+GNU tar and `unrar`. Everything is extracted into a hidden folder first and
+then moved into place under the conflict rule, so a few items can come out
+on their own. 7-Zip gets the password on stdin, never on the command line.
 
 DSM's web server serves the interface without cache headers, so every URL
 carries the build, and a page left open across an upgrade reloads itself.

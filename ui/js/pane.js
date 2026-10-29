@@ -9,6 +9,7 @@ import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } 
 import { h, $, errorToast } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
+import { rememberArchive } from "./archive.js";
 
 const COLS = {
   mode: { label: "Permessi", width: "92px", cls: "mono pm" },
@@ -197,6 +198,7 @@ export class Pane {
         }));
         this.writable = false;
         this.space = null;
+        this.archive = null;
       } else {
         const data = await api.list(this.path);
         if (myPath !== this.path) return;
@@ -204,6 +206,12 @@ export class Pane {
         this.writable = data.writable;
         this.space = data.space;
         this.recycle = data.recycle;
+        this.archive = null;
+        if (data.inner !== undefined) {
+          const root = data.inner ? this.path.slice(0, this.path.length - data.inner.length - 1) : this.path;
+          rememberArchive(root);
+          this.archive = { root, inner: data.inner };
+        }
       }
     } catch (e) {
       if (myPath !== this.path) return;
@@ -716,6 +724,7 @@ export class Pane {
     const n = this.visible.length;
     const selList = this.visible.filter((e) => this.sel.has(e.path));
     let html = `<span>${count(n, "elemento", "elementi", int)}</span>`;
+    if (this.archive) html += `<span class="ro">${svg("archive")} ${t("Archivio · sola lettura")}</span>`;
     const hidden = (this.search ? this.search.results : this.entries).filter(isHidden).length;
     if (!prefs.showHidden && hidden) html += `<span>${t("{n} nascosti", { n: int(hidden) })}</span>`;
     if (selList.length) {
@@ -799,7 +808,10 @@ export class Pane {
     try {
       const st = await api.stat(e.path);
       if (token !== this.infoToken) return;
-      $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
+      if (st.archive) {
+        $(".owner", this.infoEl).textContent = "—";
+        $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Archivio")}</dt><dd>${esc(st.owner)}</dd>`);
+      } else $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
       if (st.target) $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Destinazione")}</dt><dd style="font-family:var(--mono)">${esc(st.target)}</dd>`);
     } catch {
       if (token === this.infoToken) $(".owner", this.infoEl).textContent = "—";

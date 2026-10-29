@@ -12,6 +12,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::archive;
 use crate::cgi::{self, ApiError, Request};
 use crate::identity::{self, User};
 use crate::jobs::daemon;
@@ -126,11 +127,17 @@ struct NewJob {
     into_folder: bool,
     #[serde(default)]
     password: Option<String>,
+    /// extract: only these items (paths inside the archive), each into dest
+    #[serde(default)]
+    members: Vec<String>,
 }
 
 fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
     if body.sources.is_empty() {
         return Err(ApiError::bad_request(t!("nessun elemento selezionato", "nothing selected")));
+    }
+    if body.op == Op::Cleanup {
+        return Err(ApiError::bad_request("invalid operation"));
     }
     let mut sources = Vec::new();
     let mut recycle = Vec::new();
@@ -175,7 +182,40 @@ fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
         level: body.level.clone(),
         into_folder: body.into_folder,
         password: body.password.clone(),
+        members: body.members.iter().map(|m| valid_member(m)).collect::<Result<_, _>>()?,
     })
+}
+
+/// A path inside an archive, as the client sends it: plain components only.
+fn valid_member(m: &str) -> Result<String, ApiError> {
+    let parts: Vec<&str> = m.split('/').filter(|p| !p.is_empty()).collect();
+    if parts.is_empty() || parts.iter().any(|p| *p == "." || *p == ".." || p.contains('\0')) {
+        return Err(ApiError::bad_request("invalid path"));
+    }
+    Ok(parts.join("/"))
+}
+
+/// A path that goes inside an archive file: the archive, the path inside
+/// it, and what the archive holds.
+fn in_archive(real: &std::path::Path) -> Result<Option<(PathBuf, String, Vec<archive::Member>)>, ApiError> {
+    match archive::locate(real) {
+        Some((file, inner)) => {
+            let members = archive::members(&file)?;
+            Ok(Some((file, inner, members)))
+        }
+        None => Ok(None),
+    }
+}
+
+/// One file out of an archive, to show or to download.
+fn send_member(out: &mut impl Write, real: &std::path::Path, inline: bool) -> Result<bool, ApiError> {
+    let Some((file, inner, members)) = in_archive(real)? else { return Ok(false) };
+    if inner.is_empty() {
+        return Ok(false);
+    }
+    let m = archive::find(&members, &inner).ok_or_else(|| ApiError::not_found(t!("elemento non trovato nell'archivio", "item not found in the archive")))?;
+    transfer::send_command(out, archive::cat(&file, m), &inner, m.size, m.mtime, inline)?;
+    Ok(true)
 }
 
 fn prefs(req: &Request, out: &mut impl Write, user: &User) -> Result<(), ApiError> {
@@ -222,6 +262,14 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
         }
         "list" => {
             let r = shares::resolve(shares, req.require("path")?)?;
+            if let Some((_, inner, members)) = in_archive(&r.real)? {
+                if !archive::is_dir(&members, &inner) {
+                    return Err(ApiError::bad_request(t!("non è una cartella", "not a folder")));
+                }
+                let (files, dirs, bytes) = archive::usage(&members, &inner);
+                let total = json!({ "files": files, "dirs": dirs, "bytes": bytes });
+                return reply(out, &json!({ "entries": archive::children(&members, &inner), "writable": false, "space": null, "recycle": false, "inner": inner, "total": total }));
+            }
             let listing = fsops::list(&r.real)?;
             let space = fsops::space(&r.real).map(|(free, total)| json!({"free": free, "total": total}));
             reply(
@@ -229,11 +277,31 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
                 &json!({ "entries": listing.entries, "writable": listing.writable, "space": space, "recycle": r.share.recycle }),
             )
         }
-        "stat" => reply(out, &fsops::details(&path_param("path")?)?),
+        "stat" => {
+            let real = path_param("path")?;
+            if let Some((file, inner, members)) = in_archive(&real)? {
+                if !inner.is_empty() {
+                    let m = archive::find(&members, &inner);
+                    let name = inner.rsplit('/').next().unwrap_or_default();
+                    let archive_name = file.file_name().unwrap_or_default().to_string_lossy();
+                    return reply(out, &json!({ "name": name, "kind": if m.is_some() { "f" } else { "d" }, "size": m.map_or(0, |m| m.size), "mtime": m.map_or(0, |m| m.mtime), "mode": m.map_or(0o755, |m| m.mode), "owner": archive_name, "group": "", "archive": true }));
+                }
+            }
+            reply(out, &fsops::details(&real)?)
+        }
         "usage" => {
             method(req, "POST")?;
             let body: Paths = req.json()?;
             let paths = body.paths.iter().map(|p| Ok(shares::resolve(shares, p)?.real)).collect::<Result<Vec<_>, ApiError>>()?;
+            // folders inside an archive are counted from its listing
+            if let [one] = paths.as_slice() {
+                if let Some((_, inner, members)) = in_archive(one)? {
+                    if !inner.is_empty() {
+                        let (files, dirs, bytes) = archive::usage(&members, &inner);
+                        return reply(out, &json!({ "bytes": bytes, "files": files, "dirs": dirs + 1, "unreadable": 0, "partial": false }));
+                    }
+                }
+            }
             reply(out, &fsops::usage(&paths, Duration::from_secs(25)))
         }
         "mkdir" => {
@@ -268,6 +336,9 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
         }
         "search" => {
             let root = path_param("path")?;
+            if archive::locate(&root).is_some() {
+                return Err(ApiError::bad_request(t!("la ricerca nelle sottocartelle non funziona dentro un archivio", "subfolder search does not work inside an archive")));
+            }
             let pattern = fsops::Pattern::new(req.require("q")?);
             let limit = req.param("limit").and_then(|l| l.parse().ok()).unwrap_or(2000).min(10000);
             let budget = req.param("budget").and_then(|b| b.parse().ok()).unwrap_or(15u64).clamp(1, 60);
@@ -277,6 +348,9 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
             if let Some(list) = req.param("paths") {
                 let paths: Vec<String> = serde_json::from_str(list).map_err(|_| ApiError::bad_request("paths"))?;
                 let real = paths.iter().map(|p| Ok(shares::resolve(shares, p)?.real)).collect::<Result<Vec<_>, ApiError>>()?;
+                if real.len() == 1 && send_member(out, &real[0], false)? {
+                    return Ok(());
+                }
                 if real.len() == 1 && std::fs::metadata(&real[0]).is_ok_and(|m| m.is_file()) {
                     return transfer::send_file(out, req, &real[0], false);
                 }
@@ -293,9 +367,19 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
                 }
                 return transfer::send_zip(out, &real, &format!("{name}.zip"));
             }
-            transfer::send_file(out, req, &path_param("path")?, false)
+            let real = path_param("path")?;
+            if send_member(out, &real, false)? {
+                return Ok(());
+            }
+            transfer::send_file(out, req, &real, false)
         }
-        "view" => transfer::send_file(out, req, &path_param("path")?, true),
+        "view" => {
+            let real = path_param("path")?;
+            if send_member(out, &real, true)? {
+                return Ok(());
+            }
+            transfer::send_file(out, req, &real, true)
+        }
         "thumb" => {
             let file = path_param("path")?;
             let thumb = fsops::thumbnail(&file, req.param("size") == Some("big")).ok_or_else(|| ApiError::not_found(t!("nessuna miniatura", "no thumbnail")))?;
@@ -313,8 +397,20 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
             let path = path_param("path")?;
             let mut buf = Vec::new();
             use std::io::Read;
-            std::fs::File::open(&path)?.take(512 * 1024).read_to_end(&mut buf)?;
-            let size = std::fs::metadata(&path)?.len();
+            let size = match in_archive(&path)? {
+                Some((file, inner, members)) if !inner.is_empty() => {
+                    let m = archive::find(&members, &inner).ok_or_else(|| ApiError::not_found(t!("elemento non trovato nell'archivio", "item not found in the archive")))?;
+                    let mut child = archive::cat(&file, m).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()?;
+                    child.stdout.take().unwrap().take(512 * 1024).read_to_end(&mut buf)?;
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    m.size
+                }
+                _ => {
+                    std::fs::File::open(&path)?.take(512 * 1024).read_to_end(&mut buf)?;
+                    std::fs::metadata(&path)?.len()
+                }
+            };
             let binary = buf.iter().take(8192).any(|&b| b == 0);
             reply(out, &json!({ "text": if binary { String::new() } else { String::from_utf8_lossy(&buf).into_owned() }, "binary": binary, "size": size, "truncated": size > buf.len() as u64 }))
         }

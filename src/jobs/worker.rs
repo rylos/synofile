@@ -87,7 +87,13 @@ pub fn run() -> std::process::ExitCode {
     let mut engine = Engine::new(spec, shared);
     let (status, msg) = match engine.run() {
         Ok(()) => (Status::Ok, engine.summary()),
-        Err(Cancelled) => (Status::Cancelled, t!("annullato", "cancelled").to_string()),
+        Err(Cancelled) => {
+            // deepest first; remove_dir leaves any folder that holds something
+            for dir in engine.made_dirs.iter().rev() {
+                let _ = fs::remove_dir(dir);
+            }
+            (Status::Cancelled, t!("annullato", "cancelled").to_string())
+        }
     };
     let status = if status == Status::Ok && engine.fatal.is_some() { Status::Failed } else { status };
     let msg = engine.fatal.take().unwrap_or(msg);
@@ -116,6 +122,8 @@ struct Engine {
     buf: Vec<u8>,
     clone_works: Option<bool>,
     fatal: Option<String>,
+    /// folders this job made: on cancel the ones left empty go
+    made_dirs: Vec<PathBuf>,
 }
 
 impl Engine {
@@ -133,6 +141,7 @@ impl Engine {
             buf: Vec::new(),
             clone_works: None,
             fatal: None,
+            made_dirs: Vec::new(),
         }
     }
 
@@ -228,6 +237,49 @@ impl Engine {
             Op::Copy | Op::Move => self.transfer(),
             Op::Compress => self.compress(),
             Op::Extract => self.extract(),
+            Op::Cleanup => {
+                self.cleanup();
+                Ok(())
+            }
+        }
+    }
+
+    /// The leftovers of a job the restart cut short: ".name.synofile-part"
+    /// files and ".synofile-x-…" extraction folders, in the destination and
+    /// in the trees it was copying into. Nothing else is touched.
+    fn cleanup(&mut self) {
+        let Some(dest) = self.spec.dest.clone() else { return };
+        let leftover = |name: &OsStr| {
+            let b = name.as_bytes();
+            (b.starts_with(b".") && b.ends_with(b".synofile-part")) || b.starts_with(b".synofile-x-")
+        };
+        let clean = |dir: &Path, deep: bool, stack: &mut Vec<PathBuf>, seen: &mut usize| {
+            let Ok(items) = fs::read_dir(dir) else { return };
+            for item in items.flatten() {
+                *seen += 1;
+                let name = item.file_name();
+                let Ok(kind) = item.file_type() else { continue };
+                if leftover(&name) {
+                    let _ = if kind.is_dir() { fs::remove_dir_all(item.path()) } else { fs::remove_file(item.path()) };
+                } else if deep && kind.is_dir() {
+                    stack.push(item.path());
+                }
+            }
+        };
+        let mut seen = 0usize;
+        let mut stack = Vec::new();
+        // the destination at its top level, the trees of the job's items in full
+        clean(&dest, false, &mut stack, &mut seen);
+        for src in &self.spec.sources {
+            if let Some(name) = src.file_name() {
+                stack.push(dest.join(name));
+            }
+        }
+        while let Some(dir) = stack.pop() {
+            if seen > 500_000 {
+                return;
+            }
+            clean(&dir, true, &mut stack, &mut seen);
         }
     }
 
@@ -252,6 +304,9 @@ impl Engine {
         let moving = self.spec.op == Op::Move;
         let sources = self.spec.sources.clone();
 
+        if !self.can_write(&dest) {
+            return Ok(());
+        }
         // refuse a folder into itself before touching anything
         let dest_real = fs::canonicalize(&dest).unwrap_or_else(|_| dest.clone());
         for src in &sources {
@@ -342,6 +397,17 @@ impl Engine {
         self.p.scanning = false;
         self.emit_progress(true);
         Ok(())
+    }
+
+    /// Fails the job at once when the user may not write into `dest`: else
+    /// every item would fail on its own, after the whole scan.
+    fn can_write(&mut self, dest: &Path) -> bool {
+        if crate::fsops::access(dest, libc::W_OK | libc::X_OK) {
+            return true;
+        }
+        let name = dest.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| dest.display().to_string());
+        self.fatal = Some(t!("non hai il permesso di scrivere nella cartella «{}»", "you are not allowed to write to the folder “{}”", name));
+        false
     }
 
     /// Fails the job early when the data cannot fit. A copy inside one
@@ -511,6 +577,7 @@ impl Engine {
                 self.skip_tree(src);
                 return Ok(());
             }
+            self.made_dirs.push(target.clone());
         }
         let mut children: Vec<OsString> = match fs::read_dir(src) {
             Ok(rd) => rd.flatten().map(|e| e.file_name()).collect(),
@@ -772,6 +839,9 @@ impl Engine {
         if !name.to_ascii_lowercase().ends_with(".zip") {
             name.push_str(".zip");
         }
+        if !self.can_write(&dest) {
+            return Ok(());
+        }
         self.scan(&sources)?;
         if !self.room_for(&[], &dest) {
             return Ok(());
@@ -876,6 +946,9 @@ impl Engine {
             self.fatal = Some(t!("manca la destinazione", "no destination"));
             return Ok(());
         };
+        if !self.can_write(&dest) {
+            return Ok(());
+        }
         let size = fs::metadata(&archive).map(|m| m.len()).unwrap_or(0);
         self.p.phase = "extract".into();
         self.p.bytes_total = size;
@@ -897,38 +970,128 @@ impl Engine {
         };
         let password = self.spec.password.clone().unwrap_or_default();
         let policy = self.spec.conflict;
-        let mut cmd = if rar {
-            let mut c = std::process::Command::new("unrar");
-            c.arg("x").arg(match policy {
-                Policy::Overwrite | Policy::Newer => "-o+",
-                Policy::Skip => "-o-",
-                _ => "-or",
-            });
-            c.arg(if password.is_empty() { "-p-".to_string() } else { format!("-p{password}") });
-            c.arg("--").arg(&archive).arg(format!("{}/", target.display()));
-            c
+        let format = crate::archive::format(&name);
+        // Everything lands in a hidden folder first, then moves into place
+        // under the conflict rule: the same for every tool, and it lets a
+        // few items come out of the archive on their own.
+        let tmp = target.join(format!(".synofile-x-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        if let Err(e) = fs::create_dir(&tmp) {
+            if let Some(dir) = &created {
+                let _ = fs::remove_dir(dir);
+            }
+            self.fatal = Some(describe(&e));
+            return Ok(());
+        }
+        let cleanup = |created: &Option<PathBuf>| {
+            let _ = fs::remove_dir_all(&tmp);
+            let _ = fs::remove_file(tmp.with_extension("list"));
+            if let Some(dir) = created {
+                let _ = fs::remove_dir_all(dir);
+            }
+        };
+        // only some items: the tools get the list of their names in a file
+        let list = if self.spec.members.is_empty() {
+            None
         } else {
-            let mut c = std::process::Command::new("7z");
-            c.arg("x").arg("-y").arg("-bsp1").arg("-bb1").arg("-bse1");
-            c.arg(match policy {
-                Policy::Overwrite | Policy::Newer => "-aoa",
-                Policy::Skip => "-aos",
-                _ => "-aou",
-            });
-            c.arg(format!("-p{password}"));
-            c.arg(format!("-o{}", target.display())).arg("--").arg(&archive);
-            c
+            let all = match crate::archive::members(&archive) {
+                Ok(m) => m,
+                Err(e) => {
+                    cleanup(&created);
+                    self.fatal = Some(e.message);
+                    return Ok(());
+                }
+            };
+            let wanted: Vec<&crate::archive::Member> = all
+                .iter()
+                .filter(|m| self.spec.members.iter().any(|sel| m.path == *sel || (m.path.starts_with(sel.as_str()) && m.path.as_bytes().get(sel.len()) == Some(&b'/'))))
+                .collect();
+            self.p.bytes_total = wanted.iter().map(|m| m.size).sum();
+            self.p.files_total = wanted.iter().filter(|m| !m.dir).count() as u64;
+            let file = tmp.with_extension("list");
+            let text: String = wanted.iter().map(|m| format!("{}\n", m.raw)).collect();
+            if let Err(e) = fs::write(&file, text) {
+                cleanup(&created);
+                self.fatal = Some(describe(&e));
+                return Ok(());
+            }
+            Some(file)
+        };
+        let fed = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let tar = matches!(format, Some(crate::archive::Format::Tar(_)));
+        let mut cmd = match format {
+            Some(crate::archive::Format::Rar) => {
+                let mut c = std::process::Command::new("unrar");
+                c.arg("x").arg("-o+");
+                c.arg(if password.is_empty() { "-p-".to_string() } else { format!("-p{password}") });
+                // a list after "--" would be taken for a file name
+                if let Some(l) = &list {
+                    c.arg(format!("-n@{}", l.display()));
+                }
+                c.arg("--").arg(&archive).arg(format!("{}/", tmp.display()));
+                c
+            }
+            Some(crate::archive::Format::Tar(flag)) => {
+                // fed through stdin, so the bytes read give the progress
+                let mut c = std::process::Command::new("tar");
+                c.args(["-x", "-v", "--no-same-owner", "--no-same-permissions"]);
+                if let Some(f) = flag {
+                    c.arg(f);
+                }
+                c.arg("-f").arg("-").arg("-C").arg(&tmp);
+                if let Some(l) = &list {
+                    c.args(["--no-recursion", "--verbatim-files-from", "-T"]).arg(l);
+                }
+                c
+            }
+            _ => {
+                let mut c = std::process::Command::new("7z");
+                c.arg("x").arg("-y").arg("-bsp1").arg("-bb1").arg("-bse1").arg("-aoa").arg("-spd").arg("-scsUTF-8");
+                // the password goes on stdin, out of sight of `ps`; an empty
+                // -p makes 7z fail at once instead of asking
+                if password.is_empty() {
+                    c.arg("-p");
+                }
+                // a list after "--" would be taken for a file name
+                if let Some(l) = &list {
+                    c.arg(format!("-i@{}", l.display()));
+                }
+                c.arg(format!("-o{}", tmp.display())).arg("--").arg(&archive);
+                c
+            }
         };
         // p7zip reads UTF-8 names right only in a UTF-8 locale
         cmd.env("LC_ALL", "en_US.utf8").env("LANG", "en_US.utf8").env("PATH", "/usr/bin:/bin:/usr/local/bin");
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+        let password_on_stdin = !tar && format != Some(crate::archive::Format::Rar) && !password.is_empty();
+        cmd.stdin(if tar || password_on_stdin { std::process::Stdio::piped() } else { std::process::Stdio::null() });
+        cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
+                cleanup(&created);
                 self.fatal = Some(t!("strumento di estrazione non disponibile: {}", "extraction tool not available: {}", describe(&e)));
                 return Ok(());
             }
         };
+        if password_on_stdin {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(format!("{password}\n").as_bytes());
+            }
+        }
+        let feeder = child.stdin.take().map(|mut stdin| {
+            let fed = Arc::clone(&fed);
+            let archive = archive.clone();
+            std::thread::spawn(move || {
+                let Ok(mut f) = File::open(&archive) else { return };
+                let mut buf = vec![0u8; 1 << 20];
+                while let Ok(n) = f.read(&mut buf) {
+                    if n == 0 || stdin.write_all(&buf[..n]).is_err() {
+                        break;
+                    }
+                    fed.fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed);
+                }
+            })
+        });
         #[derive(Default)]
         struct Seen {
             percent: u64,
@@ -942,6 +1105,7 @@ impl Engine {
         for stream in [child.stdout.take().map(|s| Box::new(s) as Box<dyn Read + Send>), child.stderr.take().map(|s| Box::new(s) as Box<dyn Read + Send>)].into_iter().flatten() {
             let seen = Arc::clone(&seen);
             readers.push(std::thread::spawn(move || {
+                let tar = tar;
                 let mut stream = stream;
                 let mut line = Vec::new();
                 let mut byte = [0u8; 4096];
@@ -960,9 +1124,14 @@ impl Engine {
                     if let Some(pct) = text.split_whitespace().find_map(|w| w.strip_suffix('%').and_then(|n| n.parse::<u64>().ok())) {
                         s.percent = s.percent.max(pct.min(100));
                     }
-                    let file = text.strip_prefix("- ").map(str::to_string).or_else(|| text.split_once(" - ").map(|(_, f)| f.to_string())).or_else(|| {
-                        text.strip_prefix("Extracting").map(|r| r.trim().trim_end_matches(|c: char| c.is_ascii_digit() || c == '%' || c == ' ' || c == '\u{8}').trim().to_string())
-                    });
+                    let file = if tar {
+                        // tar -v prints just the names
+                        Some(text.clone()).filter(|f| !f.ends_with('/'))
+                    } else {
+                        text.strip_prefix("- ").map(str::to_string).or_else(|| text.split_once(" - ").map(|(_, f)| f.to_string())).or_else(|| {
+                            text.strip_prefix("Extracting").map(|r| r.trim().trim_end_matches(|c: char| c.is_ascii_digit() || c == '%' || c == ' ' || c == '\u{8}').trim().to_string())
+                        })
+                    };
                     if let Some(f) = file.filter(|f| !f.is_empty() && !f.starts_with("from ")) {
                         if f != s.last {
                             s.files += 1;
@@ -1003,9 +1172,7 @@ impl Engine {
                 // SAFETY: signalling our own child
                 unsafe { libc::kill(pid, libc::SIGKILL) };
                 let _ = child.wait();
-                if let Some(dir) = &created {
-                    let _ = fs::remove_dir_all(dir);
-                }
+                cleanup(&created);
                 return Err(Cancelled);
             }
             if paused != stopped {
@@ -1017,7 +1184,7 @@ impl Engine {
             }
             {
                 let s = seen.lock().unwrap();
-                self.p.bytes_done = size * s.percent / 100;
+                self.p.bytes_done = if tar { fed.load(std::sync::atomic::Ordering::Relaxed).min(size) * self.p.bytes_total.max(1) / size.max(1) } else { self.p.bytes_total * s.percent / 100 };
                 self.p.files_done = s.files;
                 self.p.current = s.last.clone();
             }
@@ -1027,32 +1194,55 @@ impl Engine {
         for r in readers {
             let _ = r.join();
         }
+        if let Some(f) = feeder {
+            let _ = f.join();
+        }
         let s = seen.lock().unwrap();
         self.p.files_done = s.files;
-        self.p.files_total = s.files;
+        self.p.files_total = self.p.files_total.max(s.files);
         self.p.current.clear();
         let code = status.and_then(|st| st.code()).unwrap_or(-1);
         if s.password && code != 0 {
-            if let Some(dir) = &created {
-                let _ = fs::remove_dir_all(dir);
-            }
+            cleanup(&created);
             self.fatal = Some(super::protocol::NEED_PASSWORD.into());
             return Ok(());
         }
-        // 7z: 1 = warnings (some files), 2+ = fatal; unrar: 0 ok, anything else trouble
-        if code == 0 || (!rar && code == 1) {
-            self.p.bytes_done = size;
+        // 7z: 1 = warnings (some files), 2+ = fatal; unrar and tar: 0 ok
+        let format_7z = !tar && format != Some(crate::archive::Format::Rar);
+        if code == 0 || (format_7z && code == 1) {
             if code == 1 {
                 self.error_msg(&archive, s.tail.last().cloned().unwrap_or_default());
             }
+            drop(s);
+            // into place: the chosen items, or all that came out
+            let moves: Vec<(PathBuf, PathBuf)> = if self.spec.members.is_empty() {
+                fs::read_dir(&tmp).map(|d| d.flatten().map(|e| (e.path(), target.join(e.file_name()))).collect()).unwrap_or_default()
+            } else {
+                self.spec.members.iter().map(|m| (tmp.join(m), target.join(m.rsplit('/').next().unwrap_or(m)))).collect()
+            };
+            let picked = !self.spec.members.is_empty();
+            for (from, to) in moves {
+                if fs::symlink_metadata(&from).is_err() {
+                    // the tool said fine, yet the item is not there
+                    if picked {
+                        self.error_msg(&to, t!("non estratto dall'archivio", "not extracted from the archive"));
+                    }
+                    continue;
+                }
+                if let Err(e) = merge(&from, &to, policy) {
+                    self.error_msg(&to, describe(&e));
+                }
+            }
+            let _ = fs::remove_dir_all(&tmp);
+            let _ = fs::remove_file(tmp.with_extension("list"));
+            self.p.bytes_done = self.p.bytes_total;
             return Ok(());
         }
         let why = s.tail.iter().rev().find(|l| l.to_ascii_lowercase().contains("error")).or(s.tail.last()).cloned().unwrap_or_default();
         self.fatal = Some(t!("estrazione non riuscita: {}", "extraction failed: {}", why));
-        if let Some(dir) = &created {
-            // an empty folder is no use to anybody
-            let _ = fs::remove_dir(dir);
-        }
+        drop(s);
+        // an empty folder is no use to anybody
+        cleanup(&created);
         Ok(())
     }
 
@@ -1256,6 +1446,35 @@ fn part_name(name: &OsStr) -> OsString {
 
 /// "name.ext" if free, else "name (1).ext", "name (2).ext"... With a `tag`,
 /// "name - Copia.ext", then "name - Copia (1).ext".
+/// Moves an extracted item into place: folders are merged, a clash is
+/// settled by the conflict rule (asking is not possible here: "ask" keeps
+/// both, like the NAS does).
+fn merge(from: &Path, to: &Path, policy: Policy) -> io::Result<()> {
+    let Ok(old) = fs::symlink_metadata(to) else { return fs::rename(from, to) };
+    let new = fs::symlink_metadata(from)?;
+    if old.is_dir() && new.is_dir() {
+        for item in fs::read_dir(from)?.flatten() {
+            merge(&item.path(), &to.join(item.file_name()), policy)?;
+        }
+        return Ok(());
+    }
+    let replace = !old.is_dir()
+        && !new.is_dir()
+        && match policy {
+            Policy::Overwrite => true,
+            Policy::Newer => new.mtime() > old.mtime(),
+            _ => false,
+        };
+    if replace {
+        return fs::rename(from, to);
+    }
+    if matches!(policy, Policy::Skip | Policy::Newer | Policy::Overwrite) {
+        return Ok(());
+    }
+    let parent = to.parent().unwrap_or(Path::new("."));
+    fs::rename(from, unique_name(parent, to.file_name().unwrap_or_default(), ""))
+}
+
 pub fn unique_name(dir: &Path, name: &OsStr, tag: &str) -> PathBuf {
     let text = name.to_string_lossy();
     let (stem, ext) = match text.rfind('.') {

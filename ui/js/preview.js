@@ -2,12 +2,13 @@
 // folder; the arrows move to the previous and next file.
 
 import { api } from "./api.js";
-import { t } from "./i18n.js";
-import { esc, size, dateTime } from "./format.js";
+import { t, count } from "./i18n.js";
+import { esc, size, dateTime, int } from "./format.js";
 import { svg, iconHTML, kindLabel, previewKind } from "./icons.js";
 import { h, $ } from "./ui.js";
 import { isHeic, heicURL } from "./heic.js";
 import { imageViewer } from "./zoom.js";
+import { isBrowsable } from "./archive.js";
 
 export function quickLook(pane, onDownload) {
   const files = pane.visible.filter((e) => e.kind !== "d" && !e.link_dir);
@@ -77,6 +78,32 @@ export function quickLook(pane, onDownload) {
       body.querySelector("video").onerror = () => nothing(e, t("Il browser non sa riprodurre questo formato."));
     } else if (kind === "audio") {
       body.append(h(`<div style="text-align:center">${iconHTML(e, "keep").replace('class="gi', 'style="font-size:96px;display:block;margin-bottom:20px" class="gi')}<audio src="${src}" controls autoplay></audio></div>`));
+    } else if (isBrowsable(e) && !pane.archive) {
+      // like flea: what is inside, at a glance; Enter opens it as a folder
+      body.append(h(`<div class="ql-wait">${t("Caricamento…")}</div>`));
+      try {
+        const data = await api.list(e.path);
+        if (files[index] !== e) return;
+        const rows = data.entries
+          .map((x) => ({ ...x, path: e.path + "/" + x.name }))
+          .sort((a, b) => (b.kind === "d") - (a.kind === "d") || a.name.localeCompare(b.name));
+        const shown = rows.slice(0, 400);
+        const tot = data.total || {};
+        body.innerHTML = "";
+        body.append(h(`<div class="ql-archive">
+          <div class="sum">${iconHTML(e, "keep")}<div><b>${esc(e.name)}</b>
+            <span>${esc(count(tot.files || 0, "file", "file", int))} · ${esc(count(tot.dirs || 0, "cartella", "cartelle", int))} · ${esc(t("{s} estratti", { s: size(tot.bytes || 0) }))}</span></div>
+            <button class="btn primary enter">${svg("forward")} ${t("Apri come cartella")}</button></div>
+          <ul>${shown.map((x) => `<li>${iconHTML(x)}<span class="n">${esc(x.name)}</span><span class="s">${x.kind === "d" ? "" : esc(size(x.size))}</span></li>`).join("")}</ul>
+          ${rows.length > shown.length ? `<div class="more">${esc(t("e altri {n}", { n: int(rows.length - shown.length) }))}</div>` : ""}
+        </div>`));
+        $(".enter", body).onclick = () => {
+          dlg.close();
+          pane.go(e.path);
+        };
+      } catch (err) {
+        if (files[index] === e) nothing(e, err.message);
+      }
     } else if (kind === "pdf") {
       body.append(h(`<iframe src="${src}"></iframe>`));
     } else if (kind === "text" || e.size < 256 * 1024) {

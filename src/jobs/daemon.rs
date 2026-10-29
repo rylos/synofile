@@ -106,6 +106,9 @@ pub struct JobView {
     pub policy: Policy,
     /// [ms since start, bytes done, files done, bytes verified]
     pub samples: Vec<[u64; 4]>,
+    /// stopped by a restart of the package: it can be run again
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub interrupted: bool,
 }
 
 struct Job {
@@ -137,6 +140,7 @@ impl Job {
             self.finished_at = Some(Instant::now());
             self.view.finished = Some(now_ms());
             self.stdin = None;
+            let _ = std::fs::remove_file(journal_path(self.view.id));
         }
     }
 
@@ -182,7 +186,7 @@ pub fn run() -> std::process::ExitCode {
     };
     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     eprintln!("{} synofile daemon listening on {}", stamp(), path.display());
-    let jobs: Jobs = Arc::new(Mutex::new(VecDeque::new()));
+    let jobs: Jobs = Arc::new(Mutex::new(recover()));
     let mut next_id = now_ms();
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -234,7 +238,9 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                 limit: spec.limit,
                 policy: spec.conflict,
                 samples: Vec::new(),
+                interrupted: false,
             };
+            journal(&JournalEntry { id: new_id, user: user.clone(), spec: spec.clone(), info: view.info.clone(), created: view.created });
             let job = Job {
                 view,
                 owner: user.name.clone(),
@@ -407,13 +413,14 @@ fn worker_command() -> io::Result<std::process::Command> {
     Err(io::Error::other(format!("{} is missing", worker.display())))
 }
 
-fn spawn(job: &mut Job) -> io::Result<std::process::ChildStdout> {
+/// A worker running as `user`, with `spec` already sent.
+fn start_worker(user: &User, spec: &Spec) -> io::Result<std::process::Child> {
     if !crate::caps::effective() && !crate::identity::dev() {
         return Err(io::Error::other(t!("permessi del pacchetto da attivare: sudo /var/packages/synofile/target/bin/synofile setup", "the package permissions need enabling: sudo /var/packages/synofile/target/bin/synofile setup")));
     }
     let mut cmd = worker_command()?;
     cmd.env_clear().env("PATH", "/usr/bin:/bin").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
-    let user = job.user.clone();
+    let user = user.clone();
     if crate::identity::dev() {
         cmd.env("SYNOFILE_DEV_USER", &user.name);
     } else {
@@ -425,11 +432,16 @@ fn spawn(job: &mut Job) -> io::Result<std::process::ChildStdout> {
         }
     }
     let mut child = cmd.spawn()?;
-    let mut stdin = child.stdin.take().ok_or_else(|| io::Error::other("no stdin"))?;
-    let stdout = child.stdout.take().ok_or_else(|| io::Error::other("no stdout"))?;
-    let mut line = serde_json::to_vec(&job.spec).map_err(io::Error::other)?;
+    let mut line = serde_json::to_vec(spec).map_err(io::Error::other)?;
     line.push(b'\n');
-    stdin.write_all(&line)?;
+    child.stdin.as_mut().ok_or_else(|| io::Error::other("no stdin"))?.write_all(&line)?;
+    Ok(child)
+}
+
+fn spawn(job: &mut Job) -> io::Result<std::process::ChildStdout> {
+    let mut child = start_worker(&job.user, &job.spec)?;
+    let stdin = child.stdin.take().ok_or_else(|| io::Error::other("no stdin"))?;
+    let stdout = child.stdout.take().ok_or_else(|| io::Error::other("no stdout"))?;
     job.stdin = Some(stdin);
     job.view.started = Some(now_ms());
     job.start_instant = Some(Instant::now());
@@ -489,6 +501,101 @@ fn follow(jobs: &Jobs, id: u64, stdout: std::process::ChildStdout) {
         }
     }
     schedule(jobs);
+}
+
+// ---- the journal: jobs not finished yet, on disk ----
+//
+// A restart of the package (an update, the NAS rebooting) stops the
+// workers. The jobs are not resumed on their own: after an update that
+// could surprise, and half a copy cannot be trusted. Instead their
+// temporary files are cleaned up and they come back as interrupted, with
+// Retry.
+
+#[derive(Serialize, Deserialize)]
+struct JournalEntry {
+    id: u64,
+    user: User,
+    spec: Spec,
+    info: Info,
+    created: u64,
+}
+
+fn journal_path(id: u64) -> PathBuf {
+    crate::var_dir().join("journal").join(format!("{id}.json"))
+}
+
+fn journal(entry: &JournalEntry) {
+    let path = journal_path(entry.id);
+    let dir = path.parent().unwrap();
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    let tmp = path.with_extension("tmp");
+    // the spec may hold an archive password: readable by the package only
+    let written = serde_json::to_vec(entry).ok().and_then(|b| std::fs::write(&tmp, b).ok());
+    if written.is_some() {
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+        let _ = std::fs::rename(&tmp, &path);
+    }
+}
+
+/// The jobs a restart cut short: cleaned up, shown as interrupted.
+fn recover() -> VecDeque<Job> {
+    let dir = crate::var_dir().join("journal");
+    let mut entries: Vec<JournalEntry> = std::fs::read_dir(&dir)
+        .map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "json")).filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok()).collect())
+        .unwrap_or_default();
+    entries.sort_by_key(|e| e.id);
+    let mut list = VecDeque::new();
+    for e in entries {
+        crate::lang::set(&e.spec.lang);
+        if e.spec.op != Op::Delete && e.spec.dest.is_some() {
+            let mut clean = e.spec.clone();
+            clean.op = Op::Cleanup;
+            match start_worker(&e.user, &clean) {
+                Ok(mut child) => {
+                    drop(child.stdin.take());
+                    let _ = child.wait();
+                }
+                Err(err) => eprintln!("{} cleanup of job {} failed: {err}", stamp(), e.id),
+            }
+        }
+        eprintln!("{} job {} was interrupted by the restart", stamp(), e.id);
+        let view = JobView {
+            id: e.id,
+            op: e.spec.op,
+            info: e.info,
+            state: State::Queued,
+            created: e.created,
+            started: None,
+            finished: None,
+            active_ms: 0,
+            progress: Progress::default(),
+            conflict: None,
+            errors: Vec::new(),
+            msg: t!("interrotto dal riavvio del pacchetto", "interrupted by a restart of the package").into(),
+            verify: e.spec.verify,
+            limit: e.spec.limit,
+            policy: e.spec.conflict,
+            samples: Vec::new(),
+            interrupted: true,
+        };
+        let mut job = Job {
+            view,
+            owner: e.user.name.clone(),
+            user: e.user,
+            spec: e.spec,
+            stdin: None,
+            run_since: None,
+            active: Duration::ZERO,
+            last_sample: None,
+            start_instant: None,
+            finished_at: None,
+            force: false,
+        };
+        job.set_state(State::Failed);
+        list.push_back(job);
+    }
+    list
 }
 
 pub fn now_ms() -> u64 {

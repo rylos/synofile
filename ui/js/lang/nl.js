@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "‘Beide behouden’ slaat het nieuwe op als {n}",
   "Riduci": "Uitzoomen", "Ingrandisci": "Inzoomen", "Adatta alla finestra": "Aanpassen aan venster",
   "Dimensione totale": "Totale grootte",
+  "Apri come cartella": "Openen als map", "Archivio · sola lettura": "Archief · alleen-lezen", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "In een archief kun je alleen losse bestanden downloaden: gebruik voor de rest ‘Kopiëren naar…’", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archieven openen alleen-lezen: pak ze uit om ze te wijzigen", "Riprova": "Opnieuw proberen", "{s} estratti": "{s} uitgepakt",
 };

@@ -366,4 +366,5 @@ export default {
   "«Mantieni entrambi» salva il nuovo come {n}": "„Beide behalten“ speichert das neue als {n}",
   "Riduci": "Verkleinern", "Ingrandisci": "Vergrößern", "Adatta alla finestra": "An Fenster anpassen",
   "Dimensione totale": "Gesamtgröße",
+  "Apri come cartella": "Als Ordner öffnen", "Archivio · sola lettura": "Archiv · schreibgeschützt", "Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»": "In einem Archiv lassen sich nur einzelne Dateien herunterladen: für den Rest „Kopieren nach…“ verwenden", "Gli archivi si aprono in sola lettura: per cambiarli, estraili": "Archive werden schreibgeschützt geöffnet: zum Ändern zuerst extrahieren", "Riprova": "Wiederholen", "{s} estratti": "{s} entpackt",
 };
