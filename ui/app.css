@@ -494,6 +494,8 @@ dialog.quick::backdrop { background: rgba(4, 5, 8, .82); backdrop-filter: blur(4
 }
 .ql-body .nopreview { color: #c9ced8; text-align: center; }
 .ql-body .nopreview .gi { font-size: 96px; width: auto; display: block; margin: 0 auto 16px; }
+.ql-body .ql-wait { position: absolute; color: #c9ced8; }
+img[data-heic]:not([src]) { display: none; }
 .ql-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: 10px; background: rgba(255,255,255,.06); color: #fff; cursor: pointer; display: grid; place-items: center; }
 .ql-nav:hover { background: rgba(255,255,255,.14); }
 .ql-nav.prev { left: 8px; }

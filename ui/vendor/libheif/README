@@ -1,0 +1,3 @@
+libheif-js 1.23.2 (libheif + libde265 compiled to WebAssembly)
+https://github.com/catdad-experiments/libheif-js
+License: LGPL-3.0 (see LICENSE). Unmodified copy of libheif-wasm/libheif.js and libheif.wasm from the npm package.

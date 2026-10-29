@@ -6,6 +6,7 @@ import { t } from "./i18n.js";
 import { esc, size, dateTime } from "./format.js";
 import { svg, iconHTML, kindLabel, previewKind } from "./icons.js";
 import { h, $ } from "./ui.js";
+import { isHeic, heicURL } from "./heic.js";
 
 export function quickLook(pane, onDownload) {
   const files = pane.visible.filter((e) => e.kind !== "d" && !e.link_dir);
@@ -32,7 +33,19 @@ export function quickLook(pane, onDownload) {
     const src = api.view(e.path);
     const kind = previewKind(e);
     body.innerHTML = "";
-    if (kind === "image") {
+    if (kind === "image" && isHeic(e.name)) {
+      // Synology's thumbnail, if any, while the full photo decodes.
+      body.append(h(`<img alt=""${e.thumb ? ` src="${api.thumb(e.path, true)}"` : ""}>`));
+      if (!e.thumb) body.append(h(`<div class="ql-wait">${t("Caricamento…")}</div>`));
+      try {
+        const u = await heicURL(e, 2560);
+        if (files[index] !== e) return;
+        body.querySelector(".ql-wait")?.remove();
+        body.querySelector("img").src = u;
+      } catch {
+        if (files[index] === e && !e.thumb) nothing(e);
+      }
+    } else if (kind === "image") {
       body.append(h(`<img src="${e.thumb && /\.(heic|heif)$/i.test(e.name) ? api.thumb(e.path, true) : src}" alt="">`));
       body.querySelector("img").onerror = () => {
         if (e.thumb) body.querySelector("img").src = api.thumb(e.path, true);

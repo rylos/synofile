@@ -8,6 +8,7 @@ import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
 import { h, $, errorToast } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
+import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
 
 const COLS = {
   mode: { label: "Permessi", width: "92px", cls: "mono pm" },
@@ -696,6 +697,7 @@ export class Pane {
         let thumb = iconHTML(e, "keep");
         if (e.thumb) thumb = `<img loading="lazy" src="${api.thumb(e.path)}" alt="">`;
         else if (kind === "image" && e.size < 8 * 1024 * 1024 && !/\.(heic|heif|tiff?)$/i.test(e.name)) thumb = `<img loading="lazy" src="${api.view(e.path)}" alt="">`;
+        else if (isHeic(e.name) && e.size < HEIC_LIMIT) thumb += `<img data-heic alt="">`;
         const sub = isDirLike(e) ? "" : size(e.size);
         html += `<div class="${cls}" data-i="${i}" draggable="true" style="left:${8 + c * cw}px;top:${4 + r * this.tileH}px;width:${cw - 6}px;height:${this.tileH - 6}px">
           <div class="thumb">${thumb}</div><div class="tname ${colorClass(e)}" title="${esc(e.name)}">${esc(e.name)}</div>${sub ? `<div class="tsub">${sub}</div>` : ""}</div>`;
@@ -707,6 +709,7 @@ export class Pane {
       const e = list[+tile.dataset.i];
       img.replaceWith(h(iconHTML(e, "keep")));
     }));
+    fillHeic(this.rowsEl, (img) => list[+img.closest(".tile").dataset.i], 384);
   }
 
   renderStatus() {
@@ -758,6 +761,7 @@ export class Pane {
     let preview = iconHTML(e, "keep");
     if (e.thumb) preview = `<img src="${api.thumb(e.path, true)}" alt="">`;
     else if (kind === "image" && e.size < 15 * 1024 * 1024 && !/\.(heic|heif|tiff?)$/i.test(e.name)) preview = `<img src="${api.view(e.path)}" alt="">`;
+    else if (isHeic(e.name) && e.size < HEIC_LIMIT) preview += `<img data-heic alt="">`;
     const u = this.dirSizes.get(e.path);
     const sizeText = isDirLike(e) ? (u ? `${size(u.bytes)}${u.partial ? "+" : ""}` : `<button class="btn small calc">${t("Calcola")}</button>`) : `${size(e.size)} <span style="color:var(--faint)">(${int(e.size)} B)</span>`;
     this.infoEl.innerHTML = `<div class="preview-box">${preview}</div><h3>${esc(e.name)}</h3><div class="kind">${esc(kindLabel(e))}</div>
@@ -777,6 +781,7 @@ export class Pane {
     $(".dl", this.infoEl)?.addEventListener("click", () => this.app.download([e]));
     $(".info-preview", this.infoEl)?.addEventListener("click", () => this.app.quickLook(this));
     $(".cp", this.infoEl).onclick = () => this.app.copyPaths([e], "nas");
+    fillHeic(this.infoEl, () => e, 1024);
     if (e.share) {
       $(".owner", this.infoEl).textContent = e.share.comment || "—";
       return;

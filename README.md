@@ -27,7 +27,7 @@ Synology ACLs.
 - **Fuzzy filter** of the folder as you type (`/`), ranked, letters marked;
   **search** below it by words in the name or a glob (`*.mkv`, Ctrl+F).
 - **Quick look** (Space): images, Synology thumbnails, video, audio, PDF and
-  text, arrows to the next file; an info panel with size, owner and
+  text, HEIC/HEIF photos too (decoded in the browser), arrows to the next file; an info panel with size, owner and
   permissions, folder sizes on demand.
 - Copy, cut, paste and **drag and drop** (within a shared folder it moves,
   across shares it copies; Ctrl copies, Shift moves, Alt asks), rename, new
@@ -183,4 +183,5 @@ and the light theme is Tokyo Night Light.
 
 ## License
 
-MIT
+MIT. `ui/vendor/libheif` is [libheif-js](https://github.com/catdad-experiments/libheif-js)
+(libheif and libde265 compiled to WebAssembly), LGPL-3.0, shipped unmodified.
