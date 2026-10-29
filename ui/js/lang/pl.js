@@ -372,4 +372,6 @@ export default {
   "File nascosti in fondo": "Ukryte pliki na końcu", "La cartella scelta": "Wybrany folder", "Le ultime schede": "Ostatnie karty",
   "Nella colonna Modificato": "W kolumnie Zmodyfikowano", "Nuove schede in": "Nowe karty w", "Quando sono visibili, dopo gli altri": "Gdy są widoczne, po pozostałych",
   "Ricorda vista e ordinamento per cartella": "Zapamiętaj widok i sortowanie dla każdego folderu", "Scegli…": "Wybierz…", "Usa questa cartella": "Użyj tego folderu",
+  "Ordine predefinito": "Domyślna kolejność",
+  "Nomi dei volumi": "Nazwy woluminów", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Nadane w aplikacji Zarządzanie przechowywaniem (np. „HDD”), w przeciwnym razie „Wolumen 1”",
 };

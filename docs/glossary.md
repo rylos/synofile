@@ -24,6 +24,7 @@ impersonal forms. Buttons are infinitives or imperatives as DSM uses them.
 | elemento | item | Element | élément | elemento | item | item | item | element |
 | Cestino (di DSM) | Recycle Bin | Papierkorb | Corbeille | Papelera de reciclaje | Prullenbak | Reciclagem | Lixeira | Kosz |
 | Centro pacchetti | Package Center | Paket-Zentrum | Centre de paquets | Centro de paquetes | Package Center | Centro de pacotes | Centro de pacotes | Centrum pakietów |
+| Storage Manager | Storage Manager | Speicher-Manager | Gestionnaire de stockage | Administrador de almacenamiento | Opslagbeheer | Gestor de Armazenamento | Gerenciador de armazenamento | Zarządzanie przechowywaniem |
 | Pannello di controllo | Control Panel | Systemsteuerung | Panneau de configuration | Panel de control | Configuratiescherm | Painel de controlo | Painel de controle | Panel sterowania |
 | amministratori | administrators | Administratoren | administrateurs | administradores | beheerders | administradores | administradores | administratorzy |
 | volume | volume | Volume | volume | volumen | volume | volume | volume | wolumen |

@@ -372,4 +372,6 @@ export default {
   "File nascosti in fondo": "Ficheiros ocultos no fim", "La cartella scelta": "A pasta escolhida", "Le ultime schede": "Os últimos separadores",
   "Nella colonna Modificato": "Na coluna Modificado", "Nuove schede in": "Novos separadores em", "Quando sono visibili, dopo gli altri": "Quando visíveis, depois dos outros",
   "Ricorda vista e ordinamento per cartella": "Lembrar vista e ordenação para cada pasta", "Scegli…": "Escolher…", "Usa questa cartella": "Usar esta pasta",
+  "Ordine predefinito": "Ordem predefinida",
+  "Nomi dei volumi": "Nomes dos volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Os definidos no Gestor de Armazenamento (ex. «HDD»), caso contrário «Volume 1»",
 };

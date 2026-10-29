@@ -372,4 +372,6 @@ export default {
   "File nascosti in fondo": "Verborgen bestanden achteraan", "La cartella scelta": "De gekozen map", "Le ultime schede": "De laatste tabbladen",
   "Nella colonna Modificato": "In de kolom Gewijzigd", "Nuove schede in": "Nieuwe tabbladen in", "Quando sono visibili, dopo gli altri": "Wanneer zichtbaar, na de andere",
   "Ricorda vista e ordinamento per cartella": "Weergave en sortering per map onthouden", "Scegli…": "Kiezen…", "Usa questa cartella": "Deze map gebruiken",
+  "Ordine predefinito": "Standaardvolgorde",
+  "Nomi dei volumi": "Namen van volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Die in Opslagbeheer zijn gegeven (bijv. ‘HDD’), anders ‘Volume 1’",
 };

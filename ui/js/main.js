@@ -335,6 +335,7 @@ class App {
       const data = await api.shares();
       this.shares = data.shares;
       this.user = data.user;
+      this.volumeNames = data.volumes || {};
       this.renderSidebar();
     } catch (e) {
       if (e.status === 401) this.banner(t("Sessione DSM scaduta: accedi di nuovo a DSM e riapri SynoFile."));
@@ -361,11 +362,15 @@ class App {
       if (!volumes.has(v)) volumes.set(v, []);
       volumes.get(v).push(s);
     }
-    for (const [vol, list] of volumes) {
+    for (const vol of this.volumeOrder([...volumes.keys()])) {
+      const list = volumes.get(vol);
       const first = list[0];
       const used = first.total ? 1 - first.free / first.total : 0;
-      const title = vol === "home" ? t("Personale") : vol.replace("volume", t("Volume") + " ").replace("USB", "USB ");
-      html += `<div class="side-title"><span>${esc(title)}</span>${first.total && vol !== "home" ? `<span title="${t("{f} liberi di {t}", { f: size(first.free), t: size(first.total) })}">${size(first.free)}</span>` : ""}</div>`;
+      const plain = vol === "home" ? t("Personale") : vol.replace("volume", t("Volume") + " ").replace("USB", "USB ");
+      // the name given in Storage Manager, with the plain one as the tooltip
+      const named = prefs.volumeNames ? this.volumeNames?.[vol] : null;
+      const title = named || plain;
+      html += `<div class="side-title vol-title" data-vol="${esc(vol)}" draggable="true"${named ? ` title="${esc(plain)}"` : ""}><span>${esc(title)}</span>${first.total && vol !== "home" ? `<span title="${t("{f} liberi di {t}", { f: size(first.free), t: size(first.total) })}">${size(first.free)}</span>` : ""}</div>`;
       if (first.total && vol !== "home") html += `<div class="vol-bar ${used > 0.95 ? "full" : used > 0.85 ? "high" : ""}" style="margin:0 10px 6px"><div style="width:${(used * 100).toFixed(1)}%"></div></div>`;
       for (const s of list) {
         const badges = (s.encrypted ? `<span class="si-badge" title="${t("Cartella crittografata")}">🔒</span>` : "") + (s.hidden ? `<span class="si-badge" title="${t("Nascosta in Rete")}">${t("nasc.")}</span>` : "");
@@ -383,6 +388,81 @@ class App {
       this.makeDropTarget(b, () => b.dataset.path);
     });
     this.bindFavoriteDrag(el);
+    this.bindVolumeDrag(el);
+  }
+
+  /**
+   * The groups of the sidebar: the order chosen (dragging a title,
+   * or its menu), the others after it in the natural one: personal home,
+   * volume1, volume2…, then USB and the rest.
+   */
+  volumeOrder(vols) {
+    const rank = (v) => {
+      if (v === "home") return [0, 0];
+      const m = v.match(/^volume(\d+)$/);
+      if (m) return [1, +m[1]];
+      const u = v.match(/^volumeUSB(\d+)$/);
+      if (u) return [2, +u[1]];
+      return [3, 0];
+    };
+    const natural = [...vols].sort((a, b) => {
+      const [x, y] = [rank(a), rank(b)];
+      return x[0] - y[0] || x[1] - y[1] || a.localeCompare(b);
+    });
+    const saved = (prefs.volumeOrder || []).filter((v) => vols.includes(v));
+    return [...saved, ...natural.filter((v) => !saved.includes(v))];
+  }
+
+  moveVolume(vol, to) {
+    const order = this.volumeOrder([...new Set(this.shares.map((s) => (s.home ? "home" : s.volume)))]);
+    const from = order.indexOf(vol);
+    if (from < 0) return;
+    to = Math.max(0, Math.min(order.length - 1, to));
+    if (from === to) return;
+    order.splice(from, 1);
+    order.splice(to, 0, vol);
+    save({ volumeOrder: order });
+  }
+
+  bindVolumeDrag(el) {
+    const VOL = "application/x-synofile-vol";
+    const titles = [...el.querySelectorAll(".vol-title")];
+    const clear = () => titles.forEach((x) => x.classList.remove("fav-before", "fav-after"));
+    titles.forEach((b, i) => {
+      b.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData(VOL, b.dataset.vol);
+        e.dataTransfer.effectAllowed = "move";
+      });
+      b.addEventListener("dragover", (e) => {
+        if (!e.dataTransfer.types.includes(VOL)) return;
+        e.preventDefault();
+        const r = b.getBoundingClientRect();
+        clear();
+        b.classList.add(e.clientY < r.top + r.height / 2 ? "fav-before" : "fav-after");
+      });
+      b.addEventListener("dragleave", () => b.classList.remove("fav-before", "fav-after"));
+      b.addEventListener("drop", (e) => {
+        if (!e.dataTransfer.types.includes(VOL)) return;
+        e.preventDefault();
+        const after = b.classList.contains("fav-after");
+        clear();
+        const vol = e.dataTransfer.getData(VOL);
+        const from = titles.findIndex((x) => x.dataset.vol === vol);
+        let to = i + (after ? 1 : 0);
+        if (from < to) to--;
+        this.moveVolume(vol, to);
+      });
+      b.addEventListener("dragend", clear);
+      b.oncontextmenu = (e) => {
+        e.preventDefault();
+        openMenu(e.clientX, e.clientY, [
+          i > 0 && { label: t("Sposta su"), icon: "up", action: () => this.moveVolume(b.dataset.vol, i - 1) },
+          i < titles.length - 1 && { label: t("Sposta giù"), icon: "up", action: () => this.moveVolume(b.dataset.vol, i + 1) },
+          (prefs.volumeOrder || []).length > 0 && "-",
+          (prefs.volumeOrder || []).length > 0 && { label: t("Ordine predefinito"), icon: "refresh", action: () => save({ volumeOrder: [] }) },
+        ]);
+      };
+    });
   }
 
   /** Favourites reorder by dragging; a folder dropped on their title becomes one. */

@@ -135,4 +135,6 @@ export default {
   "File nascosti in fondo": "Hidden files last", "La cartella scelta": "The chosen folder", "Le ultime schede": "The last tabs",
   "Nella colonna Modificato": "In the Modified column", "Nuove schede in": "New tabs open in", "Quando sono visibili, dopo gli altri": "When shown, after the others",
   "Ricorda vista e ordinamento per cartella": "Remember view and sort for each folder", "Scegli…": "Choose…", "Usa questa cartella": "Use this folder",
+  "Ordine predefinito": "Default order",
+  "Nomi dei volumi": "Volume names", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "The ones given in Storage Manager (e.g. “HDD”), otherwise “Volume 1”",
 };

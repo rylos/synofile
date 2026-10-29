@@ -712,8 +712,8 @@ dialog:focus-visible, .scroller:focus-visible { outline: none; }
 .settings .credits a:hover { color: var(--text); }
 .settings .credits svg { width: 13px; height: 13px; fill: currentColor; }
 
-.side-item.fav-before { box-shadow: inset 0 2px 0 var(--accent); }
-.side-item.fav-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.side-item.fav-before, .vol-title.fav-before { box-shadow: inset 0 2px 0 var(--accent); }
+.side-item.fav-after, .vol-title.fav-after { box-shadow: inset 0 -2px 0 var(--accent); }
 .side-title.drop { color: var(--accent); outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 6px; }
 .statusbar .ro { display: inline-flex; align-items: center; gap: 5px; color: var(--warn); }
 .statusbar .ro .i { width: 13px; height: 13px; }
@@ -729,3 +729,4 @@ dialog:focus-visible, .scroller:focus-visible { outline: none; }
 .ql-archive li .s { color: #98a2b3; font-variant-numeric: tabular-nums; font-size: 12px; }
 .ql-archive .more { padding: 8px 16px; color: #98a2b3; border-top: 1px solid #2e3440; font-size: 12.5px; }
 .cell.today, .cell.today * { color: var(--accent) !important; font-weight: 600; }
+.vol-title { cursor: default; user-select: none; }

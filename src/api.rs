@@ -258,7 +258,7 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
                     v
                 })
                 .collect();
-            reply(out, &json!({ "shares": list, "user": user.name }))
+            reply(out, &json!({ "shares": list, "user": user.name, "volumes": shares::volume_names() }))
         }
         "list" => {
             let r = shares::resolve(shares, req.require("path")?)?;

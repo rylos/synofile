@@ -372,4 +372,6 @@ export default {
   "File nascosti in fondo": "Versteckte Dateien zuletzt", "La cartella scelta": "Den gewählten Ordner", "Le ultime schede": "Die letzten Tabs",
   "Nella colonna Modificato": "In der Spalte Geändert", "Nuove schede in": "Neue Tabs öffnen in", "Quando sono visibili, dopo gli altri": "Wenn sichtbar, nach den anderen",
   "Ricorda vista e ordinamento per cartella": "Ansicht und Sortierung pro Ordner merken", "Scegli…": "Wählen…", "Usa questa cartella": "Diesen Ordner verwenden",
+  "Ordine predefinito": "Standardreihenfolge",
+  "Nomi dei volumi": "Volumenamen", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Die im Speicher-Manager vergebenen (z. B. „HDD“), sonst „Volume 1“",
 };

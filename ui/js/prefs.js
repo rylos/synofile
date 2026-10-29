@@ -37,6 +37,8 @@ export const DEFAULTS = {
   startIn: "last", // last, shares, folder
   newTabIn: "current", // current, shares, folder
   startFolder: "",
+  volumeNames: true, // the names given in Storage Manager, else "Volume 1"
+  volumeOrder: [], // the sidebar's groups in the order chosen by dragging
 };
 
 const LOCAL = "synofile.prefs";

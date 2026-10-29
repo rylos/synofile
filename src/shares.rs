@@ -144,6 +144,32 @@ pub fn resolve<'a>(shares: &'a [Share], vpath: &str) -> Result<Resolved<'a>, Api
     Ok(Resolved { share, rel, real })
 }
 
+const SPACE_META: &str = "/run/space/space_meta.status";
+
+/// The names given to the volumes in Storage Manager ("volume1" → "M2"),
+/// from the status file DSM keeps for everyone to read.
+pub fn volume_names() -> std::collections::BTreeMap<String, String> {
+    parse_volume_names(&fs::read_to_string(SPACE_META).unwrap_or_default())
+}
+
+fn parse_volume_names(text: &str) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut volume: Option<String> = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(section) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            // "/dev/vg4/volume_1" is /volume1; pools have no volume part
+            volume = section.rsplit('/').next().and_then(|n| n.strip_prefix("volume_")).filter(|n| n.chars().all(|c| c.is_ascii_digit())).map(|n| format!("volume{n}"));
+        } else if let (Some(v), Some(desc)) = (&volume, line.strip_prefix("vol_desc=")) {
+            let desc = desc.trim_matches('"').trim();
+            if !desc.is_empty() {
+                out.insert(v.clone(), desc.to_string());
+            }
+        }
+    }
+    out
+}
+
 /// Checks that a file name is one component, not empty, not "." or "..".
 pub fn valid_name(name: &str) -> Result<(), ApiError> {
     let name_trim = name.trim();
@@ -161,6 +187,15 @@ mod tests {
     use super::*;
 
     const CONF: &str = "[Documenti]\n\tenable recycle bin=yes\n\tpath=/volume1/Documenti\n\tbrowseable=yes\n\tcomment=\"Carte\"\n[0rep_docker]\n\tbrowseable=no\n\tenable recycle bin=no\n\tpath=/volume2/0rep_docker\n";
+
+    #[test]
+    fn parses_volume_names() {
+        let text = "[/dev/vg4/volume_1]\n\t desc=\"\"\n\t vol_desc=\"M2\"\n[/dev/vg4]\n\t desc=\"Pool-M2\"\n\t vol_desc=\"\"\n[/dev/vg1/volume_2]\n\t vol_desc=\"HDD\"\n[/dev/vg1/volume_3]\n\t vol_desc=\"\"\n";
+        let names = parse_volume_names(text);
+        assert_eq!(names.get("volume1").map(String::as_str), Some("M2"));
+        assert_eq!(names.get("volume2").map(String::as_str), Some("HDD"));
+        assert_eq!(names.len(), 2);
+    }
 
     #[test]
     fn parses_share_conf() {

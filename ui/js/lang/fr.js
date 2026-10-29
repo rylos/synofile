@@ -372,4 +372,6 @@ export default {
   "File nascosti in fondo": "Fichiers cachés à la fin", "La cartella scelta": "Le dossier choisi", "Le ultime schede": "Les derniers onglets",
   "Nella colonna Modificato": "Dans la colonne Modifié", "Nuove schede in": "Nouveaux onglets dans", "Quando sono visibili, dopo gli altri": "Quand ils sont visibles, après les autres",
   "Ricorda vista e ordinamento per cartella": "Mémoriser l'affichage et le tri pour chaque dossier", "Scegli…": "Choisir…", "Usa questa cartella": "Utiliser ce dossier",
+  "Ordine predefinito": "Ordre par défaut",
+  "Nomi dei volumi": "Noms des volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Ceux donnés dans le Gestionnaire de stockage (ex. « HDD »), sinon « Volume 1 »",
 };

@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "synofile"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "crc32fast",
  "flate2",
