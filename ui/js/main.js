@@ -353,9 +353,11 @@ class App {
     };
     let html = "";
     const favs = prefs.favorites || [];
-    html += `<div class="side-title fav-title">${t("Preferiti")}</div>`;
-    if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), "", "nested", i)).join("");
-    else html += `<div class="hint" style="padding:2px 10px 6px">${t("Ctrl+D aggiunge la cartella aperta")}</div>`;
+    if (prefs.showFavorites) {
+      html += `<div class="side-title fav-title">${t("Preferiti")}</div>`;
+      if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), "", "nested", i)).join("");
+      else html += `<div class="hint" style="padding:2px 10px 6px">${t("Ctrl+D aggiunge la cartella aperta")}</div>`;
+    }
     const volumes = new Map();
     for (const s of this.shares) {
       const v = s.home ? "home" : s.volume;
@@ -497,6 +499,7 @@ class App {
       b.addEventListener("dragend", clear);
     });
     const title = el.querySelector(".fav-title");
+    if (!title) return;
     title.addEventListener("dragover", (e) => {
       if (!e.dataTransfer.types.includes("application/x-synofile")) return;
       e.preventDefault();

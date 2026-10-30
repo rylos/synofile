@@ -62,6 +62,7 @@ function body(section) {
         row("Cartelle prima", "Come eza --group-directories-first", sw("foldersFirst")) +
         row("Mostra i file nascosti", "Quelli che iniziano con un punto (Ctrl+H)", sw("showHidden")) +
         row("File nascosti in fondo", "Quando sono visibili, dopo gli altri", sw("hiddenLast")) +
+        row("Mostra i preferiti", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti", sw("showFavorites")) +
         row("Nomi dei volumi", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»", sw("volumeNames")) +
         row("Ricorda vista e ordinamento per cartella", "Altrimenti valgono gli ultimi usati, per tutte", sw("perFolder")) +
         row("Evidenzia le date di oggi", "Nella colonna Modificato", sw("todayHighlight")) +

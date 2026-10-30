@@ -374,4 +374,5 @@ export default {
   "Ricorda vista e ordinamento per cartella": "Recordar vista y orden para cada carpeta", "Scegli…": "Elegir…", "Usa questa cartella": "Usar esta carpeta",
   "Ordine predefinito": "Orden predeterminado",
   "Nomi dei volumi": "Nombres de los volúmenes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Los asignados en el Administrador de almacenamiento (p. ej. «HDD»), si no «Volumen 1»",
+  "Mostra i preferiti": "Mostrar favoritos", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "La sección Favoritos de la barra lateral; ocultos, siguen guardados",
 };

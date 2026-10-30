@@ -374,4 +374,5 @@ export default {
   "Ricorda vista e ordinamento per cartella": "Weergave en sortering per map onthouden", "Scegli…": "Kiezen…", "Usa questa cartella": "Deze map gebruiken",
   "Ordine predefinito": "Standaardvolgorde",
   "Nomi dei volumi": "Namen van volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Die in Opslagbeheer zijn gegeven (bijv. ‘HDD’), anders ‘Volume 1’",
+  "Mostra i preferiti": "Favorieten tonen", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "Het onderdeel Favorieten van de zijbalk; verborgen blijven ze bewaard",
 };

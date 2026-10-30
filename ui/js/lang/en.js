@@ -137,4 +137,5 @@ export default {
   "Ricorda vista e ordinamento per cartella": "Remember view and sort for each folder", "Scegli…": "Choose…", "Usa questa cartella": "Use this folder",
   "Ordine predefinito": "Default order",
   "Nomi dei volumi": "Volume names", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "The ones given in Storage Manager (e.g. “HDD”), otherwise “Volume 1”",
+  "Mostra i preferiti": "Show favourites", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "The Favourites section of the sidebar; they stay saved while hidden",
 };
