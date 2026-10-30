@@ -670,7 +670,7 @@ class JobDialog {
     const st = this.st || stats(job);
     const work = (x) => (st.byBytes ? x[1] + x[3] : x[2]);
     const s = job.samples;
-    const pad = { l: 8, r: 64, t: 26, b: 18 };
+    const pad = { l: 8, r: 64, t: 22, b: 10 };
     const w = W - pad.l - pad.r;
     const hh = H - pad.t - pad.b;
 

@@ -24,11 +24,8 @@ printf 'Read me first.\n' >"$d/README.md"
 printf 'fn main() {}\n' >"$d/main.rs"
 printf 'secret\n' >"$d/.env"
 for f in budget-2026.xlsx contract.pdf report.docx slides.pptx; do head -c 180000 /dev/urandom >"$d/$f"; done
-head -c 4200000 /dev/urandom >"$d/photos-2025.zip"
-head -c 900000 /dev/urandom >"$d/backup.tar.gz"
 ln -s Projects/website "$d/site"
 for i in 01 02 03 04 05 06; do printf 'invoice %s\n' "$i" >"$d/Invoices/2026/invoice-$i.pdf"; done
-touch -d '2025-11-02 10:14' "$d/backup.tar.gz" "$d/contract.pdf"
 touch -d '2026-03-18 17:40' "$d/Recipes" "$d/Scans"
 
 p="$demo/Photos"
@@ -43,6 +40,13 @@ for spec in "sunset:#ff7e5f:#feb47b" "sea:#2193b0:#6dd5ed" "forest:#134e5e:#71b2
     magick -size 640x427 "gradient:${rest%%:*}-${rest#*:}" -swirl $((n * 23)) -quality 82 "$p/2026/Holidays/IMG_$(printf '%04d' $((2400 + n)))-$name.jpg"
 done
 head -c 2000000 /dev/urandom >"$p/2026/Holidays/VID_2412.mp4"
+# real archives, to walk into
+mkdir -p "$demo/.pack/Summer 2025/Beach" "$demo/.pack/Summer 2025/Mountains"
+cp "$p"/2026/Holidays/IMG_240[1-6]-*.jpg "$demo/.pack/Summer 2025/Beach/"
+cp "$p"/2026/Holidays/IMG_24[01][7-9]-*.jpg "$p"/2026/Holidays/IMG_241[0-2]-*.jpg "$demo/.pack/Summer 2025/Mountains/" 2>/dev/null || true
+printf 'Summer 2025, the good ones.\n' >"$demo/.pack/Summer 2025/notes.txt"
+(cd "$demo/.pack" && zip -qr "$d/photos-2025.zip" "Summer 2025" && tar czf "$d/backup.tar.gz" "Summer 2025")
+rm -rf "$demo/.pack"
 
 v="$demo/Video"
 mkdir -p "$v/Films" "$v/Series"
@@ -85,6 +89,10 @@ shot list 1360,780 ""
 prefs "{\"theme\":\"dark\",\"info\":true,\"favorites\":[{\"path\":\"/Documents/Projects\",\"name\":\"Projects\"}],\"tabs\":{\"list\":[{\"panes\":[{\"path\":\"/Documents\"}]},{\"panes\":[{\"path\":\"/Photos/2026/Holidays\",\"view\":\"grid\"}]}],\"current\":1}}"
 shot grid 1360,780 ""
 
+# inside an archive, as a folder
+prefs "{\"theme\":\"dark\",\"info\":true,\"tabs\":{\"list\":[{\"panes\":[{\"path\":\"/Documents/photos-2025.zip/Summer 2025/Beach\",\"view\":\"grid\"}]},{\"panes\":[{\"path\":\"/Documents\"}]}],\"current\":0}}"
+shot archive 1360,780 ""
+
 prefs "{\"theme\":\"light\",\"info\":false,\"favorites\":[{\"path\":\"/Documents/Projects\",\"name\":\"Projects\"}],\"tabs\":{\"list\":[{\"panes\":[{\"path\":\"/Video/Films\"},{\"path\":\"/Backup/laptop\"}],\"active\":0}],\"current\":0}}"
 shot light 1360,780 ""
 
@@ -97,12 +105,12 @@ for bps in 104857600 41943040 83886080 136314880; do
     curl -s -X POST "$api/jobs/control" -d "{\"id\":$id,\"action\":\"limit\",\"bps\":$bps}" >/dev/null
 done
 sleep 1
-shot transfer 1360,980 "&xfer=last"
+shot transfer 1360,880 "&xfer=last"
 
 # a conflict, waiting for an answer
 curl -s -X POST "$api/jobs/new" -d '{"op":"copy","sources":["/Documents/contract.pdf"],"dest":"/Backup/laptop","conflict":"ask"}' >/dev/null
 sleep 1.5
-shot conflict 1360,1020 "&xfer=last"
+shot conflict 1360,920 "&xfer=last"
 
 if command -v pngquant >/dev/null; then
     pngquant --force --skip-if-larger --ext .png --quality 85-98 "$out"/*.png || true

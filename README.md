@@ -53,11 +53,17 @@ Nine languages, following DSM.
   <img src="docs/img/conflict.png" alt="A conflict waiting for an answer" width="49%">
 </p>
 <p align="center">
+  <img src="docs/img/archive.png" alt="Inside a zip archive, opened like a folder" width="49%">
   <img src="docs/img/grid.png" alt="The grid with thumbnails, and the info panel" width="49%">
+</p>
+<p align="center">
   <img src="docs/img/light.png" alt="The dual pane in the light theme" width="49%">
 </p>
 
-*The screenshots show made-up data: `tools/screenshots.sh` takes them again.*
+*A copy with its speed chart; a conflict; inside a zip archive; the grid with
+the info panel; the dual pane in the light theme.*
+
+*Made-up data: `tools/screenshots.sh` takes the screenshots again.*
 
 ## Install
 
