@@ -213,7 +213,8 @@ export async function upload(dest, items, onDone) {
         else {
           job.progress.bytes_done -= blob.size;
           job.progress.current_done -= blob.size;
-          reject(Object.assign(new Error((data && data.error) || `HTTP ${xhr.status}`), { status: xhr.status }));
+          const status = +xhr.getResponseHeader("X-Synofile-Status") || xhr.status;
+          reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status }));
         }
       };
       xhr.onerror = () => {

@@ -346,16 +346,19 @@ class App {
   renderSidebar() {
     const el = $("#sidebar");
     const cur = this.pane?.path || "/";
-    const item = (path, name, gl, sub = "", extra = "", fav = null) => {
+    const item = (path, name, gl, sub = "", extra = "", fav = null, gone = false) => {
       const active = cur === path || (path !== "/" && cur.startsWith(path + "/") && !extra.includes("nested"));
       const favAttrs = fav === null ? "" : ` data-fav="${fav}" draggable="true"`;
-      return `<button class="side-item ${active ? "active" : ""}" data-path="${esc(path)}"${favAttrs}><i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
+      return `<button class="side-item ${active ? "active" : ""} ${gone ? "gone" : ""}" data-path="${esc(path)}"${favAttrs}><i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
     };
     let html = "";
     const favs = prefs.favorites || [];
     if (prefs.showFavorites) {
       html += `<div class="side-title fav-title">${t("Preferiti")}</div>`;
-      if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), "", "nested", i)).join("");
+      // a favourite on a shared folder that is gone (a USB drive unplugged)
+      const there = new Set(this.shares.map((s) => s.name));
+      const gone = (f) => this.shares.length && !there.has(f.path.split("/")[1]);
+      if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), glyph({ kind: "d", name: baseName(f.path) }), gone(f) ? `<span class="si-sub">${t("non disponibile")}</span>` : "", "nested", i, gone(f))).join("");
       else html += `<div class="hint" style="padding:2px 10px 6px">${t("Ctrl+D aggiunge la cartella aperta")}</div>`;
     }
     const volumes = new Map();

@@ -198,6 +198,7 @@ export default {
   "Mostra o nascondi i file nascosti": "Mostrar ou ocultar ficheiros ocultos",
   "NAS": "NAS",
   "Nascondi i file nascosti": "Ocultar ficheiros ocultos",
+  "non disponibile": "indisponível",
   "Nascosta in Rete": "Oculta na rede",
   "Nella cartella di destinazione ci sono già {n} elementi con lo stesso nome:": "A pasta de destino já tem {n} itens com o mesmo nome:",
   "Nella destinazione": "No destino",

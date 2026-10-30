@@ -142,6 +142,7 @@ fn reason(status: u16) -> &'static str {
         405 => "Method Not Allowed",
         409 => "Conflict",
         416 => "Range Not Satisfiable",
+        422 => "Unprocessable Content",
         503 => "Service Unavailable",
         _ => "Internal Server Error",
     }
@@ -168,7 +169,19 @@ pub fn json(out: &mut impl Write, status: u16, value: &impl Serialize) -> io::Re
 }
 
 pub fn error(out: &mut impl Write, err: &ApiError) -> io::Result<()> {
-    json(out, err.status, &serde_json::json!({ "error": err.message }))
+    let body = serde_json::to_vec(&serde_json::json!({ "error": err.message })).map_err(io::Error::other)?;
+    let length = body.len().to_string();
+    let real = err.status.to_string();
+    // DSM's nginx swaps the body of a 403, 404 or 5xx for its own error page
+    // (error_page … /dsm_error_page), and the message with it: those leave
+    // as 422, the real status in a header the client reads back.
+    let status = if matches!(err.status, 403 | 404 | 500..=599) { 422 } else { err.status };
+    head(
+        out,
+        status,
+        &[("Content-Type", "application/json; charset=utf-8"), ("Content-Length", &length), ("X-Synofile-Status", &real)],
+    )?;
+    out.write_all(&body)
 }
 
 pub fn disposition(kind: &str, filename: &str) -> String {

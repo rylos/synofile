@@ -198,6 +198,7 @@ export default {
   "Mostra o nascondi i file nascosti": "Versteckte Dateien ein- oder ausblenden",
   "NAS": "NAS",
   "Nascondi i file nascosti": "Versteckte Dateien ausblenden",
+  "non disponibile": "nicht verfügbar",
   "Nascosta in Rete": "Im Netzwerk verborgen",
   "Nella cartella di destinazione ci sono già {n} elementi con lo stesso nome:": "Im Zielordner gibt es bereits {n} Elemente mit demselben Namen:",
   "Nella destinazione": "Im Ziel",

@@ -51,7 +51,9 @@ export async function call(route, { params, body, method, raw, signal } = {}) {
   } catch {
     data = null;
   }
-  if (!res.ok) throw new ApiError(res.status, (data && data.error) || `errore ${res.status}`);
+  // errors DSM's nginx would hide come as 422 with the real status aside
+  const status = +res.headers.get("X-Synofile-Status") || res.status;
+  if (!res.ok) throw new ApiError(status, (data && data.error) || `errore ${status}`);
   return data;
 }
 

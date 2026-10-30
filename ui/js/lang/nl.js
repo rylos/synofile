@@ -198,6 +198,7 @@ export default {
   "Mostra o nascondi i file nascosti": "Verborgen bestanden weergeven of verbergen",
   "NAS": "NAS",
   "Nascondi i file nascosti": "Verborgen bestanden verbergen",
+  "non disponibile": "niet beschikbaar",
   "Nascosta in Rete": "Verborgen in netwerk",
   "Nella cartella di destinazione ci sono già {n} elementi con lo stesso nome:": "De doelmap bevat al {n} items met dezelfde naam:",
   "Nella destinazione": "In het doel",

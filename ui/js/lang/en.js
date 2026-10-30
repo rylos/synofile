@@ -7,6 +7,7 @@ export default {
   "Nome": "Name", "Nuovo nome": "New name", "Nome non valido": "Invalid name", "di": "of", "NAS": "NAS", "Volume": "Volume",
   "Personale": "Personal", "Home ({u})": "Home ({u})", "Preferiti": "Favourites", "Cartelle condivise": "Shared folders",
   "Ctrl+D aggiunge la cartella aperta": "Ctrl+D adds the open folder", "Cartella crittografata": "Encrypted folder",
+  "non disponibile": "not available",
   "Nascosta in Rete": "Hidden on the network", "nasc.": "hid.",
   "elemento": "item", "elementi": "items", "file": "file", "cartella": "folder", "cartelle": "folders", "errore": "error", "errori": "errors",
   "selezionato": "selected", "selezionati": "selected", "elemento selezionato": "item selected", "elementi selezionati": "items selected",
