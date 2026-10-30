@@ -18,7 +18,7 @@ use crate::identity::{self, User};
 use crate::jobs::daemon;
 use crate::jobs::protocol::{Op, Policy, RecycleRoot, Spec};
 use crate::shares::{self, Share};
-use crate::{auth, fsops, transfer};
+use crate::{auth, fsops, space, transfer};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The interface build the package ships (build.sh), none in development.
@@ -303,6 +303,13 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
                 }
             }
             reply(out, &fsops::usage(&paths, Duration::from_secs(25)))
+        }
+        "space" => {
+            let r = shares::resolve(shares, req.require("path")?)?;
+            if in_archive(&r.real)?.is_some() {
+                return Err(ApiError::bad_request(t!("l'analisi dello spazio non va dentro un archivio", "space analysis does not work inside an archive")));
+            }
+            reply(out, &space::analyse(&r.real, &r.share.path, Duration::from_secs(25)))
         }
         "mkdir" => {
             method(req, "POST")?;

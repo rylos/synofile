@@ -731,3 +731,36 @@ dialog:focus-visible, .scroller:focus-visible { outline: none; }
 .ql-archive .more { padding: 8px 16px; color: #98a2b3; border-top: 1px solid #2e3440; font-size: 12.5px; }
 .cell.today, .cell.today * { color: var(--accent) !important; font-weight: 600; }
 .vol-title { cursor: default; user-select: none; }
+
+/* ---------- space analysis ---------- */
+dialog.dlg.space { max-width: min(96vw, 940px); }
+.space .dlg-head .icon-btn { margin-left: auto; }
+.sp-crumbs { display: flex; align-items: center; gap: 2px; padding: 0 18px 6px; flex-wrap: wrap; min-height: 30px; }
+.sp-crumbs .sep { color: var(--faint); display: grid; place-items: center; }
+.sp-crumbs .sep svg { width: 12px; height: 12px; }
+.sp-main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; padding: 0 18px; align-items: start; }
+.sp-chart { position: relative; aspect-ratio: 1; width: min(100%, 62vh); justify-self: center; display: grid; place-items: center; }
+.sp-svg { width: 100%; height: 100%; display: block; }
+.sp-svg path { stroke: var(--surface); stroke-width: 1; transition: fill-opacity .12s; }
+.sp-svg path.hot { fill-opacity: 1; stroke: var(--text); stroke-width: 1.5; }
+.sp-svg .sp-centre { fill: var(--surface-2); stroke: var(--border); }
+.sp-svg text { text-anchor: middle; fill: var(--text); pointer-events: none; }
+.sp-svg .sp-c1 { font-weight: 600; font-size: 15px; }
+.sp-svg .sp-c2 { font-size: 14px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.sp-svg .sp-c3 { font-size: 12px; fill: var(--faint); }
+.sp-wait { position: relative; display: grid; place-items: center; gap: 10px; width: 100%; height: 100%; color: var(--muted); text-align: center; }
+.sp-wait .loading-bar { top: 50%; left: 25%; right: 25%; }
+.sp-wait span { margin-top: 40px; overflow-wrap: anywhere; padding: 0 20px; }
+.sp-wait.error { color: var(--crit); }
+.sp-side { max-height: min(520px, 62vh); overflow: auto; }
+.sp-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; grid-template-rows: auto 4px; column-gap: 8px; row-gap: 3px; align-items: center; padding: 5px 8px; border-radius: 7px; }
+.sp-row.dir { cursor: pointer; }
+.sp-row:hover, .sp-row.hot { background: var(--surface-2); }
+.sp-row .gi { font-family: "eza-icons"; text-align: center; }
+.sp-row .gi svg { width: 14px; height: 14px; color: var(--faint); }
+.sp-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-row .sz { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .93em; }
+.sp-row .bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+.sp-row .bar i { display: block; height: 100%; border-radius: 2px; }
+.sp-stats .warn { color: var(--warn); }
+@media (max-width: 720px) { .sp-main { grid-template-columns: 1fr; } }

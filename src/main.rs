@@ -16,6 +16,7 @@ mod fsops;
 mod identity;
 mod jobs;
 mod shares;
+mod space;
 mod transfer;
 mod zip;
 

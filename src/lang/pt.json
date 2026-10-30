@@ -26,6 +26,7 @@
  "impossibile leggere l'archivio: {}": "não é possível ler o arquivo: {}",
  "in uso": "em utilização",
  "interrotto dal riavvio del pacchetto": "interrompido por um reinício do pacote",
+ "l'analisi dello spazio non va dentro un archivio": "a análise de espaço não funciona dentro de um arquivo",
  "la cartella non è vuota": "a pasta não está vazia",
  "la ricerca nelle sottocartelle non funziona dentro un archivio": "a pesquisa em subpastas não funciona dentro de um arquivo",
  "manca la destinazione": "falta o destino",

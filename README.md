@@ -30,6 +30,10 @@ Nine languages, following DSM.
   walk in, preview or download a file, copy items out (only those are
   extracted). Space shows the contents at a glance. Compress to `.zip`;
   extract password-protected archives too.
+- **Space analysis.** Right-click a folder or a shared folder: rings around
+  it show what takes up the room, level by level, as KDE's Filelight does.
+  The NAS reads the folders with several threads at once; Synology's own
+  folders, snapshots and the recycle bin are left out.
 - **DSM's own Recycle Bin.** Deleting hands items to DSM's `synorecycle`, so
   they land in `#recycle` exactly as File Station puts them there.
 - **eza in the browser.** The list looks like `eza -l`: icons and colours for

@@ -26,6 +26,7 @@
  "impossibile leggere l'archivio: {}": "impossible de lire l'archive : {}",
  "in uso": "en cours d'utilisation",
  "interrotto dal riavvio del pacchetto": "interrompu par un redémarrage du paquet",
+ "l'analisi dello spazio non va dentro un archivio": "l'analyse de l'espace ne fonctionne pas dans une archive",
  "la cartella non è vuota": "le dossier n'est pas vide",
  "la ricerca nelle sottocartelle non funziona dentro un archivio": "la recherche dans les sous-dossiers ne fonctionne pas dans une archive",
  "manca la destinazione": "destination manquante",

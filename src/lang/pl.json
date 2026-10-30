@@ -26,6 +26,7 @@
  "impossibile leggere l'archivio: {}": "nie można odczytać archiwum: {}",
  "in uso": "w użyciu",
  "interrotto dal riavvio del pacchetto": "przerwane przez ponowne uruchomienie pakietu",
+ "l'analisi dello spazio non va dentro un archivio": "analiza miejsca nie działa wewnątrz archiwum",
  "la cartella non è vuota": "folder nie jest pusty",
  "la ricerca nelle sottocartelle non funziona dentro un archivio": "wyszukiwanie w podfolderach nie działa wewnątrz archiwum",
  "manca la destinazione": "brak miejsca docelowego",

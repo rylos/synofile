@@ -13,6 +13,7 @@ import * as transfers from "./transfers.js";
 import { upload, fromDataTransfer, fromInput } from "./uploads.js";
 import { quickLook } from "./preview.js";
 import { openSettings } from "./settings.js";
+import { spaceAnalysis } from "./space.js";
 
 
 const isDirLike = (e) => e.kind === "d" || e.link_dir;
@@ -542,11 +543,16 @@ class App {
       { label: t("Apri in una nuova scheda"), icon: "plus", action: () => this.newTab(path) },
       this.isSplit() && { label: t("Apri nell'altro pannello"), icon: "split", action: () => this.other().go(path) },
       share?.recycle && { label: t("Apri il Cestino"), icon: "trash", action: () => this.pane.go(path + "/#recycle") },
+      { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(path) },
       "-",
       fav ? { label: t("Togli dai preferiti"), icon: "star", action: () => this.toggleFavorite(path) } : { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(path) },
       { label: t("Copia percorso"), icon: "link", action: () => copyText(path) },
       { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(path) },
     ]);
+  }
+
+  analyseSpace(path) {
+    spaceAnalysis(path, (p) => this.pane.go(p));
   }
 
   toggleFavorite(path = this.pane.path) {
@@ -912,6 +918,7 @@ class App {
         { label: t("Seleziona tutto"), key: "Ctrl+A", action: () => pane.selectAll() },
         { label: prefs.showHidden ? t("Nascondi i file nascosti") : t("Mostra i file nascosti"), icon: prefs.showHidden ? "eyeOff" : "eye", key: "Ctrl+H", action: () => this.toggleHidden() },
         { label: t("Calcola dimensione delle cartelle"), icon: "drive", action: () => this.computeSizes(pane, pane.visible) },
+      pane.path !== "/" && !pane.archive && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(pane.path) },
         "-",
         !atRoot && { label: t("Copia percorso della cartella"), icon: "link", action: () => copyText(pane.path) },
         !atRoot && { label: t("Aggiungi ai preferiti"), icon: "star", key: "Ctrl+D", action: () => this.toggleFavorite(pane.path) },
@@ -950,6 +957,7 @@ class App {
       !share && !ro && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
       "-",
       dir && { label: t("Calcola dimensione"), icon: "drive", action: () => this.computeSizes(pane, list) },
+      !many && dir && !ro && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(entry.path) },
       { label: t("Copia percorso"), icon: "link", key: "Ctrl+Shift+C", action: () => this.copyPaths(list, "nas") },
       { label: t("Copia percorso di rete (\\\\NAS)"), icon: "link", action: () => this.copyPaths(list, "smb") },
       { label: t("Copia indirizzo smb://"), icon: "link", action: () => this.copyPaths(list, "url") },
@@ -988,6 +996,7 @@ class App {
       "-",
       { label: (prefs.sidebar ? "✓ " : "") + t("Barra laterale"), icon: "sidebar", key: "Ctrl+B", action: () => save({ sidebar: !prefs.sidebar }) },
       { label: t("Calcola dimensione delle cartelle"), icon: "drive", action: () => this.computeSizes(pane, pane.visible) },
+      pane.path !== "/" && !pane.archive && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(pane.path) },
       pane.path !== "/" && { label: fav ? t("Togli dai preferiti") : t("Aggiungi ai preferiti"), icon: "star", key: "Ctrl+D", action: () => this.toggleFavorite(pane.path) },
       pane.path !== "/" && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(pane.path) },
       "-",

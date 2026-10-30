@@ -26,6 +26,7 @@
  "impossibile leggere l'archivio: {}": "Archiv kann nicht gelesen werden: {}",
  "in uso": "in Verwendung",
  "interrotto dal riavvio del pacchetto": "durch einen Neustart des Pakets unterbrochen",
+ "l'analisi dello spazio non va dentro un archivio": "die Speicherplatzanalyse funktioniert nicht innerhalb eines Archivs",
  "la cartella non è vuota": "der Ordner ist nicht leer",
  "la ricerca nelle sottocartelle non funziona dentro un archivio": "die Suche in Unterordnern funktioniert nicht innerhalb eines Archivs",
  "manca la destinazione": "kein Ziel angegeben",

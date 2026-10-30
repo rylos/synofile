@@ -63,6 +63,7 @@ export const api = {
   list: (path) => call("list", { params: { path } }),
   stat: (path) => call("stat", { params: { path } }),
   usage: (paths) => call("usage", { body: { paths } }),
+  space: (path) => call("space", { params: { path } }),
   mkdir: (path, name, parents) => call("mkdir", { params: { path, name, parents: parents ? 1 : undefined }, body: {} }),
   rename: (path, name) => call("rename", { params: { path, name }, body: {} }),
   search: (path, q, signal) => call("search", { params: { path, q }, signal }),

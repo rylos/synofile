@@ -26,6 +26,7 @@
  "impossibile leggere l'archivio: {}": "kan het archief niet lezen: {}",
  "in uso": "in gebruik",
  "interrotto dal riavvio del pacchetto": "onderbroken door een herstart van het pakket",
+ "l'analisi dello spazio non va dentro un archivio": "ruimteanalyse werkt niet binnen een archief",
  "la cartella non è vuota": "de map is niet leeg",
  "la ricerca nelle sottocartelle non funziona dentro un archivio": "zoeken in submappen werkt niet binnen een archief",
  "manca la destinazione": "geen doel",
