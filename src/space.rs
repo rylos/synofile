@@ -8,7 +8,9 @@
 //! counts once. Nothing mounted below the folder is entered, as `du -x`:
 //! Active Backup's ActiveBackupData is a FUSE view showing every version as
 //! a whole disk image (its deduplicated data is `@ActiveBackup`), snapshots
-//! are mounted on `#snapshot`. The tree sent back is pruned: items smaller than a fraction
+//! are mounted on `#snapshot`. Read-only btrfs subvolumes are snapshots
+//! too (btrbk's, received ones) and are left out. The tree sent back is
+//! pruned: items smaller than a fraction
 //! of the whole are summed into one "other" piece per folder.
 
 use std::collections::HashSet;
@@ -128,7 +130,8 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
                 }
                 let Ok(ft) = e.file_type() else { continue };
                 if ft.is_dir() {
-                    if mounts.is_empty() || !mounts.contains(&path.join(&name)) {
+                    let full = path.join(&name);
+                    if (mounts.is_empty() || !mounts.contains(&full)) && !snapshot(&e, &full) {
                         subdirs.push(name);
                     }
                     continue;
@@ -196,6 +199,21 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
         ms: start.elapsed().as_millis() as u64,
         partial: partial.load(Ordering::Relaxed),
     }
+}
+
+/// A read-only btrfs subvolume: the root of a subvolume has inode 256.
+fn snapshot(e: &fs::DirEntry, path: &Path) -> bool {
+    const FIRST_FREE_OBJECTID: u64 = 256;
+    const SUBVOL_GETFLAGS: libc::c_ulong = 0x8008_9419; // _IOR(0x94, 25, u64)
+    const SUBVOL_RDONLY: u64 = 2;
+    if !e.metadata().is_ok_and(|m| m.ino() == FIRST_FREE_OBJECTID) {
+        return false;
+    }
+    let Ok(dir) = fs::File::open(path) else { return false };
+    let mut flags: u64 = 0;
+    // SAFETY: an open directory and a u64 for the ioctl to fill
+    let rc = unsafe { libc::ioctl(std::os::fd::AsRawFd::as_raw_fd(&dir), SUBVOL_GETFLAGS as _, &mut flags) };
+    rc == 0 && flags & SUBVOL_RDONLY != 0
 }
 
 /// The mount points strictly below `root`, from /proc/self/mountinfo.
