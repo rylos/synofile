@@ -1,0 +1,10 @@
+[
+  {
+    "step_title": "In te schakelen machtigingen",
+    "items": [
+      {
+        "desc": "DSM 7 laat pakketten van derden niet om de benodigde rechten vragen, dus SynoFile wordt zonder geïnstalleerd.<br><br>Voer na elke installatie of update van het pakket eenmaal via SSH uit:<br><br><code>sudo /var/packages/synofile/target/bin/synofile setup &amp;&amp; sudo /usr/syno/bin/synopkg restart synofile</code><br><br><a target=\"_blank\" href=\"https://github.com/rylos/synofile#install\">Details</a>"
+      }
+    ]
+  }
+]

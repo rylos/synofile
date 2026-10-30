@@ -34,11 +34,12 @@ find "$work/pkg/ui/js" -name '*.js' -exec sed -i \
 tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui
 
 sed "s/@VERSION@/$version/" spk/INFO.in > "$work/spk/INFO"
-cp -r spk/conf spk/scripts "$work/spk/"
+# WIZARD_UIFILES: a step of the install and upgrade wizard says to run setup
+cp -r spk/conf spk/scripts spk/WIZARD_UIFILES "$work/spk/"
 cp ui/images/icon_72.png "$work/spk/PACKAGE_ICON.PNG"
 cp ui/images/icon_256.png "$work/spk/PACKAGE_ICON_256.PNG"
 
 mkdir -p dist
 out="dist/synofile-$version.spk"
-tar -C "$work/spk" --owner=0 --group=0 -cf "$out" INFO package.tgz conf scripts PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
+tar -C "$work/spk" --owner=0 --group=0 -cf "$out" INFO package.tgz conf scripts WIZARD_UIFILES PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
 echo "$out"
