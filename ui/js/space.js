@@ -83,12 +83,16 @@ export function spaceAnalysis(path, onOpen) {
     const step = (R - r0) / Math.max(depth, 1);
     let paths = "";
     const pieces = [];
+    // each branch gets its colour where the tree first divides: a folder
+    // holding one folder would otherwise paint everything alike
+    let split = 0;
+    for (let n = view; n.c?.length === 1 && n.c[0].k === "d" && split < depth - 1; n = n.c[0]) split++;
     const walk = (node, chain, a0, a1, level, hue) => {
       if (!node.c || level >= depth) return;
       let a = a0;
       node.c.forEach((c, i) => {
         const span = node.s ? ((a1 - a0) * c.s) / node.s : 0;
-        const h = level === 0 ? HUES[i % HUES.length] : hue;
+        const h = level === split ? HUES[i % HUES.length] : hue;
         if (span >= MIN_ANGLE) {
           const id = pieces.length;
           pieces.push({ node: c, chain: [...chain, c] });
@@ -136,7 +140,7 @@ export function spaceAnalysis(path, onOpen) {
     s.querySelector(".sp-centre").style.cursor = trail.length > 1 ? "pointer" : "";
     drawCrumbs();
     drawList();
-    const sec = data.ms / 1000;
+    const sec = Math.max(data.ms, 100) / 1000;
     stats.innerHTML =
       t("{f} file in {d} cartelle, letti in {s} s", { f: int(data.root.f), d: int(data.dirs), s: sec.toLocaleString(undefined, { maximumFractionDigits: 1 }) }) +
       (data.partial ? ` · <span class="warn">${t("analisi incompleta: tempo scaduto")}</span>` : "") +
@@ -177,7 +181,7 @@ export function spaceAnalysis(path, onOpen) {
       .map((c, i) => {
         const entry = { name: c.n, kind: c.k === "d" ? "d" : "f", mode: 0 };
         const icon = c.k === "o" ? `<i class="gi">${svg("more")}</i>` : `<i class="gi ${colorClass(entry)}">${glyph(entry)}</i>`;
-        const name = c.k === "o" ? t("{n} elementi più piccoli", { n: int(c.f) }) : esc(c.n);
+        const name = c.k === "o" ? count(c.f, "elemento più piccolo", "elementi più piccoli", int) : esc(c.n);
         const hue = c.k === "o" ? "var(--surface-3)" : `var(${HUES[i % HUES.length]})`;
         return `<div class="sp-row ${c.k === "d" ? "dir" : ""}" data-i="${i}" data-name="${esc(c.n)}">${icon}<span class="nm" title="${esc(c.n)}">${name}</span><span class="sz">${size(c.s)}</span>
           <span class="bar"><i style="width:${((c.s / (view.s || 1)) * 100).toFixed(1)}%;background:${hue}"></i></span></div>`;

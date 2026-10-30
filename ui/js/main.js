@@ -78,6 +78,8 @@ class App {
     const cur = this.tabs[prefs.startIn === "last" ? Math.min(saved?.current || 0, this.tabs.length - 1) : 0];
     this.switchTab(cur);
     for (const tab of this.tabs) for (const p of tab.panes) p.load().then(() => p.render());
+    // ?space=/path opens its analysis (the README screenshot)
+    if (q.get("space")) this.analyseSpace(q.get("space"));
   }
 
   saveTabs() {

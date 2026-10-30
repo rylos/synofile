@@ -60,6 +60,21 @@ mkdir -p "$m/Jazz" "$m/Classical"
 head -c 32000000 /dev/zero >"$m/Classical/symphony.flac"
 head -c 9000000 /dev/zero >"$m/Jazz/track-01.mp3"
 mkdir -p "$demo/Backup/laptop" "$demo/homes"
+# a laptop backup with some depth, for the space analysis (sparse files)
+n=0
+for top in Pictures:9 Videos:7 Projects:5 Music:4 Documents:3 Games:6 Downloads:4; do
+    name=${top%%:*}
+    for sub in $(seq 1 ${top#*:}); do
+        dir="$demo/Backup/laptop/$name/$name-$sub"
+        mkdir -p "$dir/a" "$dir/b"
+        for f in 1 2 3; do
+            n=$((n + 1))
+            truncate -s $(((n * 7919) % 900 + 60))M "$dir/file-$f.bin"
+            truncate -s $(((n * 104729) % 400 + 20))M "$dir/a/part-$f.bin"
+            truncate -s $(((n * 1299709) % 250 + 10))M "$dir/b/item-$f.bin"
+        done
+    done
+done
 # an older copy of a file, for the conflict
 head -c 150000 /dev/urandom >"$demo/Backup/laptop/contract.pdf"
 touch -d '2026-01-09 08:30' "$demo/Backup/laptop/contract.pdf"
@@ -95,6 +110,9 @@ shot archive 1360,780 ""
 
 prefs "{\"theme\":\"light\",\"info\":false,\"favorites\":[{\"path\":\"/Documents/Projects\",\"name\":\"Projects\"}],\"tabs\":{\"list\":[{\"panes\":[{\"path\":\"/Video/Films\"},{\"path\":\"/Backup/laptop\"}],\"active\":0}],\"current\":0}}"
 shot light 1360,780 ""
+
+prefs "{\"theme\":\"dark\",\"info\":false,$tabs}"
+shot space 1360,880 "&space=/Backup/laptop"
 
 # a copy that changes pace, so the chart has something to show
 prefs "{\"theme\":\"dark\",\"info\":false,$tabs}"

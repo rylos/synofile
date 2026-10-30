@@ -5,7 +5,10 @@
 //! many folders has several reads in flight. Synology's own folders (`@…`
 //! and `#…` at the top of a shared folder, `@eaDir`, snapshots and the
 //! recycle bin anywhere) are left out, and a file with several hard links
-//! counts once. The tree sent back is pruned: items smaller than a fraction
+//! counts once. Nothing mounted below the folder is entered, as `du -x`:
+//! Active Backup's ActiveBackupData is a FUSE view showing every version as
+//! a whole disk image (its deduplicated data is `@ActiveBackup`), snapshots
+//! are mounted on `#snapshot`. The tree sent back is pruned: items smaller than a fraction
 //! of the whole are summed into one "other" piece per folder.
 
 use std::collections::HashSet;
@@ -94,6 +97,7 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
     let seen = Mutex::new(HashSet::<(u64, u64)>::new());
     let unreadable = AtomicU64::new(0);
     let partial = AtomicBool::new(false);
+    let mounts = mounts_below(root);
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get() * 2).clamp(4, 16);
 
     let work = || loop {
@@ -124,7 +128,9 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
                 }
                 let Ok(ft) = e.file_type() else { continue };
                 if ft.is_dir() {
-                    subdirs.push(name);
+                    if mounts.is_empty() || !mounts.contains(&path.join(&name)) {
+                        subdirs.push(name);
+                    }
                     continue;
                 }
                 let Ok(meta) = e.metadata() else {
@@ -192,6 +198,33 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
     }
 }
 
+/// The mount points strictly below `root`, from /proc/self/mountinfo.
+fn mounts_below(root: &Path) -> HashSet<PathBuf> {
+    let Ok(info) = fs::read_to_string("/proc/self/mountinfo") else { return HashSet::new() };
+    info.lines()
+        .filter_map(|l| l.split(' ').nth(4))
+        .map(|m| PathBuf::from(unescape(m)))
+        .filter(|m| m != root && m.starts_with(root))
+        .collect()
+}
+
+/// mountinfo writes space, tab, newline and backslash as \040 and the like.
+fn unescape(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'\\' && i + 3 < b.len() && b[i + 1..i + 4].iter().all(|c| (b'0'..=b'7').contains(c)) {
+            out.push((b[i + 1] - b'0') * 64 + (b[i + 2] - b'0') * 8 + (b[i + 3] - b'0'));
+            i += 4;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn prune(dirs: &[Dir], id: usize, floor: u64, depth: usize) -> Node {
     let d = &dirs[id];
     let mut c = Vec::new();
@@ -223,6 +256,12 @@ fn prune(dirs: &[Dir], id: usize, floor: u64, depth: usize) -> Node {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unescapes_mountinfo() {
+        assert_eq!(unescape("/volume1/a\\040b"), "/volume1/a b");
+        assert_eq!(unescape("/x\\"), "/x\\");
+    }
 
     #[test]
     fn sums_and_skips() {

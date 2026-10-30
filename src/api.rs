@@ -309,7 +309,7 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
             if in_archive(&r.real)?.is_some() {
                 return Err(ApiError::bad_request(t!("l'analisi dello spazio non va dentro un archivio", "space analysis does not work inside an archive")));
             }
-            reply(out, &space::analyse(&r.real, &r.share.path, Duration::from_secs(25)))
+            reply(out, &space::analyse(&r.real, &r.share.path, Duration::from_secs(40)))
         }
         "mkdir" => {
             method(req, "POST")?;
