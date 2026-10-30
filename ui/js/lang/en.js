@@ -138,4 +138,5 @@ export default {
   "Ordine predefinito": "Default order",
   "Nomi dei volumi": "Volume names", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "The ones given in Storage Manager (e.g. “HDD”), otherwise “Volume 1”",
   "Mostra i preferiti": "Show favourites", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "The Favourites section of the sidebar; they stay saved while hidden",
+  "Icona nella barra di DSM": "Icon in DSM's taskbar", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa": "Beside DSM's icons at the top right, while transfers are running or paused",
 };

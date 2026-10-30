@@ -18,7 +18,8 @@ Nine languages, following DSM.
   archives and uploads: a speed chart, current, average and peak speed, time
   left, the file in flight, conflicts side by side, pause, cancel and a speed
   limit that changes while it runs. Transfers run on the NAS and go on when
-  the browser closes.
+  the browser closes; while they run, or wait paused, an icon in DSM's
+  taskbar shows their progress, a click away from their dialog.
 - **Copies that cannot half-fail.** Data goes to a hidden `.name.synofile-part`
   renamed into place when complete; inside one btrfs volume a copy is an
   instant **reflink**; an optional xxHash3 check reads every file back. A

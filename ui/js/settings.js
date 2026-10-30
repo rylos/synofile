@@ -88,7 +88,8 @@ function body(section) {
         row("Verifica dopo la copia", "Rilegge ogni file copiato e lo confronta (xxHash3): più lento, a prova di errore", sw("verify")) +
         row("Limite di velocità", "Si cambia anche durante il trasferimento", sel("limit", [[0, "Nessuno"], [10, "10 MiB/s"], [25, "25 MiB/s"], [50, "50 MiB/s"], [100, "100 MiB/s"], [200, "200 MiB/s"]])) +
         row("Apri il dialogo all'avvio", "Altrimenti il trasferimento parte in background", sw("openDialog")) +
-        row("Notifica del browser alla fine", "Quando la pagina non è in primo piano", sw("notify"))
+        row("Notifica del browser alla fine", "Quando la pagina non è in primo piano", sw("notify")) +
+        row("Icona nella barra di DSM", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa", sw("dsmTray"))
       );
     case "keys":
       return `<table class="keys">${KEYS.map(([k, d]) => `<tr><td>${k.split(" / ").map((x) => x.split("+").map((p) => `<kbd>${t(p)}</kbd>`).join("+")).join(" / ")}</td><td>${t(d)}</td></tr>`).join("")}</table>`;

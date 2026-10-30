@@ -11,7 +11,33 @@
             "hidden": false,
             "depend": [],
             "texts": "texts",
-            "preloadTexts": ["app:title"]
+            "preloadTexts": [
+                "app:title"
+            ]
+        }
+    },
+    "tray.js": {
+        "SYNO.SDS.SynoFile.Tray.Instance": {
+            "type": "app",
+            "title": "SynoFile",
+            "hidden": true,
+            "autoLaunch": true,
+            "autoLaunchType": "tray",
+            "allUsers": false,
+            "canLaunch": {
+                "standalone": false,
+                "demo_mode": false
+            },
+            "depend": [
+                "SYNO.SDS.SynoFile.Tray.Item"
+            ]
+        },
+        "SYNO.SDS.SynoFile.Tray.Item": {
+            "type": "lib",
+            "title": "SynoFile",
+            "depend": [
+                "SYNO.SDS.Tray.ArrowTray"
+            ]
         }
     }
 }

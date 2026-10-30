@@ -375,4 +375,5 @@ export default {
   "Ordine predefinito": "Ordre par défaut",
   "Nomi dei volumi": "Noms des volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Ceux donnés dans le Gestionnaire de stockage (ex. « HDD »), sinon « Volume 1 »",
   "Mostra i preferiti": "Afficher les favoris", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "La section Favoris de la barre latérale ; masqués, ils restent enregistrés",
+  "Icona nella barra di DSM": "Icône dans la barre des tâches de DSM", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa": "À côté des icônes de DSM en haut à droite, tant que des transferts sont en cours ou en pause",
 };

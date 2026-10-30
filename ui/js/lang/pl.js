@@ -375,4 +375,5 @@ export default {
   "Ordine predefinito": "Domyślna kolejność",
   "Nomi dei volumi": "Nazwy woluminów", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Nadane w aplikacji Zarządzanie przechowywaniem (np. „HDD”), w przeciwnym razie „Wolumen 1”",
   "Mostra i preferiti": "Pokaż ulubione", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "Sekcja Ulubione na pasku bocznym; ukryte pozostają zapisane",
+  "Icona nella barra di DSM": "Ikona na pasku zadań DSM", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa": "Obok ikon DSM w prawym górnym rogu, gdy transfery trwają lub są wstrzymane",
 };

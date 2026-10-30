@@ -37,6 +37,7 @@ export const DEFAULTS = {
   startIn: "last", // last, shares, folder
   newTabIn: "current", // current, shares, folder
   startFolder: "",
+  dsmTray: true, // the icon in DSM's taskbar while transfers run
   showFavorites: true, // the Favourites section of the sidebar
   volumeNames: true, // the names given in Storage Manager, else "Volume 1"
   volumeOrder: [], // the sidebar's groups in the order chosen by dragging

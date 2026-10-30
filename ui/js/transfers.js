@@ -4,7 +4,7 @@
 
 import { api } from "./api.js";
 import { prefs } from "./prefs.js";
-import { t, count } from "./i18n.js";
+import { t, count, LANG } from "./i18n.js";
 import { esc, size, speed, duration, clock, int, baseName, parentOf, dateTime } from "./format.js";
 import { svg } from "./icons.js";
 import { h, $, toast, errorToast } from "./ui.js";
@@ -77,6 +77,19 @@ function route(job) {
   return { from, to: job.info.dest };
 }
 
+/**
+ * The percentage as shown: rounded down while the job runs, so it never
+ * reaches 100 early nor goes back (99.5 → "100" → "99.9" looked broken);
+ * one decimal below 10. 100 only once finished.
+ */
+function pctText(pct, done) {
+  if (done && pct >= 1) return "100";
+  const n = Math.min(pct * 100, 99.9);
+  const one = n > 0 && n < 10;
+  const v = one ? Math.floor(n * 10) / 10 : Math.floor(n);
+  return v.toLocaleString(LANG, { minimumFractionDigits: one ? 1 : 0, maximumFractionDigits: one ? 1 : 0 });
+}
+
 /** Everything the views show, worked out once per update. */
 export function stats(job) {
   const p = job.progress;
@@ -139,6 +152,7 @@ async function poll() {
       const last = [...jobs.values()].sort((a, b) => b.created - a.created)[0];
       if (last) setTimeout(() => openDialog(last.id));
     }
+    if (firstPoll) openAsked();
     firstPoll = false;
   } catch {
     // the daemon may be restarting: keep the last state and retry
@@ -146,6 +160,29 @@ async function poll() {
   renderAll();
   schedule();
 }
+
+/**
+ * The icon in DSM's taskbar (tray.js) leaves the transfer to show here, in
+ * the browser's storage: read at start, and when it changes while open.
+ */
+/** Tells the icon in DSM's taskbar (another page, same origin) to look now. */
+function nudgeTray() {
+  try {
+    localStorage.setItem("synofile.jobsChanged", String(Date.now()));
+  } catch {}
+}
+
+function openAsked() {
+  let asked = null;
+  try {
+    asked = JSON.parse(localStorage.getItem("synofile.openXfer") || "null");
+    localStorage.removeItem("synofile.openXfer");
+  } catch {}
+  if (asked && Date.now() - asked.at < 60000 && jobs.has(asked.id)) setTimeout(() => openDialog(asked.id));
+}
+addEventListener("storage", (e) => {
+  if (e.key === "synofile.openXfer" && e.newValue) openAsked();
+});
 
 function schedule(ms) {
   clearTimeout(pollTimer);
@@ -221,6 +258,7 @@ export function updateLocal(job) {
 export async function start(request) {
   try {
     const { id } = await api.newJob({ conflict: prefs.conflict, verify: prefs.verify, limit: prefs.limit * 1024 * 1024, ...request });
+    nudgeTray();
     since = Math.max(0, since - 1);
     await poll();
     if (prefs.openDialog && request.op !== "delete") openDialog(id);
@@ -242,6 +280,7 @@ async function control(job, action, extra = {}) {
   } catch (e) {
     errorToast(e);
   }
+  nudgeTray();
   kick();
 }
 
@@ -284,7 +323,7 @@ function renderButton() {
   }
   const pct = total ? done / total : 0;
   $("#xfer-ring").style.strokeDashoffset = String(94.25 * (1 - pct));
-  btn.title = running.length ? t("Trasferimenti: {n} attivi, {p}%", { n: running.length, p: Math.round(pct * 100) }) : t("Trasferimenti");
+  btn.title = running.length ? t("Trasferimenti: {n} attivi, {p}%", { n: running.length, p: pctText(pct, false) }) : t("Trasferimenti");
 }
 
 function toggleDrawer(show) {
@@ -324,7 +363,7 @@ function renderDrawer() {
     const meta = active(job)
       ? job.state === "running"
         ? `<span>${st.byBytes ? `${size(job.progress.bytes_done)} / ${size(job.progress.bytes_total)}` : `${int(job.progress.files_done)} / ${int(job.progress.files_total)}`}</span><span>${st.byBytes ? speed(st.now) : ""}${st.eta != null ? " · " + duration(st.eta) : ""}</span>`
-        : `<span>${t(STATE[job.state])}</span><span>${Math.round(st.pct * 100)}%</span>`
+        : `<span>${t(STATE[job.state])}</span><span>${pctText(st.pct, finished(job))}%</span>`
       : `<span>${job.finished ? clock(job.finished) : ""} · ${duration(job.active_ms)}</span><span>${job.progress.errors ? count(job.progress.errors, "errore", "errori", int) : esc(job.msg || "")}</span>`;
     const card = h(`<div class="jcard">
       <div class="jcard-top"><div class="op">${svg(op.icon)}</div>
@@ -490,7 +529,7 @@ class JobDialog {
       .join("");
 
     // the big numbers
-    $(".pct", d).textContent = st.pct >= 0.999 && !finished(job) ? "99,9" : (st.pct * 100).toFixed(st.pct < 0.1 && st.pct > 0 ? 1 : 0).replace(".", ",");
+    $(".pct", d).textContent = pctText(st.pct, finished(job));
     if (st.byBytes) {
       $(".bytes", d).innerHTML = `${size(p.bytes_done)} <span>${t("di")} ${size(p.bytes_total)}</span>`;
     } else {
@@ -542,7 +581,7 @@ class JobDialog {
       const cp = p.current_size ? Math.min(1, p.current_done / p.current_size) : 0;
       cur.innerHTML = `<div class="row1">${svg(p.phase === "verify" ? "shield" : "file")}<span class="nm">${esc(name)}</span><span class="meth">${esc(p.phase === "verify" ? t("verifica") : methods[p.method] || "")}</span></div>
         <div class="path">${esc(p.current)}</div>
-        ${p.current_size ? `<div class="pbar thin ${barClass(job)}" style="--p:${(cp * 100).toFixed(1)}%"><div class="fill"></div></div><div class="row3"><span>${size(p.current_done)} ${t("di")} ${size(p.current_size)}</span><span>${Math.round(cp * 100)}%</span></div>` : ""}`;
+        ${p.current_size ? `<div class="pbar thin ${barClass(job)}" style="--p:${(cp * 100).toFixed(1)}%"><div class="fill"></div></div><div class="row3"><span>${size(p.current_done)} ${t("di")} ${size(p.current_size)}</span><span>${pctText(cp, false)}%</span></div>` : ""}`;
     } else cur.hidden = true;
 
     if (!tickOnly) {
