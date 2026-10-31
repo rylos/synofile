@@ -50,6 +50,8 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
     let name = auth::require_admin()?;
     let user = identity::lookup(&name)?;
     let shares = shares::all(&user);
+    // read as the package, which owns them
+    let conns: Vec<_> = crate::remote::load(&user.name).into_iter().map(|c| crate::remote::api::with_key(&user.name, c)).collect();
 
     match req.route.as_str() {
         // ---- as the package user ----
@@ -59,6 +61,7 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
             reply(out, &json!({ "user": user.name, "version": VERSION, "asset": ASSET, "setup": setup, "daemon": daemon.is_some() }))
         }
         "prefs" => prefs(req, out, &user),
+        r if r == "conns" || r.starts_with("conns/") => crate::remote::api::conns(req, out, &user.name),
         "jobs" => {
             let since: u64 = req.param("since").and_then(|s| s.parse().ok()).unwrap_or(0);
             let answer = ask_daemon(&json!({ "cmd": "list", "user": user.name, "since": since }))?;
@@ -67,7 +70,7 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
         "jobs/new" => {
             method(req, "POST")?;
             let body: NewJob = req.json()?;
-            let spec = job_spec(&shares, &body)?;
+            let spec = job_spec(&shares, &conns, &user.name, &body)?;
             let info = daemon::Info { sources: body.sources.clone(), dest: body.dest.clone(), permanent: body.permanent };
             let answer = ask_daemon(&json!({ "cmd": "submit", "user": user, "spec": spec, "info": info, "lang": crate::lang::code() }))?;
             reply(out, &answer)
@@ -85,9 +88,23 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
             if !identity::dev() && !crate::caps::none_left() {
                 return Err(ApiError::new(500, "capabilities still held after dropping to the user"));
             }
-            as_user(req, out, &user, &shares)
+            if let Some(result) = crate::remote::api::serve(req, out, &conns) {
+                return result;
+            }
+            as_user(req, out, &user, &shares, &conns)
         }
     }
+}
+
+/// The NAS's own name: an address typed with it is a shared folder.
+fn hostname() -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: a buffer and its length
+    if unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len()) } != 0 {
+        return String::new();
+    }
+    let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).into_owned()
 }
 
 fn reply(out: &mut impl Write, value: &impl serde::Serialize) -> Result<(), ApiError> {
@@ -132,7 +149,7 @@ struct NewJob {
     members: Vec<String>,
 }
 
-fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
+fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &NewJob) -> Result<Spec, ApiError> {
     if body.sources.is_empty() {
         return Err(ApiError::bad_request(t!("nessun elemento selezionato", "nothing selected")));
     }
@@ -141,7 +158,32 @@ fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
     }
     let mut sources = Vec::new();
     let mut recycle = Vec::new();
+    let mut remotes: Vec<crate::remote::Conn> = Vec::new();
+    // a remote path stays as it is, the worker connects: (path, whether it
+    // is the server or one of its shares)
+    let mut remote_path = |vpath: &str| -> Option<Result<(PathBuf, bool), ApiError>> {
+        let split = crate::remote::split(vpath)?;
+        Some(split.and_then(|(id, parts)| {
+            let conn = conns.iter().find(|c| c.id == id).ok_or_else(|| ApiError::not_found(t!("connessione inesistente: è stata eliminata?", "no such connection: was it deleted?")))?;
+            let top = parts.is_empty() || (conn.kind == crate::remote::Kind::Smb && parts.len() == 1);
+            if !remotes.iter().any(|c| c.id == id) {
+                remotes.push(crate::remote::api::with_key(user, conn.clone()));
+            }
+            Ok((crate::remote::join(&id, &parts), top))
+        }))
+    };
+    if matches!(body.op, Op::Compress | Op::Extract) && body.sources.iter().chain(&body.dest).any(|p| crate::remote::split(p).is_some()) {
+        return Err(ApiError::bad_request(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first")));
+    }
     for vpath in &body.sources {
+        if let Some(found) = remote_path(vpath) {
+            let (path, top) = found?;
+            if top {
+                return Err(ApiError::bad_request(t!("una cartella condivisa non si copia, sposta o elimina da qui", "a shared folder cannot be copied, moved or deleted from here")));
+            }
+            sources.push(path);
+            continue;
+        }
         let r = shares::resolve(shares, vpath)?;
         if r.is_root() {
             return Err(ApiError::bad_request(t!("una cartella condivisa non si copia, sposta o elimina da qui", "a shared folder cannot be copied, moved or deleted from here")));
@@ -160,6 +202,13 @@ fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
     }
     let dest = match (&body.dest, body.op) {
         (_, Op::Delete) => None,
+        (Some(d), _) if crate::remote::split(d).is_some() => {
+            let (path, _) = remote_path(d).unwrap()?;
+            if crate::remote::split(d).is_some_and(|r| r.is_ok_and(|(_, parts)| parts.is_empty())) {
+                return Err(ApiError::bad_request(t!("scegli una cartella condivisa del server", "choose a shared folder of the server")));
+            }
+            Some(path)
+        }
         (Some(d), _) => Some(shares::resolve(shares, d)?.real),
         (None, _) => return Err(ApiError::bad_request(t!("manca la destinazione", "no destination"))),
     };
@@ -183,6 +232,7 @@ fn job_spec(shares: &[Share], body: &NewJob) -> Result<Spec, ApiError> {
         into_folder: body.into_folder,
         password: body.password.clone(),
         members: body.members.iter().map(|m| valid_member(m)).collect::<Result<_, _>>()?,
+        remotes,
     })
 }
 
@@ -242,7 +292,7 @@ struct Paths {
     paths: Vec<String>,
 }
 
-fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -> Result<(), ApiError> {
+fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], conns: &[crate::remote::Conn]) -> Result<(), ApiError> {
     let path_param = |name: &str| -> Result<PathBuf, ApiError> { Ok(shares::resolve(shares, req.require(name)?)?.real) };
     match req.route.as_str() {
         "shares" => {
@@ -258,7 +308,7 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
                     v
                 })
                 .collect();
-            reply(out, &json!({ "shares": list, "user": user.name, "volumes": shares::volume_names() }))
+            reply(out, &json!({ "shares": list, "user": user.name, "volumes": shares::volume_names(), "hostname": hostname() }))
         }
         "list" => {
             let r = shares::resolve(shares, req.require("path")?)?;
@@ -292,6 +342,9 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share]) -
         "usage" => {
             method(req, "POST")?;
             let body: Paths = req.json()?;
+            if body.paths.first().is_some_and(|p| crate::remote::split(p).is_some()) {
+                return crate::remote::api::usage(out, conns, &body.paths);
+            }
             let paths = body.paths.iter().map(|p| Ok(shares::resolve(shares, p)?.real)).collect::<Result<Vec<_>, ApiError>>()?;
             // folders inside an archive are counted from its listing
             if let [one] = paths.as_slice() {

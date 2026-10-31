@@ -276,7 +276,7 @@ fn raw_header(
 }
 
 /// Largest chunk of an upload: the interface sends 16 MiB.
-const MAX_CHUNK: u64 = 64 * 1024 * 1024;
+pub const MAX_CHUNK: u64 = 64 * 1024 * 1024;
 
 pub fn upload_part(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!(".{name}.synofile-upload"))

@@ -70,11 +70,13 @@ function title(job) {
 }
 
 function route(job) {
-  const from = job.info.sources.length ? parentOf(job.info.sources[0]) : "";
+  // a remote path reads as the server's own address
+  const show = (p) => (p && app?.displayPath ? app.displayPath(p) : p);
+  const from = job.info.sources.length ? show(parentOf(job.info.sources[0])) : "";
   if (job.op === "delete") return { from, to: job.info.permanent ? t("eliminazione definitiva") : t("Cestino") };
-  if (job.op === "upload") return { from: t("questo computer"), to: job.info.dest };
-  if (job.op === "extract") return { from: job.info.sources[0], to: job.info.dest };
-  return { from, to: job.info.dest };
+  if (job.op === "upload") return { from: t("questo computer"), to: show(job.info.dest) };
+  if (job.op === "extract") return { from: show(job.info.sources[0]), to: show(job.info.dest) };
+  return { from, to: show(job.info.dest) };
 }
 
 /**

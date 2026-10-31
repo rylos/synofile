@@ -7,7 +7,8 @@ import { toast } from "./ui.js";
 
 const BROWSABLE = /\.(zip|7z|rar|jar|iso|cab|tar|tgz|tbz2?|txz|tar\.(gz|bz2|xz|zst))$/i;
 
-export const isBrowsable = (entry) => entry.kind === "f" && BROWSABLE.test(entry.name);
+// not on remote connections: the NAS would have to fetch the whole archive
+export const isBrowsable = (entry) => entry.kind === "f" && BROWSABLE.test(entry.name) && !entry.path?.startsWith("/:");
 
 // The archives opened so far, by their path: what is under them is inside.
 const roots = new Set();

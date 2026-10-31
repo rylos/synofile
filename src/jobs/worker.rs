@@ -21,6 +21,9 @@ use std::time::{Duration, Instant};
 use super::protocol::{Command, ConflictInfo, Event, Op, Policy, Progress, RecycleRoot, Side, Spec, Status};
 use crate::fsops::{describe, rename_noreplace};
 
+#[path = "remote_jobs.rs"]
+mod remote_jobs;
+
 const EMIT_EVERY: Duration = Duration::from_millis(150);
 const CHUNK: usize = 4 * 1024 * 1024;
 /// FICLONE, _IOW(0x94, 9, int): same as BTRFS_IOC_CLONE, in every kernel DSM ships.
@@ -232,6 +235,9 @@ impl Engine {
     }
 
     fn run(&mut self) -> Step<()> {
+        if self.spec.sources.iter().chain(&self.spec.dest).any(|p| crate::remote::is_remote(p)) {
+            return self.remote_run();
+        }
         match self.spec.op {
             Op::Delete => self.delete(),
             Op::Copy | Op::Move => self.transfer(),
@@ -668,6 +674,12 @@ impl Engine {
             target: Side { size: old.len(), mtime: old.mtime(), dir: old.is_dir() },
             rename_to: unique_name(dir, name, "").file_name().unwrap_or_default().to_string_lossy().into_owned(),
         };
+        self.ask_info(info)
+    }
+
+    /// Sends a conflict to the daemon and waits for the answer.
+    fn ask_info(&mut self, info: ConflictInfo) -> Step<Policy> {
+        let id = info.id;
         self.emit_progress(true);
         emit(&Event::Conflict(info));
         let mut s = self.shared.state.lock().unwrap();

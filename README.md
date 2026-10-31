@@ -34,6 +34,11 @@ Nine languages, following DSM.
   it show what takes up the room, level by level, as KDE's Filelight does.
   The NAS reads the folders with several threads at once; Synology's own
   folders, snapshots and the recycle bin are left out.
+- **SMB and SFTP servers.** Add a Windows or Samba share, another Synology
+  or any SSH server under Connections, with a name of your choice. A bare host
+  (`\\srv03`) lists its shared folders; domain, user and password for SMB,
+  password or SynoFile's own key for SFTP. Browse, preview, upload, download,
+  rename, and copy or move both ways with the same transfer dialog.
 - **DSM's own Recycle Bin.** Deleting hands items to DSM's `synorecycle`, so
   they land in `#recycle` exactly as File Station puts them there.
 - **eza in the browser.** The list looks like `eza -l`: icons and colours for
@@ -108,6 +113,10 @@ on the NAS tells whether setup ran and the transfer service is up.
   zip64, UTF-8 names); listing and extraction use the NAS's 7-Zip, GNU tar
   and `unrar`, into a hidden folder first, then moved into place under the
   conflict rule. 7-Zip gets passwords on stdin, never on the command line.
+- Connections are kept per user in the package's folder, readable by the
+  package only, with the passwords encrypted (AES-256-GCM). SMB goes through
+  the `smb` crate (signing and encryption) with SynoFile's own share listing;
+  SFTP through `russh`, with the server's key pinned on first use.
 - Every URL carries the build, so a page left open across an upgrade reloads
   itself.
 

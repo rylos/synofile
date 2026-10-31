@@ -6,10 +6,11 @@ import { prefs } from "./prefs.js";
 import { t, count } from "./i18n.js";
 import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator, joinPath, parentOf, baseName, int } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
-import { h, $, errorToast } from "./ui.js";
+import { h, $, errorToast, toast } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
 import { rememberArchive } from "./archive.js";
+import { isRemote } from "./conns.js";
 
 const COLS = {
   mode: { label: "Permessi", width: "92px", cls: "mono pm" },
@@ -206,10 +207,14 @@ export class Pane {
         this.writable = false;
         this.space = null;
         this.archive = null;
+        this.remote = null;
       } else {
         const data = await api.list(this.path);
         if (myPath !== this.path) return;
         this.entries = data.entries.map((e) => ({ ...e, path: joinPath(this.path, e.name) }));
+        // the shares of an SMB server: like shared folders, not to be moved
+        if (data.remote?.top) this.entries.forEach((e) => (e.share = { name: e.name, remote: true }));
+        this.remote = data.remote || null;
         this.writable = data.writable;
         this.space = data.space;
         this.recycle = data.recycle;
@@ -322,6 +327,10 @@ export class Pane {
   }
 
   setSearchMode(on) {
+    if (on && isRemote(this.path)) {
+      toast(t("Sulle connessioni remote c'è solo il filtro della cartella"));
+      on = false;
+    }
     this.searchMode = on;
     $(".filter-box .mode", this.el).classList.toggle("on", on);
     this.filterInput.placeholder = on ? t("Cerca in {p}", { p: baseName(this.path) || t("tutte le cartelle") }) : t("Filtra");
@@ -510,6 +519,11 @@ export class Pane {
     const parts = this.path.split("/").filter(Boolean);
     let html = `<button class="crumb" data-path="/"><i class="gi keep">${shareGlyph("homes")}</i>${t("NAS")}</button>`;
     let acc = "";
+    if (isRemote(this.path)) {
+      // a connection starts its own trail, under its name
+      acc = "/" + parts.shift();
+      html = `<button class="crumb" data-path="${esc(acc)}"><i class="gi keep">${svg("server")}</i>${esc(this.app.connName(acc))}</button>`;
+    }
     for (const p of parts) {
       acc += "/" + p;
       html += `<span class="crumb-sep">${svg("chev")}</span><button class="crumb" data-path="${esc(acc)}">${esc(p)}</button>`;
@@ -534,12 +548,8 @@ export class Pane {
       this.editingPath = false;
       input.replaceWith(this.crumbsEl);
       this.renderCrumbs();
-      if (go && input.value.trim()) {
-        let v = input.value.trim().replace(/\\/g, "/");
-        // accept \\NAS\share\..., smb://nas/share/... and /volume1/share/...
-        v = v.replace(/^smb:\/\/[^/]+/i, "").replace(/^\/\/[^/]+/, "").replace(/^\/volume\d+/, "");
-        this.go(v);
-      }
+      // \\server\share, smb://, sftp://, /volume1/share…: the app knows where they go
+      if (go && input.value.trim()) this.app.goAddress(input.value.trim(), this);
     };
     input.onkeydown = (e) => {
       e.stopPropagation();
@@ -630,7 +640,7 @@ export class Pane {
     switch (c.key) {
       case "name": {
         const link = e.kind === "l" ? `<span class="link-target">→</span>` : "";
-        const share = e.share ? `<span class="si-badge" style="margin-left:6px">${esc(e.share.volume)}</span>` : "";
+        const share = e.share?.volume ? `<span class="si-badge" style="margin-left:6px">${esc(e.share.volume)}</span>` : "";
         const m = this.matches?.get(e.path);
         return `<div class="cell name-cell">${iconHTML(e)}<span class="nm ${colorClass(e)}">${m ? highlight(e.name, m.positions, esc) : esc(e.name)}</span>${link}${share}</div>`;
       }
@@ -761,7 +771,7 @@ export class Pane {
     const list = this.targets();
     const token = (this.infoToken = Symbol());
     if (!list.length) {
-      const name = baseName(this.path) || t("Cartelle condivise");
+      const name = (this.path.split("/").length === 2 && isRemote(this.path) ? this.app.connName(this.path) : baseName(this.path)) || t("Cartelle condivise");
       const dirEntry = { name, kind: "d", mode: 0o755 };
       this.infoEl.innerHTML = `<div class="preview-box">${iconHTML(dirEntry, "keep")}</div><h3>${esc(name)}</h3><div class="kind">${t("Cartella")}</div>
         <dl class="facts"><dt>${t("Elementi")}</dt><dd>${int(this.visible.length)}</dd>${this.space ? `<dt>${t("Spazio libero")}</dt><dd>${size(this.space.free)}</dd>` : ""}</dl>`;
@@ -801,7 +811,7 @@ export class Pane {
         <dt>${t("Modificato")}</dt><dd>${esc(dateTime(e.mtime))}</dd>
         <dt>${t("Permessi")}</dt><dd class="pm" style="font-family:var(--mono)">${this.modeHTML(e)}</dd>
         <dt>${t("Proprietario")}</dt><dd class="owner">…</dd>
-        <dt>${t("Percorso")}</dt><dd style="font-family:var(--mono);font-size:11.5px">${esc(e.path)}</dd>
+        <dt>${t("Percorso")}</dt><dd style="font-family:var(--mono);font-size:11.5px">${esc(this.app.displayPath(e.path))}</dd>
       </dl>
       <div class="actions">
         ${isDirLike(e) ? "" : `<button class="btn small dl">${svg("download")} ${t("Scarica")}</button><button class="btn small info-preview">${svg("eye")} ${t("Anteprima")}</button>`}
@@ -822,7 +832,8 @@ export class Pane {
       if (st.archive) {
         $(".owner", this.infoEl).textContent = "—";
         $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Archivio")}</dt><dd>${esc(st.owner)}</dd>`);
-      } else $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
+      } else if (st.remote) $(".owner", this.infoEl).textContent = st.server;
+      else $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
       if (st.target) $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Destinazione")}</dt><dd style="font-family:var(--mono)">${esc(st.target)}</dd>`);
     } catch {
       if (token === this.infoToken) $(".owner", this.infoEl).textContent = "—";

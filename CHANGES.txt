@@ -1,3 +1,8 @@
+v0.1.20
+- Connections to SMB and SFTP servers in the sidebar, under names you choose and can change. A bare host such as \\srv03 lists its shared folders. SMB takes domain, user and password; SFTP a password or SynoFile's own SSH key.
+- Browse, preview, upload, download and rename on a server, and copy or move between the NAS and a server with the transfer dialog. A server path can be typed in the path bar.
+- A more compact transfer dialog and folder picker.
+
 v0.1.19
 - The install and upgrade wizard has a step that says to run setup, with the command.
 - CHANGES.txt: the changes of every version.

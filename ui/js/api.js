@@ -77,4 +77,10 @@ export const api = {
   view: (path) => url("view", { path }),
   thumb: (path, big) => url("thumb", { path, size: big ? "big" : undefined }),
   download: (paths) => url("download", { paths: JSON.stringify(paths) }),
+  conns: () => call("conns"),
+  saveConn: (c) => call("conns/save", { body: c }),
+  testConn: (c) => call("conns/test", { body: c }),
+  deleteConn: (id) => call("conns/delete", { body: { id } }),
+  orderConns: (ids) => call("conns/order", { body: ids }),
+  makeKey: () => call("conns/key", { body: {} }),
 };

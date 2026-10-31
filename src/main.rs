@@ -15,6 +15,7 @@ mod cgi;
 mod fsops;
 mod identity;
 mod jobs;
+mod remote;
 mod shares;
 mod space;
 mod transfer;
@@ -51,6 +52,8 @@ fn main() -> ExitCode {
         ["daemon"] => jobs::daemon::run(),
         // development builds start the worker through the main binary
         ["worker"] if identity::dev() => jobs::worker::run(),
+        #[cfg(debug_assertions)]
+        ["remote", rest @ ..] => remote::probe(rest),
         ["version"] => {
             println!("synofile {}", api::VERSION);
             ExitCode::SUCCESS

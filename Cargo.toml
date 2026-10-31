@@ -1,6 +1,6 @@
 [package]
 name = "synofile"
-version = "0.1.19"
+version = "0.1.20"
 edition = "2024"
 license = "MIT"
 description = "Synology DSM package: a fast, dark file manager for the shared folders, with a detailed transfer dialog"
@@ -16,6 +16,12 @@ serde_json = "1.0"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# remote connections: SMB 2/3 and SFTP, pure Rust
+smb = { version = "0.12.1", default-features = false, features = ["multi_threaded", "sign", "encrypt"] }
+russh = { version = "0.54", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "2.4"
+tokio = { version = "1", features = ["rt", "net", "time", "io-util"] }
+aes-gcm = "0.10"
 
 [profile.release]
 lto = true

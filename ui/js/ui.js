@@ -167,9 +167,8 @@ export function pickFolder({ title, start, ok }) {
       <div class="dlg-head"><div class="dlg-icon">${svg("move")}</div><h2>${esc(title)}</h2></div>
       <div class="dlg-body">
         <div class="picker"><div class="picker-path"></div><div class="picker-list"></div></div>
-        <div class="row-actions" style="margin-top:8px"><button class="btn small mk">${svg("folderPlus")} ${t("Nuova cartella")}</button></div>
       </div>
-      <div class="dlg-foot"><button class="btn cancel">${t("Annulla")}</button><button class="btn primary ok">${esc(ok)}</button></div>`, { wide: true });
+      <div class="dlg-foot"><div class="left"><button class="btn small mk">${svg("folderPlus")} ${t("Nuova cartella")}</button></div><button class="btn cancel">${t("Annulla")}</button><button class="btn primary ok">${esc(ok)}</button></div>`, { cls: "picker-dlg" });
     let current = start && start !== "/" ? start : "/";
     let result = null;
     const pathEl = dlg.querySelector(".picker-path");
@@ -186,6 +185,9 @@ export function pickFolder({ title, start, ok }) {
         if (path === "/") {
           const { shares } = await api.shares();
           rows = shares.filter((s) => s.writable).map((s) => ({ name: s.name, path: "/" + s.name, glyph: shareGlyph(s.name) }));
+          // the remote connections after the shared folders
+          const { conns } = await api.conns().catch(() => ({ conns: [] }));
+          rows.push(...conns.map((c) => ({ name: c.name, path: "/:" + c.id, glyph: svg("server") })));
         } else {
           const { entries } = await api.list(path);
           rows = entries

@@ -68,6 +68,9 @@ pub struct Spec {
     /// extract: only these items (paths inside the archive), each into dest
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
+    /// the remote connections the paths name (`/:<id>/…`), secrets included
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remotes: Vec<crate::remote::Conn>,
 }
 
 /// The message of a job that failed for want of the archive's password.
