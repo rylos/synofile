@@ -611,7 +611,7 @@ dialog.xfer { max-width: min(96vw, 520px); }
 .xf-substate { color: var(--muted); font-size: 11px; margin-top: 3px; display: flex; justify-content: space-between; gap: 10px; }
 
 .xf-chart {
-  position: relative; height: 68px; margin: 6px 0; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); overflow: hidden;
+  position: relative; height: 84px; margin: 6px 0; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); overflow: hidden;
 }
 .xf-chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .xf-chart .tip {
@@ -799,3 +799,38 @@ dialog.dlg.space { max-width: min(96vw, 940px); }
 .conn-result { min-height: 1.3em; margin-top: 8px; word-break: break-word; }
 .picker-list .gi svg { width: 15px; height: 15px; vertical-align: -2px; }
 .conn-dlg .field > .seg { align-self: flex-start; }
+
+/* ---------- a folder's icon chosen by hand ---------- */
+.ic-red { color: var(--t-red) !important; }
+.ic-yellow { color: var(--t-yellow) !important; }
+.ic-green { color: var(--t-green) !important; }
+.ic-cyan { color: var(--t-cyan) !important; }
+.ic-purple { color: var(--t-purple) !important; }
+.ic-white { color: var(--t-white) !important; }
+.ic-gray { color: var(--t-gray) !important; }
+.info .preview-box.pick { cursor: pointer; transition: border-color .12s; }
+.info .preview-box.pick:hover { border-color: var(--accent); }
+.icon-pick {
+  position: fixed; z-index: 120; width: 300px; padding: 10px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ip-head { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ip-scope { display: flex; }
+.ip-scope button { flex: 1; font-size: 11.5px; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.ip-scope button.on { background: var(--accent-soft); color: var(--accent); }
+.ip-search { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 12px; }
+.ip-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 176px; overflow: auto; }
+.ip-grid button { font-size: 17px; width: auto; height: 32px; border: 1px solid transparent; border-radius: 7px; background: transparent; cursor: pointer; font-weight: 400; }
+.ip-grid button:hover { background: var(--surface-2); }
+.ip-grid button.on { border-color: var(--accent); background: var(--accent-soft); }
+.ip-grid .hint { grid-column: 1 / -1; padding: 6px; }
+.ip-colors { display: flex; gap: 6px; justify-content: space-between; }
+.ip-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; background: currentColor; padding: 0; }
+.ip-color.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--surface) inset; }
+.ip-foot { display: flex; align-items: center; }
+
+/* ---------- ejecting a USB drive ---------- */
+.si-eject { display: grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; border-radius: 5px; color: var(--faint); flex: none; cursor: pointer; }
+.si-eject svg { width: 13px; height: 13px; }
+.si-eject:hover { color: var(--text); background: var(--surface-3); }

@@ -39,10 +39,33 @@ export function previewKind(entry) {
   return "other";
 }
 
+// Icons given by hand: { paths: { "/share/dir": {g, c} }, names: { "Clienti": {g, c} } },
+// g the glyph, c a colour of the palette or "". Kept in the preferences.
+let custom = { paths: {}, names: {} };
+export function setFolderIcons(rules) {
+  custom = { paths: {}, names: {}, ...rules };
+}
+
+/** The icon given to a folder by hand, by its path first, then its name. */
+export function folderIcon(entry) {
+  if (entry.kind !== "d" && !entry.link_dir) return null;
+  return (entry.path && custom.paths[entry.path]) || custom.names[entry.name] || null;
+}
+
+// DSM's shared folders on USB drives: usbshare1, usbshare1-2 (a partition)…
+const USB_GLYPH = EZA.choices.find(([, w]) => w.startsWith("usb chiavetta"))[0];
+
+/** A folder's icon from its name alone, as eza gives it. */
+export const autoFolderGlyph = (name) => EZA.dirs[name] || (/^usbshare\d+(-\d+)?$/.test(name) ? USB_GLYPH : EZA.icons.folder);
+
+/** The icons a folder can be given, with the words that find them. */
+export const ICON_CHOICES = EZA.choices;
+export const ICON_COLORS = ["", "red", "yellow", "green", "cyan", "purple", "white", "gray"];
+
 /** eza's icon for an entry (icon_for_file). */
 export function glyph(entry) {
   if (entry.kind === "d" || entry.link_dir) {
-    return EZA.dirs[entry.name] || EZA.icons.folder;
+    return folderIcon(entry)?.g || autoFolderGlyph(entry.name);
   }
   if (EZA.names[entry.name]) return EZA.names[entry.name];
   const e = ext(entry.name);
@@ -66,13 +89,20 @@ export function colorClass(entry) {
 
 /** The icon's colour: eza paints it like the name, without bold. */
 export function iconHTML(entry, extra = "") {
-  return `<i class="gi ${colorClass(entry)} ${extra}">${glyph(entry)}</i>`;
+  const c = folderIcon(entry)?.c;
+  return `<i class="gi ${colorClass(entry)} ${c ? "ic-" + c : ""} ${extra}">${glyph(entry)}</i>`;
+}
+
+/** A folder's icon in the sidebar, the tabs and the path bar: glyph and colour class. */
+export function folderGlyphHTML(path, name, fallback) {
+  const own = folderIcon({ kind: "d", path, name });
+  return own ? `<span class="${own.c ? "ic-" + own.c : ""}">${own.g}</span>` : fallback;
 }
 
 export const FOLDER_GLYPH = EZA.icons.folder;
 export const HOME_GLYPH = EZA.dirs.home;
 export function shareGlyph(name) {
-  return EZA.dirs[name] || EZA.icons.folder;
+  return autoFolderGlyph(name);
 }
 
 const KINDS = {
@@ -144,6 +174,7 @@ const P = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
+  eject: '<path d="M12 4l8 10H4zM4 19h16"/>',
   zoomIn: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>',
   zoomOut: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M8 11h6"/>',
   pie: '<path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',

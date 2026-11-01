@@ -1,3 +1,10 @@
+v0.8.1
+- Folder icons: click a folder's icon in the info panel (or right-click it in the sidebar > Icon…) to give it an icon and a colour, for that folder only or for every folder with the same name. The icon follows the folder when it is renamed or moved in SynoFile.
+- USB drives: an eject button beside USB, SD card and eSATA shared folders in the sidebar, and beside the favourites inside them; also in their right-click menus. It works like Eject in DSM's External Devices, and refuses while a transfer is using the drive.
+- DSM's USB shared folders (usbshare1, usbshare1-2…) get a USB icon on their own.
+- Bug fix for the info panel showing the first item of a folder just opened instead of the folder itself.
+- A slightly taller speed chart in the transfer dialog.
+
 v0.8.0
 - SFTP connections can log in with a key of your own: paste it or load it from a file (OpenSSH, PEM or PuTTY; RSA, Ed25519, ECDSA). A passphrase is asked once; the key is kept encrypted, like the passwords.
 - A clear message instead of "Could not read key" when the SynoFile key has not been created yet.

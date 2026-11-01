@@ -1,11 +1,11 @@
 // SynoFile: the application around the panes — tabs, sidebar, clipboard,
 // menus, keyboard, drag and drop, and the jobs they start.
 
-import { api, loadToken } from "./api.js";
+import { api, dsm, loadToken } from "./api.js";
 import { prefs, save, loadLocal, loadRemote, onChange } from "./prefs.js";
 import { t, count, loadTable } from "./i18n.js";
 import { esc, size, int, baseName, parentOf, joinPath } from "./format.js";
-import { svg, glyph, shareGlyph, previewKind, isArchive, archiveStem, FOLDER_GLYPH } from "./icons.js";
+import { svg, glyph, shareGlyph, folderGlyphHTML, previewKind, isArchive, archiveStem, FOLDER_GLYPH } from "./icons.js";
 import { isBrowsable, archiveOf, readOnlyToast } from "./archive.js";
 import { $, h, toast, errorToast, openMenu, confirmBox, promptBox, pickFolder, copyText, dialog } from "./ui.js";
 import { Pane } from "./pane.js";
@@ -14,6 +14,7 @@ import { upload, fromDataTransfer, fromInput } from "./uploads.js";
 import { quickLook } from "./preview.js";
 import { openSettings } from "./settings.js";
 import { spaceAnalysis } from "./space.js";
+import { pickIcon, moveFolderIcons } from "./iconpick.js";
 import { isRemote, connId, editConnection, renameConnection, parseAddress, serverAddress, startPath } from "./conns.js";
 
 
@@ -34,6 +35,9 @@ class Tab {
     return { panes: this.panes.map((p) => p.state), active: this.active };
   }
 }
+
+// the volumes of USB and eSATA drives: volumeUSB1, volumeSATA1…
+const REMOVABLE = /^volume(USB|SATA)\d/i;
 
 class App {
   constructor() {
@@ -169,7 +173,7 @@ class App {
       const name = this.pathName(p.path) || t("Cartelle condivise");
       const label = tab.split ? `${name} | ${this.pathName(tab.panes[1 - tab.active].path) || "NAS"}` : name;
       const b = h(`<div class="tab ${tab === this.current ? "active" : ""}" role="tab" title="${esc(p.path)}" draggable="true">
-        <span class="tab-icon">${p.path === "/" ? shareGlyph("homes") : glyph({ kind: "d", name })}</span>
+        <span class="tab-icon">${p.path === "/" ? shareGlyph("homes") : folderGlyphHTML(p.path, name, glyph({ kind: "d", name }))}</span>
         <span class="tab-label">${esc(label)}</span>
         <button class="tab-close" title="${t("Chiudi scheda")} (Ctrl+W)">${svg("close")}</button></div>`);
       b.onclick = (e) => {
@@ -299,6 +303,7 @@ class App {
 
   prefsChanged() {
     this.renderThemeButton();
+    this.renderTabs();
     for (const tab of this.tabs)
       for (const p of tab.panes) {
         p.refilter();
@@ -327,6 +332,7 @@ class App {
   }
 
   refreshAfter(job) {
+    if (job.op === "move" && job.state === "done" && !job.progress.errors) for (const p of job.info.sources) moveFolderIcons(p, joinPath(job.info.dest, baseName(p)));
     const dirs = new Set(job.info.sources.map(parentOf));
     if (job.info.dest) dirs.add(job.info.dest);
     this.refreshFolders([...dirs]);
@@ -491,7 +497,7 @@ class App {
       // a favourite on a shared folder that is gone (a USB drive unplugged)
       const there = new Set(this.shares.map((s) => s.name));
       const gone = (f) => (isRemote(f.path) ? !this.connOf(f.path) : this.shares.length && !there.has(f.path.split("/")[1]));
-      if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), f.path.split("/").length === 2 && isRemote(f.path) ? svg("server") : glyph({ kind: "d", name: baseName(f.path) }), gone(f) ? `<span class="si-sub">${t("non disponibile")}</span>` : "", "nested", i, gone(f))).join("");
+      if (favs.length) html += favs.map((f, i) => item(f.path, f.name || baseName(f.path), f.path.split("/").length === 2 && isRemote(f.path) ? svg("server") : folderGlyphHTML(f.path, baseName(f.path), glyph({ kind: "d", name: baseName(f.path) })), gone(f) ? `<span class="si-sub">${t("non disponibile")}</span>` : "", "nested" + (gone(f) ? "" : this.ejectButton(f.path)), i, gone(f))).join("");
       else html += `<div class="hint" style="padding:2px 10px 6px">${t("Ctrl+D aggiunge la cartella aperta")}</div>`;
     }
     const volumes = new Map();
@@ -511,8 +517,8 @@ class App {
       html += `<div class="side-title vol-title" data-vol="${esc(vol)}" draggable="true"${named ? ` title="${esc(plain)}"` : ""}><span>${esc(title)}</span>${first.total && vol !== "home" ? `<span title="${t("{f} liberi di {t}", { f: size(first.free), t: size(first.total) })}">${size(first.free)}</span>` : ""}</div>`;
       if (first.total && vol !== "home") html += `<div class="vol-bar ${used > 0.95 ? "full" : used > 0.85 ? "high" : ""}" style="margin:0 10px 6px"><div style="width:${(used * 100).toFixed(1)}%"></div></div>`;
       for (const s of list) {
-        const badges = (s.encrypted ? `<span class="si-badge" title="${t("Cartella crittografata")}">🔒</span>` : "") + (s.hidden ? `<span class="si-badge" title="${t("Nascosta in Rete")}">${t("nasc.")}</span>` : "");
-        html += item("/" + s.name, s.home ? t("Home ({u})", { u: this.user }) : s.name, s.home ? shareGlyph("home") : shareGlyph(s.name), s.comment ? `<span class="si-sub">${esc(s.comment)}</span>` : "", badges);
+        const badges = (s.encrypted ? `<span class="si-badge" title="${t("Cartella crittografata")}">🔒</span>` : "") + (s.hidden ? `<span class="si-badge" title="${t("Nascosta in Rete")}">${t("nasc.")}</span>` : "") + this.ejectButton("/" + s.name);
+        html += item("/" + s.name, s.home ? t("Home ({u})", { u: this.user }) : s.name, folderGlyphHTML("/" + s.name, s.name, s.home ? shareGlyph("home") : shareGlyph(s.name)), s.comment ? `<span class="si-sub">${esc(s.comment)}</span>` : "", badges);
       }
     }
     html += `<div class="side-title conn-title"><span>${t("Connessioni")}</span><button class="side-add" title="${t("Nuova connessione")}">${svg("plus")}</button></div>`;
@@ -531,6 +537,12 @@ class App {
       if (saved) this.pane.go(startPath(saved));
     };
     this.bindConnDrag(el);
+    el.querySelectorAll(".si-eject").forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        this.eject(b.dataset.share);
+      };
+    });
     el.querySelectorAll(".side-item").forEach((b) => {
       b.onclick = () => this.pane.go(b.dataset.path);
       b.onauxclick = (e) => e.button === 1 && this.newTab(b.dataset.path, false);
@@ -614,6 +626,10 @@ class App {
           i < titles.length - 1 && { label: t("Sposta giù"), icon: "up", action: () => this.moveVolume(b.dataset.vol, i + 1) },
           (prefs.volumeOrder || []).length > 0 && "-",
           (prefs.volumeOrder || []).length > 0 && { label: t("Ordine predefinito"), icon: "refresh", action: () => save({ volumeOrder: [] }) },
+          ...(() => {
+            const share = this.shares.find((s) => s.volume === b.dataset.vol && REMOVABLE.test(s.volume));
+            return share ? ["-", { label: t("Espelli"), icon: "eject", action: () => this.eject(share.name) }] : [];
+          })(),
         ]);
       };
     });
@@ -729,7 +745,59 @@ class App {
       fav ? { label: t("Togli dai preferiti"), icon: "star", action: () => this.toggleFavorite(path) } : { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(path) },
       { label: t("Copia percorso"), icon: "link", action: () => copyText(this.displayPath(path)) },
       !isRemote(path) && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(path) },
+      !(isRemote(path) && path.split("/").length === 2) && { label: t("Icona…"), icon: "palette", action: () => pickIcon({ x, y }, path) },
+      this.removableShare(path) && "-",
+      this.removableShare(path) && { label: t("Espelli"), icon: "eject", action: () => this.eject(this.removableShare(path).name) },
     ]);
+  }
+
+  /** The shared folder on a USB or eSATA drive that holds `path`, if any. */
+  removableShare(path) {
+    if (!path || isRemote(path)) return null;
+    const name = path.split("/")[1];
+    return this.shares.find((s) => s.name === name && REMOVABLE.test(s.volume)) || null;
+  }
+
+  ejectButton(path) {
+    const share = this.removableShare(path);
+    return share ? `<span class="si-eject" role="button" data-share="${esc(share.name)}" title="${t("Espelli")}">${svg("eject")}</span>` : "";
+  }
+
+  /** Ejects the drive of a shared folder the way DSM's External Devices does. */
+  async eject(shareName) {
+    let found = null;
+    try {
+      for (const [apiName, types] of [["SYNO.Core.ExternalDevice.Storage.USB", /^(usbDisk|sdCard)$/], ["SYNO.Core.ExternalDevice.Storage.eSATA", /^eSataDisk$/]]) {
+        const data = await dsm(apiName, "list", { additional: ["dev_type", "product", "status", "partitions"] }).catch(() => null);
+        const dev = (data?.devices || []).find((d) => types.test(d.dev_type) && (d.partitions || []).some((p) => p.share_name === shareName));
+        if (dev) found = { apiName, dev };
+        if (found) break;
+      }
+    } catch {}
+    if (!found) return toast(t("Il dispositivo di «{s}» non risulta collegato", { s: shareName }), { kind: "error" });
+    const { apiName, dev } = found;
+    const names = (dev.partitions || []).map((p) => p.share_name).filter(Boolean);
+    const inUse = (p) => names.some((n) => p === "/" + n || p?.startsWith("/" + n + "/"));
+    if (transfers.all().some((j) => !["done", "failed", "cancelled"].includes(j.state) && [...(j.info.sources || []), j.info.dest].some(inUse))) {
+      return toast(t("Ci sono trasferimenti in corso su «{s}»: aspetta che finiscano o annullali", { s: shareName }), { kind: "error" });
+    }
+    const title = dev.dev_title || dev.product || shareName;
+    const ok = await confirmBox({
+      title: t("Espellere «{d}»?", { d: title }),
+      message: t("Le cartelle condivise del dispositivo non saranno disponibili finché non lo ricolleghi."),
+      items: names.map((n) => `<i class="gi">${shareGlyph(n)}</i>${esc(n)}`),
+      ok: t("Espelli"),
+      icon: "eject",
+    });
+    if (!ok) return;
+    try {
+      await dsm(apiName, "eject", { dev_id: dev.dev_id });
+    } catch (e) {
+      return toast(t("DSM non riesce a espellere «{d}» ({e}): forse è ancora in uso", { d: title, e: e.message }), { kind: "error", timeout: 9000 });
+    }
+    toast(t("«{d}» espulso: si può scollegare", { d: title }), { kind: "ok" });
+    for (const p of this.allPanes()) if (inUse(p.path)) p.go("/");
+    await this.loadShares();
   }
 
   analyseSpace(path) {
@@ -927,6 +995,7 @@ class App {
     if (!name || name === e.name) return;
     try {
       await api.rename(e.path, name);
+      if (isDirLike(e)) moveFolderIcons(e.path, joinPath(parentOf(e.path), name));
       await pane.reload();
       pane.selectPath(joinPath(parentOf(e.path), name));
       this.refreshFolders([pane.path]);
@@ -1151,6 +1220,8 @@ class App {
       !many && dir && { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(entry.path) },
       !many && !ro && !remote && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(dir ? entry.path : parentOf(entry.path)) },
       { label: t("Proprietà"), icon: "info", key: "Ctrl+I", action: () => !prefs.info && this.toggleInfo() },
+      !many && share && this.removableShare(entry.path) && "-",
+      !many && share && this.removableShare(entry.path) && { label: t("Espelli"), icon: "eject", action: () => this.eject(entry.name) },
     ]);
   }
 

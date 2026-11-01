@@ -3,6 +3,7 @@
 
 import { api } from "./api.js";
 import { setBinary } from "./format.js";
+import { setFolderIcons } from "./icons.js";
 
 export const DEFAULTS = {
   theme: "dark", // dark, light, system
@@ -29,6 +30,7 @@ export const DEFAULTS = {
   openDialog: true,
   notify: true,
   favorites: [],
+  folderIcons: { paths: {}, names: {} }, // icons given by hand: by path, or to every folder of a name
   tabs: null,
   perFolder: false, // view and sort remembered for each folder
   folderViews: {}, // path → { view, sort }
@@ -86,6 +88,7 @@ export function save(patch) {
 
 /** The look of the page follows the preferences at once. */
 export function apply() {
+  setFolderIcons(prefs.folderIcons);
   const root = document.documentElement;
   const theme = prefs.theme === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : prefs.theme;
   root.dataset.theme = theme;

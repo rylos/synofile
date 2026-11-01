@@ -57,6 +57,22 @@ export async function call(route, { params, body, method, raw, signal } = {}) {
   return data;
 }
 
+/**
+ * A call to DSM's own web API, with the user's session: what DSM's own
+ * pages do (ejecting a USB drive). Resolves `data`, or throws with DSM's
+ * error code.
+ */
+export async function dsm(apiName, method, params = {}, version = 1) {
+  const body = new URLSearchParams({ api: apiName, method, version });
+  for (const [k, v] of Object.entries(params)) body.set(k, typeof v === "string" ? v : JSON.stringify(v));
+  const headers = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (token) headers["X-SYNO-TOKEN"] = token;
+  const res = await fetch("/webapi/entry.cgi", { method: "POST", credentials: "same-origin", headers, body });
+  const data = await res.json().catch(() => null);
+  if (!data?.success) throw new ApiError(res.status, `DSM ${data?.error?.code ?? res.status}`);
+  return data.data;
+}
+
 export const api = {
   whoami: () => call("whoami"),
   shares: () => call("shares"),

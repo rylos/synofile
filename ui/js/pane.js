@@ -6,6 +6,7 @@ import { prefs } from "./prefs.js";
 import { t, count } from "./i18n.js";
 import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator, joinPath, parentOf, baseName, int } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
+import { pickIcon } from "./iconpick.js";
 import { h, $, errorToast, toast } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
@@ -35,6 +36,7 @@ export class Pane {
     this.visible = [];
     this.sel = new Set();
     this.cursor = 0;
+    this.cursorShown = false; // the cursor stays unseen on opening a folder, until moved
     this.anchor = 0;
     this.filter = "";
     this.searchMode = false;
@@ -158,6 +160,7 @@ export class Pane {
     this.clearFilter(false);
     this.sel.clear();
     this.cursor = 0;
+    this.cursorShown = false;
     this.scroller.scrollTop = 0;
     await this.load();
     // going up selects the folder we came from, as file managers do
@@ -768,13 +771,16 @@ export class Pane {
   async renderInfo() {
     this.infoEl.hidden = !prefs.info;
     if (!prefs.info) return;
-    const list = this.targets();
+    // a folder just opened shows itself, not its first item
+    const list = this.selected();
     const token = (this.infoToken = Symbol());
     if (!list.length) {
       const name = (this.path.split("/").length === 2 && isRemote(this.path) ? this.app.connName(this.path) : baseName(this.path)) || t("Cartelle condivise");
-      const dirEntry = { name, kind: "d", mode: 0o755 };
-      this.infoEl.innerHTML = `<div class="preview-box">${iconHTML(dirEntry, "keep")}</div><h3>${esc(name)}</h3><div class="kind">${t("Cartella")}</div>
+      const dirEntry = { name, kind: "d", mode: 0o755, path: this.path };
+      const pickable = this.path !== "/" && !this.archive && !(isRemote(this.path) && this.path.split("/").length === 2);
+      this.infoEl.innerHTML = `<div class="preview-box ${pickable ? "pick" : ""}"${pickable ? ` title="${t("Cambia icona")}"` : ""}>${iconHTML(dirEntry, "keep")}</div><h3>${esc(name)}</h3><div class="kind">${t("Cartella")}</div>
         <dl class="facts"><dt>${t("Elementi")}</dt><dd>${int(this.visible.length)}</dd>${this.space ? `<dt>${t("Spazio libero")}</dt><dd>${size(this.space.free)}</dd>` : ""}</dl>`;
+      if (pickable) $(".preview-box", this.infoEl).onclick = (ev) => pickIcon(ev.currentTarget, this.path);
       return;
     }
     if (list.length > 1) {
@@ -804,7 +810,8 @@ export class Pane {
     else if (isHeic(e.name) && e.size < HEIC_LIMIT) preview += `<img data-heic alt="">`;
     const u = this.dirSizes.get(e.path);
     const sizeText = isDirLike(e) ? (u ? `${size(u.bytes)}${u.partial ? "+" : ""}` : `<button class="btn small calc">${t("Calcola")}</button>`) : `${size(e.size)} <span style="color:var(--faint)">(${int(e.size)} B)</span>`;
-    this.infoEl.innerHTML = `<div class="preview-box">${preview}</div><h3>${esc(e.name)}</h3><div class="kind">${esc(kindLabel(e))}</div>
+    const pickable = isDirLike(e) && !this.archive && !(isRemote(e.path) && e.path.split("/").length === 2);
+    this.infoEl.innerHTML = `<div class="preview-box ${pickable ? "pick" : ""}"${pickable ? ` title="${t("Cambia icona")}"` : ""}>${preview}</div><h3>${esc(e.name)}</h3><div class="kind">${esc(kindLabel(e))}</div>
       <dl class="facts">
         <dt>${t("Dimensione")}</dt><dd>${sizeText}</dd>
         ${u ? `<dt>${t("Contenuto")}</dt><dd>${count(u.files, "file", "file", int)}, ${count(Math.max(0, u.dirs - 1), "cartella", "cartelle", int)}</dd>` : ""}
@@ -818,6 +825,7 @@ export class Pane {
         <button class="btn small cp">${svg("link")} ${t("Copia percorso")}</button>
       </div>`;
     $(".calc", this.infoEl)?.addEventListener("click", () => this.app.computeSizes(this, [e]));
+    if (pickable) $(".preview-box", this.infoEl).onclick = (ev) => pickIcon(ev.currentTarget, e.path);
     $(".dl", this.infoEl)?.addEventListener("click", () => this.app.download([e]));
     $(".info-preview", this.infoEl)?.addEventListener("click", () => this.app.quickLook(this));
     $(".cp", this.infoEl).onclick = () => this.app.copyPaths([e], "nas");

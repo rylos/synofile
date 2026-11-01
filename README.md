@@ -56,7 +56,10 @@ Nine languages, following DSM.
 - **Made to fit.** The volumes show their Storage Manager names and can be
   reordered; favourites, hidden files (Ctrl+H), view and sort remembered for
   each folder, where it opens, where new tabs open, single or double click,
-  Vim keys.
+  Vim keys. Any folder can get an icon and a colour of your choice (click the
+  icon in the info panel), for itself or for every folder of that name.
+- **USB drives.** An eject button beside a USB, SD or eSATA shared folder and
+  the favourites inside it, the same as DSM's External Devices.
 
 <p align="center">
   <img src="docs/img/transfer.png" alt="A copy with its speed chart" width="49%">
