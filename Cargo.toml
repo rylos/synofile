@@ -1,6 +1,6 @@
 [package]
 name = "synofile"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 license = "MIT"
 description = "Synology DSM package: a fast, dark file manager for the shared folders, with a detailed transfer dialog"

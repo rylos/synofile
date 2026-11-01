@@ -800,6 +800,18 @@ class App {
     await this.loadShares();
   }
 
+  /** A text file the editor opens: not in an archive, 8 MB at most. */
+  editable(pane, entry) {
+    return !pane.archive && entry.kind === "f" && entry.size <= 8 * 1024 * 1024 && previewKind(entry) === "text";
+  }
+
+  async edit(pane, entry) {
+    const { editFile } = await import("./editor.js");
+    const saved = await editFile(entry.path, { label: this.displayPath(entry.path) });
+    pane.focus();
+    if (saved) this.refreshFolders([parentOf(entry.path)]);
+  }
+
   analyseSpace(path) {
     spaceAnalysis(path, (p) => this.pane.go(p));
   }
@@ -1193,6 +1205,7 @@ class App {
       enter && { label: t("Apri in una nuova scheda"), icon: "plus", action: () => this.newTab(entry.path) },
       !many && dir && { label: t("Apri in una nuova scheda"), icon: "plus", key: "Ctrl+Invio", action: () => this.newTab(entry.path) },
       !many && dir && other && { label: t("Apri nell'altro pannello"), icon: "split", action: () => other.go(entry.path) },
+      !many && this.editable(pane, entry) && { label: t("Modifica"), icon: "rename", key: "F4", action: () => this.edit(pane, entry) },
       (!ro || (!many && !dir)) && { label: many || dir ? t("Scarica (.zip)") : t("Scarica"), icon: "download", action: () => this.download(list) },
       !many && !ro && !remote && isArchive(entry) && "-",
       !many && !ro && !remote && isArchive(entry) && { label: t("Estrai in «{x}»", { x: archiveStem(entry.name) }), icon: "archive", action: () => this.extract(pane, entry, "folder") },
@@ -1329,6 +1342,10 @@ class App {
       if (k === "F5") return run(() => pane.reload());
       if (k === "F6") return run(() => (this.isSplit() ? this.toOtherPane("move") : this.copyTo(pane, "move")));
       if (k === "F2") return run(() => pane.rename());
+      if (k === "F4") return run(() => {
+        const cur = pane.visible[pane.cursor];
+        if (cur && this.editable(pane, cur)) this.edit(pane, cur);
+      });
       if (k === "Delete") return run(() => this.remove(pane, e.shiftKey));
       if (k === "Tab" && this.isSplit()) return run(() => {
         this.activate(this.other());

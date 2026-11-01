@@ -834,3 +834,58 @@ dialog.dlg.space { max-width: min(96vw, 940px); }
 .si-eject { display: grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; border-radius: 5px; color: var(--faint); flex: none; cursor: pointer; }
 .si-eject svg { width: 13px; height: 13px; }
 .si-eject:hover { color: var(--text); background: var(--surface-3); }
+
+/* ---------- the text editor, in micro's look (github-dark-tc / github-light-tc) ---------- */
+.editor {
+  --ed-bg: #0d1117; --ed-fg: #e6edf3; --ed-gutter: #161b22; --ed-ln: #6e7681; --ed-cur-ln: #e6edf3; --ed-cur-ln-bg: #21262d; --ed-cur-line: #21262d;
+  --ed-sel: #264f78; --ed-brace: #3a4250; --ed-status: #e6edf3; --ed-status-bg: #161b22; --ed-indent: #30363d; --ed-ws: #484f58;
+  --ed-added: #3fb950; --ed-modified: #d29922; --ed-deleted: #f85149; --ed-msg: #e6edf3; --ed-err: #f85149; --ed-hl: #d29922;
+  position: fixed; inset: 0; z-index: 140; display: flex; flex-direction: column; background: var(--ed-bg); color: var(--ed-fg);
+}
+:root[data-theme="light"] .editor {
+  --ed-bg: #ffffff; --ed-fg: #1f2328; --ed-gutter: #f6f8fa; --ed-ln: #8c959f; --ed-cur-ln: #1f2328; --ed-cur-ln-bg: #eaeef2; --ed-cur-line: #f6f8fa;
+  --ed-sel: #b6e3ff; --ed-brace: #d0d7de; --ed-status: #1f2328; --ed-status-bg: #f6f8fa; --ed-indent: #d0d7de; --ed-ws: #8c959f;
+  --ed-added: #1a7f37; --ed-modified: #9a6700; --ed-deleted: #cf222e; --ed-msg: #1f2328; --ed-err: #cf222e; --ed-hl: #fff8c5;
+}
+.ed-view { flex: 1; min-height: 0; }
+.ed-view .cm-editor { height: 100%; background: var(--ed-bg); color: var(--ed-fg); font-family: var(--mono); font-size: 13.5px; }
+.ed-view .cm-editor.cm-focused { outline: none; }
+.ed-view .cm-scroller { font-family: inherit; line-height: 1.45; }
+.ed-view .cm-content { caret-color: var(--ed-fg); padding: 0; }
+.ed-view .cm-cursor { border-left: 2px solid var(--ed-fg); }
+.ed-view .cm-gutters { background: var(--ed-gutter); border: 0; border-right: 1px solid var(--ed-indent); color: var(--ed-ln); user-select: none; }
+.ed-view .cm-lineNumbers .cm-gutterElement { padding: 0 10px 0 6px; }
+.ed-view .cm-content { padding-left: 4px; }
+.ed-view .cm-activeLineGutter { background: var(--ed-cur-ln-bg); color: var(--ed-cur-ln); }
+.ed-view .cm-activeLine { background: var(--ed-cur-line); }
+.ed-view .cm-selectionBackground, .ed-view .cm-focused .cm-selectionBackground, .ed-view .cm-content ::selection { background: var(--ed-sel) !important; }
+.ed-view .cm-matchingBracket, .ed-view .cm-focused .cm-matchingBracket { background: var(--ed-brace); font-weight: 700; color: inherit; }
+.ed-view .cm-nonmatchingBracket { color: var(--ed-err); }
+.ed-view .cm-trailingSpace { background: transparent; text-decoration: underline wavy var(--ed-ws); }
+.ed-view .ed-tab { background: linear-gradient(to right, var(--ed-indent) 1px, transparent 1px); }
+/* the diff column keeps its width even with no line of it in view */
+.ed-view .cm-gutter.ed-diff { width: 5px; min-width: 5px; }
+.ed-view .ed-diff .cm-gutterElement { width: 3px; padding: 0 0 0 2px; }
+.ed-view .ed-diff span { display: block; width: 3px; height: 100%; }
+.ed-diff-added { background: var(--ed-added); }
+.ed-diff-modified { background: var(--ed-modified); }
+.ed-diff-deleted { background: var(--ed-deleted); height: 3px !important; margin-top: -1px; }
+.ed-status { display: flex; justify-content: space-between; white-space: pre; background: var(--ed-status-bg); color: var(--ed-status); font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+.ed-status .l { overflow: hidden; text-overflow: ellipsis; }
+.ed-info { min-height: 1.6em; display: flex; align-items: center; white-space: pre; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ed-msg); padding: 0 1ch; outline: none; overflow: hidden; }
+.ed-info.err { color: var(--ed-err); }
+.ed-info input { flex: 1; border: 0; outline: none; background: transparent; color: inherit; font: inherit; padding: 0; }
+.ed-bar { display: flex; align-items: center; gap: 2px; padding: 4px 8px; background: var(--ed-status-bg); border-bottom: 1px solid var(--ed-indent); font-family: var(--font, inherit); }
+.ed-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; min-width: 28px; justify-content: center; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ed-fg); cursor: pointer; font-size: 12.5px; }
+.ed-btn svg { width: 16px; height: 16px; }
+.ed-btn:hover:not(:disabled) { background: var(--ed-cur-line); border-color: var(--ed-indent); }
+.ed-btn:disabled { opacity: .35; cursor: default; }
+.ed-btn.on { background: var(--ed-sel); }
+.ed-btn.wide { padding: 0 10px 0 8px; }
+.ed-sep { width: 1px; height: 18px; background: var(--ed-indent); margin: 0 6px; }
+.ed-title { flex: 1; text-align: center; color: var(--ed-ln); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 12px; }
+.ed-help { position: absolute; top: 44px; right: 10px; z-index: 5; padding: 10px 14px 12px; border-radius: 10px; background: var(--ed-status-bg); border: 1px solid var(--ed-indent); box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 12.5px; }
+.ed-help-title { font-weight: 650; margin-bottom: 6px; }
+.ed-help dl { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 0; }
+.ed-help dt { font-family: var(--mono); color: var(--ed-ln); white-space: nowrap; }
+.ed-help dd { margin: 0; }

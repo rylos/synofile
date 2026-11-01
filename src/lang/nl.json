@@ -85,5 +85,11 @@
  "la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server": "er is nog geen SynoFile-sleutel: maak hem aan en voeg hem toe aan authorized_keys op de server",
  "la chiave è protetta: scrivi la sua passphrase": "de sleutel is beveiligd: typ de wachtwoordzin",
  "chiave privata non valida, o passphrase errata": "ongeldige privésleutel, of verkeerde wachtwoordzin",
- "non è una chiave privata OpenSSH o PEM valida": "geen geldige OpenSSH- of PEM-privésleutel"
+ "non è una chiave privata OpenSSH o PEM valida": "geen geldige OpenSSH- of PEM-privésleutel",
+ "dentro un archivio si legge soltanto": "binnen een archief kan alleen gelezen worden",
+ "file troppo grande per l'editor (massimo 8 MB)": "bestand te groot voor de editor (hoogstens 8 MB)",
+ "il file è cambiato sul NAS da quando l'hai aperto": "het bestand is op de NAS gewijzigd sinds je het opende",
+ "il file è cambiato sul server da quando l'hai aperto": "het bestand is op de server gewijzigd sinds je het opende",
+ "il file non è testo UTF-8: l'editor lo rovinerebbe": "het bestand is geen UTF-8-tekst: de editor zou het beschadigen",
+ "non è un file di testo": "geen tekstbestand"
 }

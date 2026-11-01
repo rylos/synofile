@@ -12,6 +12,7 @@ mod archive;
 mod auth;
 mod caps;
 mod cgi;
+mod edit;
 mod fsops;
 mod identity;
 mod jobs;

@@ -822,12 +822,14 @@ export class Pane {
       </dl>
       <div class="actions">
         ${isDirLike(e) ? "" : `<button class="btn small dl">${svg("download")} ${t("Scarica")}</button><button class="btn small info-preview">${svg("eye")} ${t("Anteprima")}</button>`}
+        ${this.app.editable(this, e) ? `<button class="btn small info-edit">${svg("rename")} ${t("Modifica")}</button>` : ""}
         <button class="btn small cp">${svg("link")} ${t("Copia percorso")}</button>
       </div>`;
     $(".calc", this.infoEl)?.addEventListener("click", () => this.app.computeSizes(this, [e]));
     if (pickable) $(".preview-box", this.infoEl).onclick = (ev) => pickIcon(ev.currentTarget, e.path);
     $(".dl", this.infoEl)?.addEventListener("click", () => this.app.download([e]));
     $(".info-preview", this.infoEl)?.addEventListener("click", () => this.app.quickLook(this));
+    $(".info-edit", this.infoEl)?.addEventListener("click", () => this.app.edit(this, e));
     $(".cp", this.infoEl).onclick = () => this.app.copyPaths([e], "nas");
     fillHeic(this.infoEl, () => e, 1024);
     if (e.share) {

@@ -474,6 +474,19 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             let binary = buf.iter().take(8192).any(|&b| b == 0);
             reply(out, &json!({ "text": if binary { String::new() } else { String::from_utf8_lossy(&buf).into_owned() }, "binary": binary, "size": size, "truncated": size > buf.len() as u64 }))
         }
+        "edit" => {
+            let path = path_param("path")?;
+            if in_archive(&path)?.is_some_and(|(_, inner, _)| !inner.is_empty()) {
+                return Err(ApiError::bad_request(t!("dentro un archivio si legge soltanto", "inside an archive it is read-only")));
+            }
+            crate::edit::open(out, &path)
+        }
+        "edit/save" => {
+            method(req, "POST")?;
+            let path = path_param("path")?;
+            let text = crate::edit::body(req)?;
+            crate::edit::save(out, &path, &text, req.param("stamp").unwrap_or_default(), req.param("force") == Some("1"))
+        }
         "upload" => {
             method(req, "POST")?;
             let dir = path_param("dir")?;

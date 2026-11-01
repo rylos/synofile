@@ -1,3 +1,7 @@
+v0.8.2
+- A text editor: Edit in the right-click menu of a text file (or F4, or the button in the info panel) opens it in an editor in the manner of the micro terminal editor: line numbers in a column of their own (left out of a mouse selection), the lines changed since the last save marked beside them, micro's syntax colours for about 150 file types, a status line, and micro's keys (Ctrl+S save, Ctrl+Q close, Ctrl+F find, Ctrl+L go to line, Ctrl+D duplicate line, Ctrl+K cut line, Alt+Up/Down move line; Ctrl+G lists them). A toolbar does the same with the mouse.
+- Saving keeps the file's permissions, owner and Windows or Unix line endings, and asks before overwriting a file that changed since it was opened. Files up to 8 MB, UTF-8 text only; read-only when you may not write the file. Works on the NAS and on SMB and SFTP connections.
+
 v0.8.1
 - Folder icons: click a folder's icon in the info panel (or right-click it in the sidebar > Icon…) to give it an icon and a colour, for that folder only or for every folder with the same name. The icon follows the folder when it is renamed or moved in SynoFile.
 - USB drives: an eject button beside USB, SD card and eSATA shared folders in the sidebar, and beside the favourites inside them; also in their right-click menus. It works like Eject in DSM's External Devices, and refuses while a transfer is using the drive.

@@ -48,6 +48,11 @@ Nine languages, following DSM.
   and a search through subfolders by words or a glob (`*.mkv`, Ctrl+F).
 - **Quick look** (Space): images with zoom and pan, **HEIC/HEIF photos**
   (decoded in the browser, the NAS does no work), video, audio, PDF, text.
+- **A text editor in micro's manner** (F4, or Edit in the right-click menu):
+  line numbers apart from the text, micro's syntax colours and keys
+  (Ctrl+S, Ctrl+Q, Ctrl+F…) and a toolbar for the mouse. Saving keeps the
+  file's permissions, owner and line endings, and refuses to overwrite a
+  file that changed meanwhile. On the NAS and on SMB and SFTP servers.
 - **Tabs and dual pane.** Ctrl+T, Ctrl+W, Ctrl+Shift+T to reopen; F3 splits,
   F5 and F6 copy and move to the other pane. Drag and drop moves within a
   shared folder and copies across them; Ctrl copies, Shift moves, Alt asks.
@@ -166,6 +171,8 @@ The look and the keyboard come from [flea](https://github.com/thisisgm/flea).
 Icons and file-type tables come from eza (MIT / EUPL-1.2), the icon font is a
 subset of the [Nerd Fonts](https://www.nerdfonts.com) symbols (MIT / OFL),
 and the light theme is Tokyo Night Light.
+The editor runs on [CodeMirror](https://codemirror.net) (MIT); its syntax colours come
+from [micro](https://github.com/zyedidia/micro)'s syntax files (MIT).
 
 ## License
 

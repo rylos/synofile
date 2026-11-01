@@ -85,5 +85,11 @@
  "la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server": "ainda não há chave do SynoFile: crie-a e adicione-a a authorized_keys no servidor",
  "la chiave è protetta: scrivi la sua passphrase": "a chave está protegida: digite a frase secreta",
  "chiave privata non valida, o passphrase errata": "chave privada inválida, ou frase secreta errada",
- "non è una chiave privata OpenSSH o PEM valida": "não é uma chave privada OpenSSH ou PEM válida"
+ "non è una chiave privata OpenSSH o PEM valida": "não é uma chave privada OpenSSH ou PEM válida",
+ "dentro un archivio si legge soltanto": "dentro de um arquivo só é possível ler",
+ "file troppo grande per l'editor (massimo 8 MB)": "arquivo grande demais para o editor (máximo 8 MB)",
+ "il file è cambiato sul NAS da quando l'hai aperto": "o arquivo mudou no NAS desde que você o abriu",
+ "il file è cambiato sul server da quando l'hai aperto": "o arquivo mudou no servidor desde que você o abriu",
+ "il file non è testo UTF-8: l'editor lo rovinerebbe": "o arquivo não é texto UTF-8: o editor o estragaria",
+ "non è un file di testo": "não é um arquivo de texto"
 }

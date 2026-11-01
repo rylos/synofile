@@ -243,6 +243,35 @@ fn route(req: &Request, out: &mut impl Write, conns: &[Conn], vpath: &str) -> Re
             let binary = buf.iter().take(8192).any(|&b| b == 0);
             reply(out, &json!({ "text": if binary { String::new() } else { String::from_utf8_lossy(&buf).into_owned() }, "binary": binary, "size": size, "truncated": size > buf.len() as u64 }))
         }
+        "edit" => {
+            let (_, fs, parts) = open(conns, vpath)?;
+            let e = fs.stat(&parts)?;
+            if e.is_dir() {
+                return Err(ApiError::bad_request(t!("non è un file", "not a file")));
+            }
+            if e.size > crate::edit::MAX {
+                return Err(crate::edit::too_big());
+            }
+            let mut buf = Vec::new();
+            fs.reader(&parts)?.read_to_end(&mut buf)?;
+            let text = crate::edit::as_text(buf)?;
+            reply(out, &json!({ "text": text, "stamp": format!("{}-{}", e.mtime, e.size), "writable": true }))
+        }
+        "edit/save" => {
+            post(req)?;
+            let (_, fs, parts) = open(conns, vpath)?;
+            let text = crate::edit::body(req)?;
+            let e = fs.stat(&parts)?;
+            if req.param("force") != Some("1") && req.param("stamp") != Some(format!("{}-{}", e.mtime, e.size).as_str()) {
+                return Err(ApiError::conflict(t!("il file è cambiato sul server da quando l'hai aperto", "the file changed on the server since you opened it")));
+            }
+            // in place, so it keeps its permissions on the server
+            let mut w = fs.writer(&parts, None)?;
+            w.write_all(&text)?;
+            w.finish()?;
+            let e = fs.stat(&parts)?;
+            reply(out, &json!({ "stamp": format!("{}-{}", e.mtime, e.size) }))
+        }
         "mkdir" => {
             post(req)?;
             let (_, fs, parts) = open(conns, vpath)?;

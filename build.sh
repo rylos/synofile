@@ -30,7 +30,10 @@ sed -i "s|href=\"app.css\"|href=\"app.css?v=$asset\"|; s|src=\"js/main.js\"|src=
 sed -i "s|fonts/eza-icons.woff2\"|fonts/eza-icons.woff2?v=$asset\"|" "$work/pkg/ui/app.css"
 find "$work/pkg/ui/js" -name '*.js' -exec sed -i \
     -e "s|\(from \"\./[^\"]*\.js\)\"|\1?v=$asset\"|g" \
-    -e "s|\(import(\`\./lang/\${code}\.js\)\`)|\1?v=$asset\`)|g" {} +
+    -e "s|\(import(\`\./lang/\${code}\.js\)\`)|\1?v=$asset\`)|g" \
+    -e "s|\(import(\"\./[^\"]*\.js\)\")|\1?v=$asset\")|g" \
+    -e "s|\(import(\`\./syntax/\${name}\.js\)\`)|\1?v=$asset\`)|g" \
+    -e "s|\(from \"\.\./vendor/[^\"]*\.js\)\"|\1?v=$asset\"|g" {} +
 tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui
 
 sed "s/@VERSION@/$version/" spk/INFO.in > "$work/spk/INFO"
