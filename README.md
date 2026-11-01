@@ -78,7 +78,17 @@ the info panel; space analysis; the dual pane in the light theme.*
 
 ## Install
 
-Take `synofile-<version>.spk` from the
+**From Package Center**, through Dave Russell's
+[007revad package source](https://github.com/007revad/Synology_package_source),
+which also brings the updates:
+
+1. Package Center > Settings > Package Sources > Add.
+2. Name `007revad`, location `https://spkrepo.007daver.workers.dev/`, then OK.
+3. Community, on the left: install SynoFile.
+4. Run `setup` and restart, the last two commands below, after the install
+   and after every update.
+
+**By hand:** take `synofile-<version>.spk` from the
 [releases](https://github.com/rylos/synofile/releases), or build it with
 `./build.sh` (Rust with the `x86_64-unknown-linux-musl` target). Then, on the
 NAS (x86_64, DSM 7):
