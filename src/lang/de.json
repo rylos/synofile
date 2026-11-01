@@ -80,5 +80,10 @@
  "{} errori": "{} Fehler",
  "{} saltati": "{} übersprungen",
  "{} saltati, {} errori": "{} übersprungen, {} Fehler",
- "è una cartella": "ist ein Ordner"
+ "è una cartella": "ist ein Ordner",
+ "carica la chiave privata, o incollala": "Lade den privaten Schlüssel oder füge ihn ein",
+ "la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server": "Es gibt noch keinen SynoFile-Schlüssel: Erstelle ihn und füge ihn auf dem Server zu authorized_keys hinzu",
+ "la chiave è protetta: scrivi la sua passphrase": "Der Schlüssel ist geschützt: Gib seine Passphrase ein",
+ "chiave privata non valida, o passphrase errata": "Ungültiger privater Schlüssel oder falsche Passphrase",
+ "non è una chiave privata OpenSSH o PEM valida": "Kein gültiger privater OpenSSH- oder PEM-Schlüssel"
 }

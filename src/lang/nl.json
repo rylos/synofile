@@ -80,5 +80,10 @@
  "{} errori": "{} fouten",
  "{} saltati": "{} overgeslagen",
  "{} saltati, {} errori": "{} overgeslagen, {} fouten",
- "è una cartella": "is een map"
+ "è una cartella": "is een map",
+ "carica la chiave privata, o incollala": "laad de privésleutel, of plak hem",
+ "la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server": "er is nog geen SynoFile-sleutel: maak hem aan en voeg hem toe aan authorized_keys op de server",
+ "la chiave è protetta: scrivi la sua passphrase": "de sleutel is beveiligd: typ de wachtwoordzin",
+ "chiave privata non valida, o passphrase errata": "ongeldige privésleutel, of verkeerde wachtwoordzin",
+ "non è una chiave privata OpenSSH o PEM valida": "geen geldige OpenSSH- of PEM-privésleutel"
 }

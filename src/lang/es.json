@@ -80,5 +80,10 @@
  "{} errori": "{} errores",
  "{} saltati": "{} omitidos",
  "{} saltati, {} errori": "{} omitidos, {} errores",
- "è una cartella": "es una carpeta"
+ "è una cartella": "es una carpeta",
+ "carica la chiave privata, o incollala": "carga la clave privada, o pégala",
+ "la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server": "aún no hay clave de SynoFile: créala y añádela a authorized_keys en el servidor",
+ "la chiave è protetta: scrivi la sua passphrase": "la clave está protegida: escribe su frase de contraseña",
+ "chiave privata non valida, o passphrase errata": "clave privada no válida, o frase de contraseña incorrecta",
+ "non è una chiave privata OpenSSH o PEM valida": "no es una clave privada OpenSSH o PEM válida"
 }

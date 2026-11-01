@@ -37,7 +37,7 @@ Nine languages, following DSM.
 - **SMB and SFTP servers.** Add a Windows or Samba share, another Synology
   or any SSH server under Connections, with a name of your choice. A bare host
   (`\\srv03`) lists its shared folders; domain, user and password for SMB,
-  password or SynoFile's own key for SFTP. Browse, preview, upload, download,
+  a password, SynoFile's own key or one of yours for SFTP. Browse, preview, upload, download,
   rename, and copy or move both ways with the same transfer dialog.
 - **DSM's own Recycle Bin.** Deleting hands items to DSM's `synorecycle`, so
   they land in `#recycle` exactly as File Station puts them there.

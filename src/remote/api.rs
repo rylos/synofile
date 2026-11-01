@@ -39,6 +39,13 @@ struct Edit {
     /// empty keeps the one saved
     #[serde(default)]
     password: String,
+    /// "own": a private key pasted or loaded from a file; empty keeps the one
+    /// saved
+    #[serde(default)]
+    private_key: String,
+    /// the private key's passphrase, if it has one: used once, to open it
+    #[serde(default)]
+    passphrase: String,
     /// forget the server's key remembered (it changed, rightly)
     #[serde(default)]
     forget_key: bool,
@@ -64,7 +71,21 @@ impl Edit {
         c.port = self.port;
         c.domain = self.domain.trim().to_string();
         c.user = self.user.trim().to_string();
-        c.auth = if self.kind == Kind::Sftp && self.auth == "key" { "key".into() } else { "password".into() };
+        c.auth = match (self.kind, self.auth.as_str()) {
+            (Kind::Sftp, "key" | "own") => self.auth.clone(),
+            _ => "password".into(),
+        };
+        if c.auth != "own" {
+            c.ssh_key.clear();
+            c.key_info.clear();
+        } else if !self.private_key.trim().is_empty() {
+            let pass = (!self.passphrase.is_empty()).then_some(self.passphrase.as_str());
+            let (private, info) = super::sftp::import_key(self.private_key.trim(), pass).map_err(ApiError::bad_request)?;
+            c.ssh_key = private;
+            c.key_info = info;
+        } else if c.ssh_key.is_empty() {
+            return Err(ApiError::bad_request(t!("carica la chiave privata, o incollala", "load the private key, or paste it")));
+        }
         c.path = self.path.trim().replace('\\', "/").trim_matches('/').to_string();
         if !self.password.is_empty() {
             c.password = self.password;

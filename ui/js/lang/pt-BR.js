@@ -424,4 +424,11 @@ export default {
   "Nomi dei volumi": "Nomes dos volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Os definidos no Gerenciador de armazenamento (ex. “HDD”), caso contrário “Volume 1”",
   "Mostra i preferiti": "Mostrar favoritos", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "A seção Favoritos da barra lateral; ocultos, continuam salvos",
   "Icona nella barra di DSM": "Ícone na barra de tarefas do DSM", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa": "Ao lado dos ícones do DSM no canto superior direito, enquanto houver transferências em andamento ou pausadas",
+  "Carica da file…": "Carregar de arquivo…",
+  "Caricata: {k}": "Carregada: {k}",
+  "Chiave privata (OpenSSH o PEM)": "Chave privada (OpenSSH ou PEM)",
+  "La mia chiave": "Minha chave",
+  "Non è una chiave privata: il file è troppo grande": "Não é uma chave privada: o arquivo é grande demais",
+  "passphrase, se la chiave ne ha una": "frase secreta, se a chave tiver uma",
+  "vuota: tieni quella caricata": "vazia: manter a carregada",
 };

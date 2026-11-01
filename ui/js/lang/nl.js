@@ -424,4 +424,11 @@ export default {
   "Nomi dei volumi": "Namen van volumes", "Quelli dati in Storage Manager (es. «HDD»), altrimenti «Volume 1»": "Die in Opslagbeheer zijn gegeven (bijv. ‘HDD’), anders ‘Volume 1’",
   "Mostra i preferiti": "Favorieten tonen", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti": "Het onderdeel Favorieten van de zijbalk; verborgen blijven ze bewaard",
   "Icona nella barra di DSM": "Pictogram in de taakbalk van DSM", "Accanto alle icone di DSM in alto a destra, mentre ci sono trasferimenti attivi o in pausa": "Naast de pictogrammen van DSM rechtsboven, zolang er overdrachten bezig of gepauzeerd zijn",
+  "Carica da file…": "Laden uit bestand…",
+  "Caricata: {k}": "Geladen: {k}",
+  "Chiave privata (OpenSSH o PEM)": "Privésleutel (OpenSSH of PEM)",
+  "La mia chiave": "Mijn sleutel",
+  "Non è una chiave privata: il file è troppo grande": "Geen privésleutel: het bestand is te groot",
+  "passphrase, se la chiave ne ha una": "wachtwoordzin, als de sleutel er een heeft",
+  "vuota: tieni quella caricata": "leeg: de geladen sleutel behouden",
 };

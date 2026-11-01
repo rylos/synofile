@@ -84,7 +84,17 @@ impl Sftp {
                 Ok(Err(e)) => return Err(other(e)),
                 Ok(Ok(s)) => s,
             };
-            let auth = if conn.auth == "key" {
+            let auth = if conn.auth == "key" || conn.auth == "own" {
+                if conn.ssh_key.is_empty() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        if conn.auth == "key" {
+                            t!("la chiave di SynoFile non c'è ancora: creala e aggiungila ad authorized_keys sul server", "there is no SynoFile key yet: create it and add it to authorized_keys on the server")
+                        } else {
+                            t!("carica la chiave privata, o incollala", "load the private key, or paste it")
+                        },
+                    ));
+                }
                 let key = russh::keys::decode_secret_key(&conn.ssh_key, None).map_err(other)?;
                 let hash = session.best_supported_rsa_hash().await.map_err(other)?.flatten();
                 session.authenticate_publickey(&conn.user, PrivateKeyWithHashAlg::new(Arc::new(key), hash)).await
@@ -411,6 +421,21 @@ pub fn new_key() -> io::Result<String> {
     let key = PrivateKey::from(russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed));
     seed.fill(0);
     Ok(key.to_openssh(LineEnding::LF).map_err(other)?.to_string())
+}
+
+/// A private key of the user's, opened with its passphrase: the key in
+/// OpenSSH's format without one, and its type, fingerprint and comment.
+pub fn import_key(text: &str, passphrase: Option<&str>) -> Result<(String, String), String> {
+    let key = russh::keys::decode_secret_key(text, passphrase).map_err(|e| match e {
+        russh::keys::Error::KeyIsEncrypted => t!("la chiave è protetta: scrivi la sua passphrase", "the key is protected: type its passphrase"),
+        _ if passphrase.is_some() => t!("chiave privata non valida, o passphrase errata", "invalid private key, or wrong passphrase"),
+        _ => t!("non è una chiave privata OpenSSH o PEM valida", "not a valid OpenSSH or PEM private key"),
+    })?;
+    let public = key.public_key();
+    let comment = key.comment();
+    let info = format!("{} {}{}", public.algorithm().as_str(), public.fingerprint(HashAlg::Sha256), if comment.is_empty() { String::new() } else { format!(" {comment}") });
+    let private = key.to_openssh(LineEnding::LF).map_err(|e| e.to_string())?.to_string();
+    Ok((private, info))
 }
 
 /// The line for the server's authorized_keys.

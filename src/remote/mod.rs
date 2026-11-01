@@ -46,7 +46,8 @@ pub struct Conn {
     pub domain: String,
     #[serde(default)]
     pub user: String,
-    /// SFTP: "password" or "key" (the user's SynoFile key)
+    /// SFTP: "password", "key" (the user's SynoFile key) or "own" (a key of
+    /// the user's, imported into this connection)
     #[serde(default)]
     pub auth: String,
     /// where it opens: "share/folder" for SMB ("" lists the shares), a path
@@ -56,10 +57,14 @@ pub struct Conn {
     /// SFTP: the server's key, remembered on the first connection
     #[serde(default)]
     pub host_key: String,
+    /// SFTP, "own": the imported key's type, fingerprint and comment
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub key_info: String,
     /// in memory only; sealed on disk
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub password: String,
-    /// in memory only: the user's private key, for a job
+    /// in memory only: the private key, for a job; an imported one is sealed
+    /// on disk
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub ssh_key: String,
 }
@@ -78,6 +83,7 @@ pub struct Public<'a> {
     pub path: &'a str,
     pub has_password: bool,
     pub host_key: &'a str,
+    pub key_info: &'a str,
 }
 
 impl Conn {
@@ -94,6 +100,7 @@ impl Conn {
             path: &self.path,
             has_password: !self.password.is_empty(),
             host_key: &self.host_key,
+            key_info: &self.key_info,
         }
     }
 
@@ -216,6 +223,9 @@ struct Stored {
     /// the password, sealed: hex of nonce and ciphertext
     #[serde(default, skip_serializing_if = "String::is_empty")]
     secret: String,
+    /// an imported private key, sealed the same way
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    key_secret: String,
 }
 
 pub fn load(user: &str) -> Vec<Conn> {
@@ -227,6 +237,9 @@ pub fn load(user: &str) -> Vec<Conn> {
         .map(|s| {
             let mut c = s.conn;
             c.password = key.as_ref().and_then(|k| open(k, &s.secret)).unwrap_or_default();
+            if c.auth == "own" {
+                c.ssh_key = key.as_ref().and_then(|k| open(k, &s.key_secret)).unwrap_or_default();
+            }
             c
         })
         .collect()
@@ -238,7 +251,8 @@ pub fn store(user: &str, conns: &[Conn]) -> io::Result<()> {
         .iter()
         .map(|c| {
             let secret = if c.password.is_empty() { String::new() } else { seal(&key, &c.password) };
-            Stored { conn: Conn { password: String::new(), ssh_key: String::new(), ..c.clone() }, secret }
+            let key_secret = if c.auth == "own" && !c.ssh_key.is_empty() { seal(&key, &c.ssh_key) } else { String::new() };
+            Stored { conn: Conn { password: String::new(), ssh_key: String::new(), ..c.clone() }, secret, key_secret }
         })
         .collect();
     write_private(&user_file(user), &serde_json::to_vec_pretty(&stored).map_err(io::Error::other)?)

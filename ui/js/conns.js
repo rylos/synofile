@@ -79,11 +79,18 @@ const fieldsHTML = (c) => `
     <div class="seg conn-auth">
       <button type="button" data-auth="password" class="${c.auth !== "key" ? "on" : ""}">${t("Password")}</button>
       <button type="button" data-auth="key" class="${c.auth === "key" ? "on" : ""}">${t("Chiave di SynoFile")}</button>
+      <button type="button" data-auth="own" class="${c.auth === "own" ? "on" : ""}">${t("La mia chiave")}</button>
     </div>
   </div>
   <label class="field pw"><span>${t("Password")}</span><input type="password" name="password" value="" placeholder="${c.has_password ? t("salvata: lasciala vuota per tenerla") : ""}" autocomplete="new-password"></label>
   <div class="field key-box"><span>${t("Chiave pubblica da aggiungere a ~/.ssh/authorized_keys sul server")}</span>
     <div class="conn-key"><code class="kv"></code><button type="button" class="btn small kcopy">${t("Copia")}</button><button type="button" class="btn small kmake">${t("Crea la chiave")}</button></div>
+  </div>
+  <div class="field own-box"><span>${t("Chiave privata (OpenSSH o PEM)")}</span>
+    ${c.key_info ? `<div class="hint conn-keyinfo">${t("Caricata: {k}", { k: esc(c.key_info) })}</div>` : ""}
+    <textarea name="private_key" rows="3" spellcheck="false" autocomplete="off" placeholder="${c.key_info ? t("vuota: tieni quella caricata") : "-----BEGIN OPENSSH PRIVATE KEY-----"}"></textarea>
+    <div class="conn-key"><button type="button" class="btn small kfile">${t("Carica da file…")}</button><input type="file" class="kpick" hidden>
+      <input type="password" name="passphrase" placeholder="${t("passphrase, se la chiave ne ha una")}" autocomplete="new-password"></div>
   </div>
   <label class="field"><span>${t("Cartella di partenza")}</span><input type="text" name="path" value="${esc(c.path && c.kind === "sftp" ? "/" + c.path : c.path || "")}" placeholder="${c.kind === "sftp" ? t("vuoto: la home dell'utente") : t("vuoto: l'elenco delle cartelle condivise")}" spellcheck="false" autocomplete="off"></label>
   ${c.host_key ? `<div class="hint conn-hostkey">${t("Chiave del server: {k}", { k: esc(c.host_key) })} <label><input type="checkbox" name="forget_key"> ${t("dimentica (è cambiata)")}</label></div>` : ""}
@@ -119,8 +126,10 @@ export function editConnection(conn = {}, key = null) {
       dlg.querySelectorAll(".smb-only").forEach((x) => (x.hidden = kind !== "smb"));
       dlg.querySelectorAll(".sftp-only").forEach((x) => (x.hidden = kind !== "sftp"));
       const byKey = kind === "sftp" && auth === "key";
-      dlg.querySelector(".pw").hidden = byKey;
+      const own = kind === "sftp" && auth === "own";
+      dlg.querySelector(".pw").hidden = byKey || own;
       dlg.querySelector(".key-box").hidden = !byKey;
+      dlg.querySelector(".own-box").hidden = !own;
       dlg.querySelector(".kv").textContent = publicKey || t("Nessuna chiave ancora: creala, poi copiala sul server.");
       dlg.querySelector(".kcopy").hidden = !publicKey;
       dlg.querySelector(".kmake").hidden = !!publicKey;
@@ -132,6 +141,15 @@ export function editConnection(conn = {}, key = null) {
     dlg.querySelectorAll(".conn-kind button").forEach((b) => (b.onclick = () => ((kind = b.dataset.kind), refresh())));
     dlg.querySelectorAll(".conn-auth button").forEach((b) => (b.onclick = () => ((auth = b.dataset.auth), refresh())));
     dlg.querySelector(".kcopy").onclick = () => copyText(publicKey);
+    const pick = dlg.querySelector(".kpick");
+    dlg.querySelector(".kfile").onclick = () => pick.click();
+    pick.onchange = async () => {
+      const file = pick.files[0];
+      if (!file) return;
+      if (file.size > 64 * 1024) return (result.textContent = t("Non è una chiave privata: il file è troppo grande"));
+      f("private_key").value = (await file.text()).trim();
+      pick.value = "";
+    };
     dlg.querySelector(".kmake").onclick = async () => {
       try {
         publicKey = (await api.makeKey()).key;
@@ -170,7 +188,9 @@ export function editConnection(conn = {}, key = null) {
       user: f("user").value.trim(),
       auth: kind === "sftp" ? auth : "password",
       path: f("path").value.trim(),
-      password: f("password").value,
+      password: auth === "own" && kind === "sftp" ? "" : f("password").value,
+      private_key: kind === "sftp" && auth === "own" ? f("private_key").value : "",
+      passphrase: kind === "sftp" && auth === "own" ? f("passphrase").value : "",
       forget_key: !!f("forget_key")?.checked,
     });
     const busy = (on) => dlg.querySelectorAll(".dlg-foot .btn").forEach((b) => (b.disabled = on));
