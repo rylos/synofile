@@ -13,7 +13,15 @@
             "texts": "texts",
             "preloadTexts": [
                 "app:title"
-            ]
+            ],
+            "loginStyle": {
+                "showAvatar": false,
+                "mainColor": "#5b6cff",
+                "titleImgPath": "images/login/{0}/title.png",
+                "defaultLoginWallpaper": "images/login/{0}/wallpaper.jpg",
+                "defaultLoginWallpaperThumbnail": "images/login/{0}/thumbnail.png",
+                "loginPreviewThumbnailMaskPath": "images/login/{0}/loginui.png"
+            }
         }
     },
     "tray.js": {

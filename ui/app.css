@@ -173,7 +173,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .xfer-btn.active { color: var(--accent); }
 .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 3; }
 .ring-fill { fill: none; stroke: url(#none); stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 94.25; stroke-dashoffset: 94.25; transition: stroke-dashoffset .4s; }
-.xfer-icon svg { width: 15px; height: 15px; }
+.xfer-icon { display: grid; }
+.xfer-icon svg { width: 15px; height: 15px; display: block; }
 .xfer-count {
   position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;

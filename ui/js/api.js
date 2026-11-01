@@ -4,11 +4,13 @@ import { LANG } from "./i18n.js";
 // the SynoToken DSM hands out guards against cross-site requests.
 
 const BASE = "api.cgi/";
+// where DSM is: "/" or, under a Login Portal alias, "/alias/"
+const DSM = location.pathname.replace(/webman\/3rdparty\/.*$/, "");
 let token = "";
 
 export async function loadToken() {
   try {
-    const res = await fetch("/webman/login.cgi", { credentials: "same-origin" });
+    const res = await fetch(DSM + "webman/login.cgi", { credentials: "same-origin" });
     const data = await res.json();
     token = data.SynoToken || "";
   } catch {
@@ -67,7 +69,7 @@ export async function dsm(apiName, method, params = {}, version = 1) {
   for (const [k, v] of Object.entries(params)) body.set(k, typeof v === "string" ? v : JSON.stringify(v));
   const headers = { "Content-Type": "application/x-www-form-urlencoded" };
   if (token) headers["X-SYNO-TOKEN"] = token;
-  const res = await fetch("/webapi/entry.cgi", { method: "POST", credentials: "same-origin", headers, body });
+  const res = await fetch(DSM + "webapi/entry.cgi", { method: "POST", credentials: "same-origin", headers, body });
   const data = await res.json().catch(() => null);
   if (!data?.success) throw new ApiError(res.status, `DSM ${data?.error?.code ?? res.status}`);
   return data.data;

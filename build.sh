@@ -24,6 +24,7 @@ cp "target/$target/release/synofile" "$work/pkg/bin/synofile"
 # the same program under another name: it starts as the worker, and has no capabilities
 cp "target/$target/release/synofile" "$work/pkg/bin/synofile-worker"
 cp -r ui "$work/pkg/ui"
+cp -r etc "$work/pkg/etc"
 # DSM serves the interface without Cache-Control, so browsers keep old files
 # on heuristics: every URL carries the build, and an upgrade loads afresh
 sed -i "s|href=\"app.css\"|href=\"app.css?v=$asset\"|; s|src=\"js/main.js\"|src=\"js/main.js?v=$asset\"|" "$work/pkg/ui/index.html"
@@ -34,7 +35,7 @@ find "$work/pkg/ui/js" -name '*.js' -exec sed -i \
     -e "s|\(import(\"\./[^\"]*\.js\)\")|\1?v=$asset\")|g" \
     -e "s|\(import(\`\./syntax/\${name}\.js\)\`)|\1?v=$asset\`)|g" \
     -e "s|\(from \"\.\./vendor/[^\"]*\.js\)\"|\1?v=$asset\"|g" {} +
-tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui
+tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui etc
 
 sed "s/@VERSION@/$version/" spk/INFO.in > "$work/spk/INFO"
 # WIZARD_UIFILES: a step of the install and upgrade wizard says to run setup

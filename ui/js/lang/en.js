@@ -242,4 +242,6 @@ export default {
   "Risultato successivo / precedente": "Next / previous match",
   "Sposta la riga": "Move the line",
   "Taglia la riga": "Cut the line",
+  "Apri in una finestra separata": "Open in a separate window",
+  "Il browser ha bloccato la finestra: consenti i popup per DSM": "The browser blocked the window: allow pop-ups for DSM",
 };

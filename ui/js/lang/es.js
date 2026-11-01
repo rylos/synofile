@@ -479,4 +479,6 @@ export default {
   "Risultato successivo / precedente": "Resultado siguiente / anterior",
   "Sposta la riga": "Mover la línea",
   "Taglia la riga": "Cortar la línea",
+  "Apri in una finestra separata": "Abrir en una ventana aparte",
+  "Il browser ha bloccato la finestra: consenti i popup per DSM": "El navegador bloqueó la ventana: permite las ventanas emergentes para DSM",
 };

@@ -56,6 +56,7 @@ class App {
     this.ensureChrome();
     loadLocal();
     if (window.self !== window.top) document.body.classList.add("embedded");
+    this.popOutButton();
     $("#tab-new").innerHTML = svg("plus");
     $("#tab-new").onclick = () => this.newTab(this.newTabPath());
     $("#open-settings").innerHTML = svg("settings");
@@ -895,7 +896,9 @@ class App {
 
   fileStation(path) {
     try {
-      const sds = window.parent !== window && window.parent.SYNO && window.parent.SYNO.SDS;
+      // inside DSM's window, or a window opened from it
+      const desk = window.parent !== window ? window.parent : window.opener?.parent;
+      const sds = desk && desk.SYNO && desk.SYNO.SDS;
       if (sds && sds.AppLaunch) return sds.AppLaunch("SYNO.SDS.App.FileStation3.Instance", { openfile: path.endsWith("/") ? path : path + "/" });
     } catch {}
     toast(t("File Station si apre solo dalla finestra di DSM"), { kind: "error" });
@@ -1406,6 +1409,22 @@ class App {
       const b = h(`<button class="icon-btn theme-btn" id="theme-toggle"></button>`);
       $("#open-settings")?.before(b);
     }
+  }
+
+  /** Inside DSM's window: a button that opens SynoFile in a window of its own. */
+  popOutButton() {
+    if (window.self === window.top || $("#pop-out")) return;
+    const b = h(`<button class="icon-btn theme-btn" id="pop-out"></button>`);
+    b.innerHTML = svg("popout");
+    b.title = t("Apri in una finestra separata");
+    b.onclick = () => {
+      const w = Math.min(screen.availWidth, 1400);
+      const ht = Math.min(screen.availHeight, 900);
+      const win = window.open(location.pathname, "synofile", `popup,width=${w},height=${ht}`);
+      if (!win) toast(t("Il browser ha bloccato la finestra: consenti i popup per DSM"), { kind: "error" });
+      else win.focus();
+    };
+    $("#theme-toggle")?.before(b);
   }
 
   /** The NAS runs another build than this page: load it, once. */

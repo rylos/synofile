@@ -1,1 +1,1 @@
-{}
+{"web-config":{"app-portal":{"json-relpath":"etc/synofile.json","mustache-relpath":"etc/synofile.mustache"}}}

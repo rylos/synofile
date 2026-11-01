@@ -1,0 +1,18 @@
+{
+   "application": "SynoFile",
+   "id": "SYNO.SDS.SynoFile.Instance",
+   "alias": "synofile",
+   "fqdn": "synofile.example.com",
+   "https": {
+       "hsts": false,
+       "http2": false
+   },
+   "alternatePort": {
+     "http": 9480,
+     "https": 9481
+   },
+   "injectable": false,
+   "index": "index.cgi",
+   "root": "/usr/syno/synoman",
+   "version": 2
+}

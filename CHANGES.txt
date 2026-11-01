@@ -1,3 +1,8 @@
+v0.8.3
+- SynoFile in DSM's Login Portal: Control Panel > Login Portal > Applications > SynoFile gives it an alias (https://nas/synofile/), HTTP/HTTPS ports of its own or a domain, with DSM's login page in front, as File Station has. The browser tab then says SynoFile, with its icon. Handy behind a reverse proxy.
+- A button in the top bar opens SynoFile in a browser window of its own; Open in File Station still works from there while DSM's tab stays open.
+- The icons of the top bar line up.
+
 v0.8.2
 - A text editor: Edit in the right-click menu of a text file (or F4, or the button in the info panel) opens it in an editor in the manner of the micro terminal editor: line numbers in a column of their own (left out of a mouse selection), the lines changed since the last save marked beside them, micro's syntax colours for about 150 file types, a status line, and micro's keys (Ctrl+S save, Ctrl+Q close, Ctrl+F find, Ctrl+L go to line, Ctrl+D duplicate line, Ctrl+K cut line, Alt+Up/Down move line; Ctrl+G lists them). A toolbar does the same with the mouse.
 - Saving keeps the file's permissions, owner and Windows or Unix line endings, and asks before overwriting a file that changed since it was opened. Files up to 8 MB, UTF-8 text only; read-only when you may not write the file. Works on the NAS and on SMB and SFTP connections.

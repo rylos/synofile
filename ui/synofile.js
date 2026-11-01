@@ -26,8 +26,20 @@ SYNO.SDS.SynoFile.Instance = Vue.extend({
             }
         } catch (e) {}
         return {
-            src: "/webman/3rdparty/synofile/index.html?t=" + Date.now(),
+            // relative: under a Login Portal alias, DSM itself is at /alias/
+            src: "webman/3rdparty/synofile/index.html?t=" + Date.now(),
             frameStyle: "display:block;width:100%;height:100%;border:0;background:" + (theme === "light" ? "#e6e7ed" : "#14171c"),
         };
+    },
+    // alone in the browser (a Login Portal alias or port): the tab says
+    // SynoFile, with its icon, as DSM's own windows do
+    mounted: function () {
+        try {
+            if (!window._S || !_S("standalone")) return;
+            document.title = "SynoFile";
+            [16, 32, 64].forEach(function (n) {
+                SYNO.SDS.Utils.addFavIconLink("webman/3rdparty/synofile/images/icon_" + n + ".png", "image/png", n + "x" + n);
+            });
+        } catch (e) {}
     },
 });

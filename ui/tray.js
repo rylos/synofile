@@ -16,7 +16,7 @@ SYNO.namespace("SYNO.SDS.SynoFile.Tray");
  * off.
  */
 (function () {
-    var API = "/webman/3rdparty/synofile/api.cgi/jobs";
+    var API = "webman/3rdparty/synofile/api.cgi/jobs"; // relative: DSM may sit under an alias
     var ACTIVE = { running: 1, paused: 1, queued: 1, conflict: 1 };
 
     var STR = {

@@ -479,4 +479,6 @@ export default {
   "Risultato successivo / precedente": "Nächster / vorheriger Treffer",
   "Sposta la riga": "Zeile verschieben",
   "Taglia la riga": "Zeile ausschneiden",
+  "Apri in una finestra separata": "In einem eigenen Fenster öffnen",
+  "Il browser ha bloccato la finestra: consenti i popup per DSM": "Der Browser hat das Fenster blockiert: Pop-ups für DSM erlauben",
 };

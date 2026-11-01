@@ -65,6 +65,11 @@ Nine languages, following DSM.
   icon in the info panel), for itself or for every folder of that name.
 - **USB drives.** An eject button beside a USB, SD or eSATA shared folder and
   the favourites inside it, the same as DSM's External Devices.
+- **In a window or a tab of its own.** A button opens SynoFile in a browser
+  window of its own. In DSM's Login Portal (Control Panel > Login Portal >
+  Applications) SynoFile can get an alias (`https://nas/synofile/`), its own
+  ports or a domain, behind DSM's login page, like File Station: easy to put
+  behind a reverse proxy.
 
 <p align="center">
   <img src="docs/img/transfer.png" alt="A copy with its speed chart" width="49%">

@@ -479,4 +479,6 @@ export default {
   "Risultato successivo / precedente": "Résultat suivant / précédent",
   "Sposta la riga": "Déplacer la ligne",
   "Taglia la riga": "Couper la ligne",
+  "Apri in una finestra separata": "Ouvrir dans une fenêtre séparée",
+  "Il browser ha bloccato la finestra: consenti i popup per DSM": "Le navigateur a bloqué la fenêtre : autorisez les pop-ups pour DSM",
 };
