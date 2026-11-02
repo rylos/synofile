@@ -62,7 +62,8 @@ Nine languages, following DSM.
   reordered; favourites, hidden files (Ctrl+H), view and sort remembered for
   each folder, where it opens, where new tabs open, single or double click,
   Vim keys. Any folder can get an icon and a colour of your choice (click the
-  icon in the info panel), for itself or for every folder of that name.
+  icon in the info panel), for itself or for every folder of that name, and
+  a shared folder's description can be changed from its right-click menu.
 - **USB drives.** An eject button beside a USB, SD or eSATA shared folder and
   the favourites inside it, the same as DSM's External Devices.
 - **In a window or a tab of its own.** A button opens SynoFile in a browser

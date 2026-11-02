@@ -481,4 +481,8 @@ export default {
   "Taglia la riga": "Regel knippen",
   "Apri in una finestra separata": "Openen in een apart venster",
   "Il browser ha bloccato la finestra: consenti i popup per DSM": "De browser heeft het venster geblokkeerd: sta pop-ups toe voor DSM",
+  "Descrizione…": "Beschrijving…",
+  "Descrizione di «{x}»": "Beschrijving van «{x}»",
+  "Descrizione (vuota per toglierla)": "Beschrijving (leeg om te verwijderen)",
+  "Descrizione non salvata: {e}": "Beschrijving niet opgeslagen: {e}",
 };

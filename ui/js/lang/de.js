@@ -481,4 +481,8 @@ export default {
   "Taglia la riga": "Zeile ausschneiden",
   "Apri in una finestra separata": "In einem eigenen Fenster öffnen",
   "Il browser ha bloccato la finestra: consenti i popup per DSM": "Der Browser hat das Fenster blockiert: Pop-ups für DSM erlauben",
+  "Descrizione…": "Beschreibung…",
+  "Descrizione di «{x}»": "Beschreibung von «{x}»",
+  "Descrizione (vuota per toglierla)": "Beschreibung (leer, um sie zu entfernen)",
+  "Descrizione non salvata: {e}": "Beschreibung nicht gespeichert: {e}",
 };

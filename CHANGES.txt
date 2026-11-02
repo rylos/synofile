@@ -1,3 +1,7 @@
+v0.8.4
+- SynoFile opened on its own page (webman/3rdparty/synofile/index.html) speaks DSM's language, the one it last saw in DSM, instead of the browser's.
+- Right-click a shared folder in the sidebar > Description… to change or remove its description, the one DSM's Control Panel shows.
+
 v0.8.3
 - SynoFile in DSM's Login Portal: Control Panel > Login Portal > Applications > SynoFile gives it an alias (https://nas/synofile/), HTTP/HTTPS ports of its own or a domain, with DSM's login page in front, as File Station has. The browser tab then says SynoFile, with its icon. Handy behind a reverse proxy.
 - A button in the top bar opens SynoFile in a browser window of its own; Open in File Station still works from there while DSM's tab stays open.

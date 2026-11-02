@@ -747,9 +747,29 @@ class App {
       { label: t("Copia percorso"), icon: "link", action: () => copyText(this.displayPath(path)) },
       !isRemote(path) && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(path) },
       !(isRemote(path) && path.split("/").length === 2) && { label: t("Icona…"), icon: "palette", action: () => pickIcon({ x, y }, path) },
+      share && !share.home && share.volume && !this.removableShare(path) && { label: t("Descrizione…"), icon: "rename", action: () => this.shareDescription(share) },
       this.removableShare(path) && "-",
       this.removableShare(path) && { label: t("Espelli"), icon: "eject", action: () => this.eject(this.removableShare(path).name) },
     ]);
+  }
+
+
+  /** The description of a shared folder, as in DSM's Control Panel; empty takes it away. */
+  async shareDescription(share) {
+    const desc = await promptBox({ title: t("Descrizione di «{x}»", { x: share.name }), label: t("Descrizione (vuota per toglierla)"), value: share.comment || "", ok: t("Salva") });
+    if (desc === null || desc.trim() === (share.comment || "")) return;
+    try {
+      await dsm("SYNO.Core.Share", "set", {
+        name: JSON.stringify(share.name),
+        shareinfo: JSON.stringify({ name: share.name, vol_path: "/" + share.volume, desc: desc.trim() }),
+      });
+      // shown at once: DSM's own list catches up a moment later
+      share.comment = desc.trim();
+      this.renderSidebar();
+      this.loadShares();
+    } catch (e) {
+      errorToast(new Error(t("Descrizione non salvata: {e}", { e: e.message })));
+    }
   }
 
   /** The shared folder on a USB or eSATA drive that holds `path`, if any. */

@@ -481,4 +481,8 @@ export default {
   "Taglia la riga": "Recortar a linha",
   "Apri in una finestra separata": "Abrir em uma janela separada",
   "Il browser ha bloccato la finestra: consenti i popup per DSM": "O navegador bloqueou a janela: permita pop-ups para o DSM",
+  "Descrizione…": "Descrição…",
+  "Descrizione di «{x}»": "Descrição de «{x}»",
+  "Descrizione (vuota per toglierla)": "Descrição (vazia para removê-la)",
+  "Descrizione non salvata: {e}": "Descrição não salva: {e}",
 };

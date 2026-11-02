@@ -481,4 +481,8 @@ export default {
   "Taglia la riga": "Wytnij wiersz",
   "Apri in una finestra separata": "Otwórz w osobnym oknie",
   "Il browser ha bloccato la finestra: consenti i popup per DSM": "Przeglądarka zablokowała okno: zezwól na wyskakujące okna dla DSM",
+  "Descrizione…": "Opis…",
+  "Descrizione di «{x}»": "Opis „{x}”",
+  "Descrizione (vuota per toglierla)": "Opis (pusty, aby go usunąć)",
+  "Descrizione non salvata: {e}": "Opis nie został zapisany: {e}",
 };
