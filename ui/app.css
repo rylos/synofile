@@ -890,3 +890,39 @@ dialog.dlg.space { max-width: min(96vw, 940px); }
 .ed-help dl { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 0; }
 .ed-help dt { font-family: var(--mono); color: var(--ed-ln); white-space: nowrap; }
 .ed-help dd { margin: 0; }
+
+/* permissions of a shared folder: a fixed height, so nothing jumps */
+dialog.dlg.perm-dlg { max-width: min(94vw, 820px); height: min(620px, 92vh); overflow: hidden; }
+.perm-dlg form { display: flex; flex-direction: column; height: 100%; }
+.perm-tabs { display: flex; gap: 18px; padding: 0 18px; border-bottom: 1px solid var(--border); flex: none; }
+.perm-tabs button { border: 0; background: none; padding: 8px 2px; cursor: pointer; color: var(--muted); font: inherit; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.perm-tabs button:hover { color: var(--text); }
+.perm-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.perm-body { flex: 1; min-height: 0; padding-top: 12px; display: flex; flex-direction: column; }
+.perm-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.perm-pane[hidden] { display: none; }
+.perm-add { position: relative; flex: none; }
+.perm-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg); }
+.perm-search:focus-within { border-color: var(--accent); }
+.perm-search svg { width: 15px; height: 15px; color: var(--faint); flex: none; }
+.perm-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--text); font: inherit; padding: 8px 0; }
+.perm-found { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); max-height: 280px; overflow: auto; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow); }
+.perm-found > .hint { padding: 8px 10px; }
+.perm-hit { padding: 6px 10px; border-radius: 6px; cursor: pointer; display: flex; }
+.perm-hit.cur { background: var(--accent-soft); }
+.perm-list { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.perm-empty { padding: 14px; }
+.perm-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 12px; }
+.perm-row + .perm-row { border-top: 1px solid var(--border); }
+.perm-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.perm-who svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.perm-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perm-seg { flex: none; }
+.perm-seg button { font: inherit; font-size: .9em; padding: 5px 10px; white-space: nowrap; }
+.perm-seg button.deny.on { background: var(--crit-soft); color: var(--crit); }
+.perm-seg button.none.on { background: var(--surface-2); color: var(--text); }
+.perm-del { flex: none; color: var(--crit); }
+.perm-del:hover { color: var(--crit); background: var(--crit-soft); border-color: transparent; }
+.perm-del svg { width: 14px; height: 14px; }
+.perm-pane[data-pane="adv"] p { margin: 0 0 4px; }

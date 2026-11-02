@@ -2,6 +2,7 @@
 // menus, keyboard, drag and drop, and the jobs they start.
 
 import { api, dsm, loadToken } from "./api.js";
+import { sharePermissions } from "./perms.js";
 import { prefs, save, loadLocal, loadRemote, onChange } from "./prefs.js";
 import { t, count, loadTable } from "./i18n.js";
 import { esc, size, int, baseName, parentOf, joinPath } from "./format.js";
@@ -748,6 +749,7 @@ class App {
       !isRemote(path) && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(path) },
       !(isRemote(path) && path.split("/").length === 2) && { label: t("Icona…"), icon: "palette", action: () => pickIcon({ x, y }, path) },
       share && !share.home && share.volume && !this.removableShare(path) && { label: t("Descrizione…"), icon: "rename", action: () => this.shareDescription(share) },
+      share && !share.home && share.volume && !this.removableShare(path) && { label: t("Permessi…"), icon: "shield", action: () => sharePermissions(share) },
       this.removableShare(path) && "-",
       this.removableShare(path) && { label: t("Espelli"), icon: "eject", action: () => this.eject(this.removableShare(path).name) },
     ]);
@@ -1218,6 +1220,7 @@ class App {
     }
     const dir = isDirLike(entry);
     const share = !!entry.share;
+    const shareObj = share ? this.shares.find((s) => "/" + s.name === entry.path) : null;
     const other = this.other();
     // inside an archive: read-only, and folders come out by copying
     const ro = !!pane.archive;
@@ -1256,6 +1259,7 @@ class App {
       !many && dir && { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(entry.path) },
       !many && !ro && !remote && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(dir ? entry.path : parentOf(entry.path)) },
       { label: t("Proprietà"), icon: "info", key: "Ctrl+I", action: () => !prefs.info && this.toggleInfo() },
+      !many && shareObj && !shareObj.home && shareObj.volume && !this.removableShare(entry.path) && { label: t("Permessi…"), icon: "shield", action: () => sharePermissions(shareObj) },
       !many && share && this.removableShare(entry.path) && "-",
       !many && share && this.removableShare(entry.path) && { label: t("Espelli"), icon: "eject", action: () => this.eject(entry.name) },
     ]);

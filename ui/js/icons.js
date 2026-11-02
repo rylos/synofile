@@ -176,6 +176,8 @@ const P = {
   archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
   popout: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M10 14l6-6M11 8h5v5"/>',
   eject: '<path d="M12 4l8 10H4zM4 19h16"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c1.2-3.6 4.2-5.5 8-5.5s6.8 1.9 8 5.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.3 3.6-5 6.5-5s5.5 1.7 6.5 5M15.5 4.6a3.5 3.5 0 0 1 0 6.8M18 15.3c1.7.8 2.9 2.4 3.5 4.7"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
   redo: '<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/>',

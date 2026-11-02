@@ -1,3 +1,6 @@
+v0.8.5
+- Right-click a shared folder (in the sidebar or in the list of shared folders) > Permissions…: who may read or write it, as in DSM's Control Panel. Each user or group gets No access, Read, Read and write or Deny, and × takes one away. The search at the top adds the others by name, fzf-style as the filter does, domain and LDAP users and groups too where the NAS has them: hundreds are fine. Custom ACL permissions made in File Station are shown and left as they are. A second tab holds DSM's three advanced settings: disable directory browsing, disable modification of existing files, disable file downloading.
+
 v0.8.4
 - SynoFile opened on its own page (webman/3rdparty/synofile/index.html) speaks DSM's language, the one it last saw in DSM, instead of the browser's.
 - Right-click a shared folder in the sidebar > Description… to change or remove its description, the one DSM's Control Panel shows.
