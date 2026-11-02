@@ -1,8 +1,11 @@
 // Uploads from this computer: files and whole folders, in chunks the NAS
-// writes into a hidden file and renames into place with the last one. A
-// chunk that fails is retried from where the NAS says it got to.
+// writes into a hidden file and renames into place with the last one. Each
+// chunk is a request of its own, and DSM checks the session of every one:
+// so several go at once, else those pauses add up (120 MB/s on 2.5 GbE).
+// The first chunk creates the file and the last one renames it, each on its
+// own; the ones between go in parallel. A chunk that fails is sent again.
 
-import { api, url, call } from "./api.js";
+import { api, url } from "./api.js";
 import { prefs } from "./prefs.js";
 import { t } from "./i18n.js";
 import { joinPath } from "./format.js";
@@ -11,7 +14,9 @@ import { dialog, errorToast } from "./ui.js";
 import { svg } from "./icons.js";
 import { esc, size } from "./format.js";
 
-const CHUNK = 8 * 1024 * 1024;
+const CHUNK = 16 * 1024 * 1024;
+// chunks in flight at once
+const PARALLEL = 4;
 
 /** Files from a drop, folders included (webkitGetAsEntry). */
 export async function fromDataTransfer(dt) {
@@ -125,8 +130,11 @@ export async function upload(dest, items, onDone) {
   };
   let paused = false;
   let cancelled = false;
-  let xhr = null;
+  const xhrs = new Set();
   let resumeWait = null;
+  let pausedP = null;
+  // every chunk in flight waits here while paused
+  const gate = () => (pausedP ||= new Promise((r) => (resumeWait = () => ((pausedP = null), r()))));
   let runSince = performance.now();
   const settle = () => {
     const now = performance.now();
@@ -151,7 +159,7 @@ export async function upload(dest, items, onDone) {
     },
     cancel() {
       cancelled = true;
-      xhr?.abort();
+      xhrs.forEach((x) => x.abort());
       resumeWait?.();
     },
   };
@@ -185,7 +193,9 @@ export async function upload(dest, items, onDone) {
 
   const sendChunk = (f, dir, name, offset, blob) =>
     new Promise((resolve, reject) => {
-      xhr = new XMLHttpRequest();
+      const xhr = new XMLHttpRequest();
+      xhrs.add(xhr);
+      xhr.onloadend = () => xhrs.delete(xhr);
       const params = { dir, name, offset, total: f.file.size, mtime: Math.floor(f.file.lastModified / 1000), overwrite: policy === "overwrite" ? 1 : undefined };
       xhr.open("POST", url("upload", params));
       xhr.withCredentials = true;
@@ -230,6 +240,20 @@ export async function upload(dest, items, onDone) {
       xhr.send(blob);
     });
 
+  // one chunk, sent again on failure: a chunk written twice is the same data
+  const sendRetrying = async (run, f, dir, name, offset) => {
+    for (let tries = 1; ; tries++) {
+      if (paused) await gate();
+      if (cancelled || run.stop) throw Object.assign(new Error("abort"), { abort: true });
+      try {
+        return await sendChunk(f, dir, name, offset, f.file.slice(offset, offset + CHUNK));
+      } catch (e) {
+        if (e.abort || run.stop || tries > 4 || (e.status === 409 && offset === 0)) throw e;
+        await new Promise((r) => setTimeout(r, 800 * tries));
+      }
+    }
+  };
+
   for (const f of files) {
     if (cancelled) break;
     const parts = f.rel.split("/");
@@ -239,45 +263,41 @@ export async function upload(dest, items, onDone) {
     p.current = f.rel;
     p.current_size = f.file.size;
     p.current_done = 0;
-    let offset = 0;
-    let tries = 0;
     let ok = true;
-    do {
-      if (paused) await new Promise((r) => (resumeWait = r));
-      if (cancelled) break;
-      const blob = f.file.slice(offset, offset + CHUNK);
-      try {
-        const r = await sendChunk(f, dir, name, offset, blob);
-        offset = r.received;
-        tries = 0;
-      } catch (e) {
-        if (e.abort) break;
-        if (e.status === 409 && offset === 0 && /esiste|exists/i.test(e.message)) {
-          fail(f.rel, t("esiste già"));
-          ok = false;
-          break;
-        }
-        if (++tries > 4) {
-          fail(f.rel, e.message);
-          ok = false;
-          break;
-        }
-        // ask the NAS where it got to, then carry on from there
-        await new Promise((r) => setTimeout(r, 800 * tries));
-        try {
-          const st = await call("upload/status", { params: { dir, name } });
-          if (st) offset = st.received;
-        } catch {}
-        p.bytes_done = p.bytes_done - p.current_done + offset;
-        p.current_done = offset;
+    const run = { stop: false };
+    const size = f.file.size;
+    const last = size > 0 ? Math.floor((size - 1) / CHUNK) * CHUNK : 0;
+    try {
+      // the first chunk creates the hidden file
+      await sendRetrying(run, f, dir, name, 0);
+      if (last > 0) {
+        // the ones between, several at once; the last renames the file, so it goes after them all
+        let next = CHUNK;
+        const worker = async () => {
+          while (next < last && !cancelled && !run.stop) {
+            const offset = next;
+            next += CHUNK;
+            try {
+              await sendRetrying(run, f, dir, name, offset);
+            } catch (e) {
+              // the first failure stops the other chunks of this file
+              if (!run.stop) {
+                run.stop = true;
+                run.error = e;
+                xhrs.forEach((x) => x.abort());
+              }
+              return;
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: PARALLEL }, worker));
+        if (run.error) throw run.error;
+        if (!cancelled) await sendRetrying(run, f, dir, name, last);
       }
-    } while (offset < f.file.size);
-    if (f.file.size === 0 && !cancelled && ok) {
-      try {
-        await sendChunk(f, dir, name, 0, new Blob([]));
-      } catch (e) {
-        fail(f.rel, e.message);
+    } catch (e) {
+      if (!e.abort) {
         ok = false;
+        fail(f.rel, e.status === 409 && /esiste|exists/i.test(e.message) ? t("esiste già") : e.message);
       }
     }
     if (cancelled) {

@@ -1,3 +1,6 @@
+v0.8.6
+- Uploads from the browser twice as fast: four chunks of 16 MiB go at once instead of one of 8 MiB, so DSM's check of the session on every chunk no longer holds them up. From 120 to about 245 MiB/s on 2.5 GbE, close to SMB.
+
 v0.8.5
 - Right-click a shared folder (in the sidebar or in the list of shared folders) > Permissions…: who may read or write it, as in DSM's Control Panel. Each user or group gets No access, Read, Read and write or Deny, and × takes one away. The search at the top adds the others by name, fzf-style as the filter does, domain and LDAP users and groups too where the NAS has them: hundreds are fine. Custom ACL permissions made in File Station are shown and left as they are. A second tab holds DSM's three advanced settings: disable directory browsing, disable modification of existing files, disable file downloading.
 

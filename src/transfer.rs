@@ -275,7 +275,7 @@ fn raw_header(
     out.write_all(&h)
 }
 
-/// Largest chunk of an upload: the interface sends 16 MiB.
+/// Largest chunk of an upload: the interface sends 16 MiB, several at once.
 pub const MAX_CHUNK: u64 = 64 * 1024 * 1024;
 
 pub fn upload_part(dir: &Path, name: &str) -> PathBuf {
@@ -289,7 +289,10 @@ pub struct UploadState {
 }
 
 /// One chunk of an upload. The data goes into a hidden file beside the
-/// target, renamed into place with the last chunk.
+/// target, renamed into place with the last chunk. The first chunk creates
+/// the file; the ones between may come in any order, at once (each writes
+/// its own range); the interface sends the last one when all the others
+/// are in.
 pub fn upload(req: &Request, dir: &Path, name: &str) -> Result<UploadState, ApiError> {
     let offset: u64 = req.param("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
     let total: u64 = req.require("total")?.parse().map_err(|_| ApiError::bad_request("total"))?;
@@ -305,12 +308,7 @@ pub fn upload(req: &Request, dir: &Path, name: &str) -> Result<UploadState, ApiE
         }
         OpenOptions::new().write(true).create(true).truncate(true).open(&part)?
     } else {
-        let file = OpenOptions::new().write(true).open(&part).map_err(|_| ApiError::conflict(t!("upload da ricominciare", "the upload has to start again")))?;
-        let have = file.metadata()?.len();
-        if have != offset {
-            return Err(ApiError::new(409, format!("offset {have}")));
-        }
-        file
+        OpenOptions::new().write(true).open(&part).map_err(|_| ApiError::conflict(t!("upload da ricominciare", "the upload has to start again")))?
     };
     file.seek(SeekFrom::Start(offset))?;
     let copied = io::copy(&mut io::stdin().lock().take(req.length), &mut file)?;
