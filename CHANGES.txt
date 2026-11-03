@@ -1,3 +1,6 @@
+v0.8.8
+- Buttons in outline style: the main ones (Done, Save…) and the dangerous ones (Delete…) have a coloured border and text instead of a filled background.
+
 v0.8.7
 - SynoFile opened from its own address (webman/3rdparty/synofile/index.html) with DSM's session expired now says so with a "Log in to DSM" link, and reloads by itself once you are back with a session. A new DSM login in another tab no longer leaves an open SynoFile stuck on "session expired": it takes the new session and goes on.
 - Bug fix for uploading folders with subfolders: only the first level was created and the files further down failed.

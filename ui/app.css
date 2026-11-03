@@ -119,9 +119,10 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
   cursor: pointer; white-space: nowrap;
 }
 .btn:hover { background: var(--surface-3); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.btn.primary:hover { filter: brightness(1.08); }
-.btn.danger { background: var(--crit); border-color: var(--crit); color: #fff; font-weight: 600; }
+.btn.primary { background: transparent; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn.primary:hover { background: var(--accent-soft); }
+.btn.danger { background: transparent; border-color: var(--crit); color: var(--crit); font-weight: 600; }
+.btn.danger:hover { background: var(--crit-soft); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
 .btn.small { padding: 3px 9px; font-size: .92em; }
