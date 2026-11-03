@@ -42,6 +42,7 @@
   --t-cyan: #89dceb;
   --t-white: #bac2de;
   --t-gray: #585b70;
+  --sys: #7f849c; /* system folders: readable on the dark background */
   color-scheme: dark;
 }
 
@@ -78,6 +79,7 @@
   --t-cyan: #0f4b6e;
   --t-white: #40434f;
   --t-gray: #9699a3;
+  --sys: #8b8e98;
   color-scheme: light;
 }
 
@@ -308,6 +310,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 
 /* eza colours: names, permissions, sizes, dates */
 .ez-dir { color: var(--t-blue); font-weight: 700; }
+/* system folders in grey (Settings → Look); a colour given by hand, ic-*, wins */
+.grey-system .ez-sys { color: var(--sys); font-weight: 400; }
 .ez-link { color: var(--t-cyan); }
 .ez-exec { color: var(--t-green); font-weight: 700; }
 .ez-special { color: var(--t-yellow); }

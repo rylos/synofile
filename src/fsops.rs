@@ -31,6 +31,12 @@ pub struct Entry {
     pub link_dir: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub thumb: bool,
+    /// a read-only btrfs snapshot: it cannot be renamed, moved or deleted
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub readonly: bool,
+    /// for a recycle bin: whether something is in it
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full: Option<bool>,
 }
 
 fn kind(meta: &Metadata) -> char {
@@ -49,7 +55,24 @@ fn kind(meta: &Metadata) -> char {
 pub fn entry(path: &Path, name: String, meta: &Metadata) -> Entry {
     let kind = kind(meta);
     let link_dir = kind == 'l' && fs::metadata(path).is_ok_and(|m| m.is_dir());
-    Entry { name, kind, size: if kind == 'd' { 0 } else { meta.len() }, mtime: meta.mtime(), mode: meta.mode() & 0o7777, link_dir, thumb: false }
+    Entry { name, kind, size: if kind == 'd' { 0 } else { meta.len() }, mtime: meta.mtime(), mode: meta.mode() & 0o7777, link_dir, thumb: false, readonly: kind == 'd' && readonly_subvolume(path, meta), full: None }
+}
+
+/// Whether a folder is the top of a read-only btrfs subvolume: a snapshot
+/// (btrbk's, DSM's #snapshot). Only subvolume tops (inode 256) are asked.
+fn readonly_subvolume(path: &Path, meta: &Metadata) -> bool {
+    const BTRFS_FIRST_FREE_OBJECTID: u64 = 256;
+    // _IOR(0x94, 25, u64)
+    const BTRFS_IOC_SUBVOL_GETFLAGS: libc::c_ulong = 0x8008_9419;
+    const BTRFS_SUBVOL_RDONLY: u64 = 1 << 1;
+    if meta.ino() != BTRFS_FIRST_FREE_OBJECTID {
+        return false;
+    }
+    let Ok(dir) = fs::File::open(path) else { return false };
+    let mut flags: u64 = 0;
+    // SAFETY: an open directory and a u64 for the kernel to fill
+    let rc = unsafe { libc::ioctl(std::os::fd::AsRawFd::as_raw_fd(&dir), BTRFS_IOC_SUBVOL_GETFLAGS as _, &mut flags) };
+    rc == 0 && flags & BTRFS_SUBVOL_RDONLY != 0
 }
 
 #[derive(Serialize)]
@@ -76,9 +99,17 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
         let Ok(meta) = fs::symlink_metadata(&path) else { continue };
         let mut e = entry(&path, name, &meta);
         e.thumb = e.kind == 'f' && thumbs.contains(&item.file_name());
+        if e.kind == 'd' && e.name == crate::shares::RECYCLE {
+            e.full = Some(bin_full(&path));
+        }
         entries.push(e);
     }
     Ok(Listing { entries, writable: access(dir, libc::W_OK | libc::X_OK) })
+}
+
+/// Whether a recycle bin holds anything: one entry read, not the whole bin.
+fn bin_full(bin: &Path) -> bool {
+    fs::read_dir(bin).is_ok_and(|d| d.flatten().any(|i| !is_system_name(&i.file_name().to_string_lossy())))
 }
 
 pub fn access(path: &Path, mode: i32) -> bool {

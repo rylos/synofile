@@ -5,7 +5,7 @@ import { api } from "./api.js";
 import { prefs } from "./prefs.js";
 import { t, count, LOCALE } from "./i18n.js";
 import { esc, size, sizeParts, ezaDate, relative, dateTime, duration, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
-import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
+import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph, isDsmFolder } from "./icons.js";
 import { pickIcon } from "./iconpick.js";
 import { h, $, errorToast, toast } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
@@ -1182,10 +1182,14 @@ export class Pane {
       const i = this.indexAt(ev.target);
       if (i < 0) return ev.preventDefault();
       if (!this.sel.has(this.visible[i].path)) this.moveCursor(i);
-      const paths = this.targets().map((e) => e.path);
+      const list = this.targets();
+      const paths = list.map((e) => e.path);
+      // out of a snapshot nothing moves: a drop copies
+      const fixed = this.writable === false || list.some((e) => e.readonly || isDsmFolder(e));
       ev.dataTransfer.setData("application/x-synofile", JSON.stringify({ paths, from: this.path }));
+      if (fixed) ev.dataTransfer.setData("application/x-synofile-fixed", "1");
       ev.dataTransfer.setData("text/plain", paths.join("\n"));
-      ev.dataTransfer.effectAllowed = "copyMove";
+      ev.dataTransfer.effectAllowed = fixed ? "copy" : "copyMove";
       const ghost = h(`<div style="position:fixed;top:-100px;padding:6px 12px;border-radius:8px;background:var(--accent);color:#fff;font-weight:600">${esc(paths.length === 1 ? baseName(paths[0]) : t("{n} elementi", { n: paths.length }))}</div>`);
       document.body.append(ghost);
       ev.dataTransfer.setDragImage(ghost, 10, 10);

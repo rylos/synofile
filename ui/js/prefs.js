@@ -9,6 +9,7 @@ export const DEFAULTS = {
   theme: "dark", // dark, light, system
   icons: true,
   colors: true, // eza colours on names and icons
+  greySystem: true, // system folders (#recycle, #snapshot…) in grey
   llColumns: true, // eza colours on permissions, sizes and dates
   size: "normal", // small, normal, large
   density: "normal", // compact, normal
@@ -121,6 +122,7 @@ export function apply() {
   if (app) {
     app.classList.toggle("no-icons", !prefs.icons);
     app.classList.toggle("no-colors", !prefs.colors);
+    app.classList.toggle("grey-system", !!prefs.greySystem);
     app.classList.toggle("no-ll", !prefs.llColumns);
     app.classList.toggle("no-sidebar", !prefs.sidebar);
   }

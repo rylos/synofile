@@ -59,8 +59,9 @@ export const dndMethods = {
     });
   },
 
-  /** Like Windows: within one shared folder a drop moves, across shares it copies; Ctrl copies, Shift moves, Alt asks. */
+  /** Like Windows: within one shared folder a drop moves, across shares it copies; Ctrl copies, Shift moves, Alt asks. Out of a snapshot it always copies. */
   dropOp(ev, dest, paths) {
+    if (ev.dataTransfer?.types.includes("application/x-synofile-fixed")) return "copy";
     if (ev.altKey) return "ask";
     if (ev.ctrlKey) return "copy";
     if (ev.shiftKey) return "move";

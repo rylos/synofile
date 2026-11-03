@@ -63,9 +63,20 @@ export const ICON_CHOICES = EZA.choices;
 export const ICON_COLORS = ["", "red", "yellow", "green", "cyan", "purple", "white", "gray"];
 
 /** eza's icon for an entry (icon_for_file). */
+// a recycle bin, as the listing tells: full or empty
+const BIN = { true: EZA.dirs["#recycle"], false: "\u{e000}" };
+
+// folders the system keeps, not the user: DSM's, and those Windows, macOS
+// and Linux leave on drives and copied shares. Grey when the option is on.
+const SYSTEM_DIRS = new Set(["#recycle", "#snapshot", "#archive", "@tmp", "@sharebin", "$RECYCLE.BIN", "System Volume Information", ".Spotlight-V100", ".fseventsd", ".TemporaryItems", "lost+found"]);
+// DSM's own: they are not the user's to move, rename or delete
+const DSM_DIRS = new Set(["#recycle", "#snapshot", "#archive", "@tmp", "@sharebin"]);
+export const isDsmFolder = (e) => (e.kind === "d" || e.link_dir) && DSM_DIRS.has(e.name);
+export const isSystemFolder = (name) => SYSTEM_DIRS.has(name) || name.startsWith(".Trash-");
+
 export function glyph(entry) {
   if (entry.kind === "d" || entry.link_dir) {
-    return folderIcon(entry)?.g || autoFolderGlyph(entry.name);
+    return folderIcon(entry)?.g || (entry.full !== undefined && BIN[entry.full]) || autoFolderGlyph(entry.name);
   }
   if (EZA.names[entry.name]) return EZA.names[entry.name];
   const e = ext(entry.name);
@@ -75,7 +86,7 @@ export function glyph(entry) {
 
 /** eza's colour class for a name (FileType::get_file_type + the kinds). */
 export function colorClass(entry) {
-  if (entry.kind === "d") return "ez-dir";
+  if (entry.kind === "d") return isSystemFolder(entry.name) ? "ez-dir ez-sys" : "ez-dir";
   if (entry.kind === "l") return "ez-link";
   if (entry.kind === "o") return "ez-special";
   if (entry.mode & 0o111) return "ez-exec";

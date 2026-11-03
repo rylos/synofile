@@ -24,9 +24,13 @@ EXTRA_DIRS = {
     "photo": "\U000f024f", "Photos": "\U000f024f", "Video": "\U000f0fce", "video": "\U000f0fce",
     "Film": "\U000f0fce", "Serie-TV": "\U000f0fce", "Cartoni": "\U000f0fce", "Scrivania": "\uf108",
     "#recycle": "\uf1f8", "homes": "\U000f10b5", "home": "\U000f10b5", "docker": "\ue650",
-    "backup": "\U000f0bc6", "web": "\U000f059f", "iso": "\ue271", "Games": "\U000f0eb5",
-    "Software": "\U000f03d6", "temp": "\uf43a", "dev": "\ue5fc", "surveillance": "\U000f0567",
+    "backup": "\U000f006f", "web": "\U000f059f", "iso": "\ue271", "Games": "\U000f0eb5",
+    "Software": "\U000f03d6", "temp": "\uf43a", "dev": "\U000f0169", "surveillance": "\U000f0567",
 }
+
+# The empty recycle bin: eza's full one (fa-trash) with the same lid and
+# only the outline of the can, drawn into the font at a private code point.
+EMPTY_BIN = 0xE000
 
 # The icons a folder can be given by hand (the picker in the info panel):
 # Material Design glyph names of the Nerd Font, with the words that find
@@ -80,6 +84,70 @@ def char(literal):
     return chr(int(literal, 16))
 
 
+def add_empty_bin(woff2):
+    """fa-trash's lid, and its can as a ring: the outer edge, then the same
+    shape 120 units in, drawn the other way round so it is a hole."""
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(woff2)
+    pen = TTGlyphPen(None)
+    # lid and handle (fa-trash, first contour)
+    pen.moveTo((499, 1494))
+    pen.qCurveTo((514, 1524), (542.5, 1541.5))
+    pen.qCurveTo((571, 1559), (605, 1559))
+    pen.lineTo((1049, 1559))
+    pen.qCurveTo((1083, 1559), (1111.5, 1541.5))
+    pen.qCurveTo((1140, 1524), (1155, 1494))
+    pen.lineTo((1182, 1441))
+    pen.lineTo((1536, 1441))
+    pen.qCurveTo((1585, 1441), (1619.5, 1406.5))
+    pen.qCurveTo((1654, 1372), (1654, 1323))
+    pen.qCurveTo((1654, 1274), (1619.5, 1239.5))
+    pen.qCurveTo((1585, 1205), (1536, 1205))
+    pen.lineTo((118, 1205))
+    pen.qCurveTo((69, 1205), (34.5, 1239.5))
+    pen.qCurveTo((0, 1274), (0, 1323))
+    pen.qCurveTo((0, 1372), (34.5, 1406.5))
+    pen.qCurveTo((69, 1441), (118, 1441))
+    pen.lineTo((473, 1441))
+    pen.closePath()
+    # the can's outer edge (fa-trash, second contour)
+    pen.moveTo((1536, 1087))
+    pen.lineTo((1458, -165))
+    pen.qCurveTo((1454, -235), (1402.5, -283))
+    pen.qCurveTo((1351, -331), (1281, -331))
+    pen.lineTo((373, -331))
+    pen.qCurveTo((303, -331), (251.5, -283))
+    pen.qCurveTo((200, -235), (196, -165))
+    pen.lineTo((118, 1087))
+    pen.closePath()
+    # its inner edge, the other way round
+    pen.moveTo((246, 967))
+    pen.lineTo((316, -150))
+    pen.qCurveTo((318, -211), (373, -211))
+    pen.lineTo((1281, -211))
+    pen.qCurveTo((1336, -211), (1338, -150))
+    pen.lineTo((1408, 967))
+    pen.closePath()
+    glyph = pen.glyph()
+    name = "empty_bin"
+    order = font.getGlyphOrder()
+    if name not in order:
+        order = order + [name]
+        font.setGlyphOrder(order)
+        font["glyf"].setGlyphOrder(order)
+    font["glyf"][name] = glyph
+    glyph.recalcBounds(font["glyf"])
+    font["hmtx"][name] = (1654, glyph.xMin)
+    for table in font["cmap"].tables:
+        if table.isUnicode():
+            table.cmap[EMPTY_BIN] = name
+    font["maxp"].numGlyphs = len(font.getGlyphOrder())
+    font.flavor = "woff2"
+    font.save(woff2)
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -127,6 +195,7 @@ def main():
     fonts.mkdir(exist_ok=True)
     subprocess.run(["pyftsubset", str(font), f"--unicodes={unicodes}", "--flavor=woff2",
                     f"--output-file={fonts / 'eza-icons.woff2'}", "--no-hinting", "--desubroutinize"], check=True)
+    add_empty_bin(fonts / "eza-icons.woff2")
     print(f"{out}: {len(dirs)} folders, {len(data['names'])} names, {len(data['exts'])} extensions, {len(choices)} choices; {len(used)} glyphs")
 
 

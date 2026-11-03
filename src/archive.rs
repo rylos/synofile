@@ -346,6 +346,8 @@ pub fn children(members: &[Member], dir: &str) -> Vec<Entry> {
                     mode: m.mode,
                     link_dir: false,
                     thumb: false,
+                    readonly: false,
+                    full: None,
                 };
                 // a real entry wins over a made-up folder
                 seen.insert(rest.to_string(), e);
@@ -356,7 +358,7 @@ pub fn children(members: &[Member], dir: &str) -> Vec<Entry> {
 }
 
 fn folder(name: &str, mtime: i64) -> Entry {
-    Entry { name: name.to_string(), kind: 'd', size: 0, mtime, mode: 0o755, link_dir: false, thumb: false }
+    Entry { name: name.to_string(), kind: 'd', size: 0, mtime, mode: 0o755, link_dir: false, thumb: false, readonly: false, full: None }
 }
 
 /// Whether `path` is a folder inside the archive ("" is the root).

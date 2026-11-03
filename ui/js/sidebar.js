@@ -394,6 +394,7 @@ export const sidebarMethods = {
       { label: t("Apri in una nuova scheda"), icon: "plus", action: () => this.newTab(path) },
       this.isSplit() && { label: t("Apri nell'altro pannello"), icon: "split", action: () => this.other().go(path) },
       share?.recycle && { label: t("Apri il Cestino"), icon: "trash", action: () => this.pane.go(path + "/#recycle") },
+      share?.recycle && { label: t("Svuota il Cestino"), icon: "trash", danger: true, action: () => this.emptyBin(path + "/#recycle") },
       !isRemote(path) && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(path) },
       "-",
       fav ? { label: t("Togli dai preferiti"), icon: "star", action: () => this.toggleFavorite(path) } : { label: t("Aggiungi ai preferiti"), icon: "star", action: () => this.toggleFavorite(path) },

@@ -6,7 +6,7 @@ import { api } from "./api.js";
 import { prefs } from "./prefs.js";
 import { t, count } from "./i18n.js";
 import { esc, int, baseName, parentOf, joinPath, isDirLike } from "./format.js";
-import { svg, glyph, previewKind, archiveStem } from "./icons.js";
+import { svg, glyph, previewKind, archiveStem, isDsmFolder } from "./icons.js";
 import { isBrowsable, archiveOf, readOnlyToast } from "./archive.js";
 import { $, toast, errorToast, confirmBox, promptBox, pickFolder, copyText, dialog } from "./ui.js";
 import * as transfers from "./transfers.js";
@@ -129,7 +129,8 @@ export const actionMethods = {
 
   setClipboard(op, pane) {
     if (op === "cut" && pane.archive) return readOnlyToast();
-    const list = pane.targets().filter((e) => !e.share);
+    // snapshots stay where they are: cutting one copies nothing away
+    const list = pane.targets().filter((e) => !e.share && !(op === "cut" && (e.readonly || isDsmFolder(e) || pane.writable === false)));
     if (!list.length) return;
     this.clipboard = { op, paths: list.map((e) => e.path), from: pane.path };
     toast(t(op === "cut" ? "{n} pronti da spostare: incolla con Ctrl+V" : "{n} pronti da copiare: incolla con Ctrl+V", { n: count(list.length, "elemento", "elementi", int) }), { timeout: 2200 });
@@ -181,8 +182,9 @@ export const actionMethods = {
 
   async remove(pane, permanent = false) {
     if (pane.archive) return readOnlyToast();
-    const list = pane.targets().filter((e) => !e.share);
-    if (!list.length) return;
+    // a recycle bin is emptied, not thrown away (Canc on it does nothing)
+    const list = pane.targets().filter((e) => !e.share && e.full === undefined && !e.readonly && !isDsmFolder(e));
+    if (!list.length || pane.writable === false) return;
     const inBin = pane.path.split("/").includes("#recycle");
     const recycle = pane.recycle && !permanent && !inBin;
     if (prefs.confirmDelete || !recycle) {
@@ -202,8 +204,28 @@ export const actionMethods = {
     transfers.start({ op: "delete", sources: list.map((e) => e.path), permanent: !recycle });
   },
 
+  /** Empties a shared folder's recycle bin for good, after asking. */
+  async emptyBin(bin) {
+    let entries;
+    try {
+      entries = (await api.list(bin)).entries;
+    } catch (err) {
+      return errorToast(err);
+    }
+    if (!entries.length) return toast(t("Il Cestino è già vuoto"));
+    const ok = await confirmBox({
+      title: t("Svuotare il Cestino?"),
+      message: `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(entries.length, "elemento", "elementi", int) })}</b>`,
+      ok: t("Svuota il Cestino"),
+      danger: true,
+      icon: "trash",
+    });
+    if (ok) transfers.start({ op: "delete", sources: entries.map((e) => joinPath(bin, e.name)), permanent: true });
+  },
+
   async renamePrompt(pane, e) {
     if (pane.archive) return readOnlyToast();
+    if (e.readonly || isDsmFolder(e) || pane.writable === false) return;
     const name = await promptBox({
       title: t("Rinomina"),
       label: t("Nuovo nome"),

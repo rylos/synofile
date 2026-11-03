@@ -53,6 +53,7 @@ function body(section) {
         row("Tema", "", sel("theme", [["dark", "Scuro"], ["light", "Chiaro"], ["system", "Come il sistema"]])) +
         row("Icone dei file", "Le icone di eza (Nerd Font), per tipo e per nome", sw("icons")) +
         row("Colori dei nomi", "I colori di eza: cartelle blu, immagini viola, archivi rossi…", sw("colors")) +
+        row("Cartelle di sistema in grigio", "#recycle, #snapshot, $RECYCLE.BIN, lost+found… Un colore dato a mano resta", sw("greySystem")) +
         row("Colonne in stile ll", "Permessi, dimensioni e date colorati come in eza -l", sw("llColumns")) +
         row("Dimensione del testo", "", sel("size", [["small", "Piccola"], ["normal", "Normale"], ["large", "Grande"]])) +
         row("Densità delle righe", "", sel("density", [["compact", "Compatta"], ["normal", "Normale"]]))

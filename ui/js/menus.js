@@ -4,8 +4,8 @@
 import { sharePermissions } from "./perms.js";
 import { prefs, save } from "./prefs.js";
 import { t, count } from "./i18n.js";
-import { int, parentOf, isDirLike } from "./format.js";
-import { isArchive, archiveStem } from "./icons.js";
+import { int, parentOf, baseName, isDirLike } from "./format.js";
+import { isArchive, archiveStem, isDsmFolder } from "./icons.js";
 import { isBrowsable } from "./archive.js";
 import { openMenu, copyText } from "./ui.js";
 import { openSettings } from "./settings.js";
@@ -36,10 +36,17 @@ export const menuMethods = {
         !atRoot && { label: t("Aggiungi ai preferiti"), icon: "star", key: "Ctrl+D", action: () => this.toggleFavorite(pane.path) },
         !atRootOrRo && !remote && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(pane.path) },
         { label: t("Aggiorna"), icon: "refresh", key: "F5", action: () => pane.reload() },
+        baseName(pane.path) === "#recycle" && !remote && "-",
+        baseName(pane.path) === "#recycle" && !remote && { label: t("Svuota il Cestino"), icon: "trash", danger: true, action: () => this.emptyBin(pane.path) },
       ]);
     }
     const dir = isDirLike(entry);
     const share = !!entry.share;
+    // a recycle bin is emptied, not thrown away
+    const bin = list.some((e) => e.full !== undefined);
+    // a snapshot, or a folder inside one: what is there stays
+    // (and DSM's own folders: #snapshot, #recycle…)
+    const fixed = pane.writable === false || list.some((e) => e.readonly || isDsmFolder(e));
     const shareObj = share ? this.shares.find((s) => "/" + s.name === entry.path) : null;
     const other = this.other();
     // inside an archive: read-only, and folders come out by copying
@@ -60,15 +67,16 @@ export const menuMethods = {
       !share && !ro && !remote && { label: t("Comprimi in .zip…"), icon: "archive", action: () => this.compress(pane) },
       "-",
       !share && { label: t("Copia"), icon: "copy", key: "Ctrl+C", action: () => this.setClipboard("copy", pane) },
-      !share && !ro && { label: t("Taglia"), icon: "cut", key: "Ctrl+X", action: () => this.setClipboard("cut", pane) },
+      !share && !ro && !fixed && { label: t("Taglia"), icon: "cut", key: "Ctrl+X", action: () => this.setClipboard("cut", pane) },
       dir && canPaste && !many && !ro && { label: t("Incolla dentro"), icon: "paste", action: () => this.paste(pane, entry.path) },
       !share && { label: t("Copia in…"), icon: "copy", key: other ? "F5" : "", action: () => (other ? this.toOtherPane("copy") : this.copyTo(pane, "copy")) },
-      !share && !ro && { label: t("Sposta in…"), icon: "move", key: other ? "F6" : "", action: () => (other ? this.toOtherPane("move") : this.copyTo(pane, "move")) },
+      !share && !ro && !fixed && { label: t("Sposta in…"), icon: "move", key: other ? "F6" : "", action: () => (other ? this.toOtherPane("move") : this.copyTo(pane, "move")) },
       !share && other && { label: t("Scegli cartella…"), icon: "move", action: () => this.copyTo(pane, "copy") },
       "-",
-      !many && !share && !ro && { label: t("Rinomina"), icon: "rename", key: "F2", action: () => this.renamePrompt(pane, entry) },
-      !share && !ro && { label: pane.recycle && !pane.path.includes("#recycle") ? t("Sposta nel Cestino") : t("Elimina"), icon: "trash", key: "Canc", danger: true, action: () => this.remove(pane) },
-      !share && !ro && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
+      !many && !share && !ro && !fixed && { label: t("Rinomina"), icon: "rename", key: "F2", action: () => this.renamePrompt(pane, entry) },
+      !share && !bin && !ro && !fixed && { label: pane.recycle && !pane.path.includes("#recycle") ? t("Sposta nel Cestino") : t("Elimina"), icon: "trash", key: "Canc", danger: true, action: () => this.remove(pane) },
+      !share && !bin && !ro && !fixed && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
+      !many && entry.full !== undefined && !ro && !remote && { label: t("Svuota il Cestino"), icon: "trash", danger: true, action: () => this.emptyBin(entry.path) },
       "-",
       dir && { label: t("Calcola dimensione"), icon: "drive", action: () => this.computeSizes(pane, list) },
       !many && dir && !ro && !remote && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(entry.path) },

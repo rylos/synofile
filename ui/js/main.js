@@ -188,6 +188,8 @@ class App {
   refreshAfter(job) {
     if (job.op === "move" && job.state === "done" && !job.progress.errors) for (const p of job.info.sources) moveFolderIcons(p, joinPath(job.info.dest, baseName(p)));
     const dirs = new Set(job.info.sources.map(parentOf));
+    // a deletion fills or empties a bin: the share's top shows which
+    if (job.op === "delete") for (const p of job.info.sources) dirs.add("/" + p.split("/")[1]);
     if (job.info.dest) dirs.add(job.info.dest);
     this.refreshFolders([...dirs]);
     this.loadShares();

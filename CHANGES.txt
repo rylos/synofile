@@ -1,3 +1,12 @@
+v0.8.13
+- Empty the Recycle Bin: from the right-click menu of a #recycle folder, from inside it, and from the menu of a shared folder in the sidebar. It asks first; what is in the bin is deleted for good.
+- The #recycle folder's icon shows whether the bin is full or empty. The bin folder itself can no longer be moved to the bin or deleted: it is emptied instead.
+- System folders in grey (Settings → Look, on by default): #recycle, #snapshot, #archive, @tmp, @sharebin, $RECYCLE.BIN, System Volume Information, .Trash-*, .Spotlight-V100, .fseventsd, .TemporaryItems, lost+found. A colour given by hand wins; the bin keeps showing full or empty in that colour.
+- The "backup" folder had a skull and crossbones by mistake: now it has the backup icon (a clock with an arrow).
+- The "dev" folder's braces are both solid, instead of one outlined and one solid.
+- Read-only snapshots (btrbk's, DSM's #snapshot) and what is inside them cannot be cut, moved, renamed or deleted: those items are no longer in the menu, and Del, F2 and Ctrl+X do nothing there. Copying out still works, and dragging out of a snapshot copies instead of moving.
+- The same for DSM's own folders (#snapshot, #recycle, #archive, @tmp, @sharebin): they cannot be cut, moved, renamed or deleted.
+
 v0.8.12
 - Administrators can open and read any folder, even one their user has no permission on: for example a btrbk backup received from a PC, owned by that PC's user, or a read-only snapshot. Preview, download and copying out work there; changing files still follows the user's own permissions. Run setup after installing (as always): it adds the read capability.
 
