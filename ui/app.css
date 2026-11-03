@@ -213,6 +213,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .side-item .si-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .side-item .si-sub { color: var(--faint); font-size: 11px; display: block; }
 .si-badge { font-size: 10px; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.si-lock { display: inline-grid; place-items: center; color: var(--muted); cursor: help; }
+.si-lock .i { width: 13px; height: 13px; }
 .vol-bar { height: 3px; background: var(--surface-3); border-radius: 2px; margin-top: 4px; overflow: hidden; }
 .vol-bar > div { height: 100%; background: var(--accent); border-radius: 2px; }
 .vol-bar.high > div { background: var(--warn); }

@@ -21,7 +21,7 @@ export class Tab {
   ensureLoaded() {
     if (this.loaded) return;
     this.loaded = true;
-    for (const p of this.panes) p.load();
+    this.ready = Promise.all(this.panes.map((p) => p.load()));
   }
   get pane() {
     return this.panes[this.active];
@@ -43,8 +43,38 @@ export const tabMethods = {
     const cur = this.tabs[prefs.startIn === "last" ? Math.min(saved?.current || 0, this.tabs.length - 1) : 0];
     // the other tabs load their folders when first shown
     this.switchTab(cur);
+    if (q.get("path") && q.get("select")) this.selectWhenReady(cur, q.get("select"));
     // ?space=/path opens its analysis (the README screenshot)
     if (q.get("space")) this.analyseSpace(q.get("space"));
+    // another DSM app opening a folder while the window is already up
+    // (SYNO.SDS.AppLaunch, relayed by synofile.js); one that came before
+    // the tabs existed waits for them
+    for (const m of this.pendingOpen || []) this.openAt(m.path, m.select);
+    this.pendingOpen = null;
+  },
+
+  /** Listens for the window's loader asking to open a folder. */
+  bindOpenMessages() {
+    addEventListener("message", (ev) => {
+      if (ev.source !== window.parent || ev.origin !== location.origin) return;
+      const m = ev.data;
+      if (m?.type !== "synofile:open" || typeof m.path !== "string") return;
+      if (!this.tabs.length) (this.pendingOpen ||= []).push(m);
+      else this.openAt(m.path, m.select);
+    });
+  },
+
+  /** A new tab at path, with select (a name in it, or a full path) picked. */
+  openAt(path, select) {
+    const tab = this.newTab(path);
+    if (select) this.selectWhenReady(tab, select);
+  },
+
+  selectWhenReady(tab, select) {
+    tab.ensureLoaded();
+    const pane = tab.pane;
+    const full = select.startsWith("/") ? select : pane.path.replace(/\/$/, "") + "/" + select;
+    tab.ready?.then(() => pane.selectPath(full));
   },
 
   saveTabs() {

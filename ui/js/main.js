@@ -51,6 +51,7 @@ class App {
     $("#theme-toggle").onclick = () => this.toggleTheme();
     this.renderThemeButton();
     $("#open-settings").onclick = () => openSettings();
+    if (this.embedded) this.bindOpenMessages();
     addEventListener("synofile:unauth", () => this.needLogin());
     addEventListener("synofile:auth", () => this.sessionBack());
     // inside DSM the token is there at once; on its own the page asks DSM

@@ -10,11 +10,11 @@ SYNO.namespace("SYNO.SDS.SynoFile");
  */
 SYNO.SDS.SynoFile.Instance = Vue.extend({
     template:
-        '<v-app-instance class-name="SYNO.SDS.SynoFile.Instance">' +
+        '<v-app-instance class-name="SYNO.SDS.SynoFile.Instance" @openparamchanged="openParam">' +
         '<v-app-window ref="appWindow" syno-id="SYNO.SDS.SynoFile.Window"' +
         ' width="1240" height="780" :resizable="true">' +
-        '<iframe :src="src" title="SynoFile" allow="clipboard-write"' +
-        ' :style="frameStyle"></iframe>' +
+        '<iframe ref="frame" :src="src" title="SynoFile" allow="clipboard-write"' +
+        ' :style="frameStyle" @load="loaded = true"></iframe>' +
         "</v-app-window>" +
         "</v-app-instance>",
     data: function () {
@@ -26,10 +26,30 @@ SYNO.SDS.SynoFile.Instance = Vue.extend({
             }
         } catch (e) {}
         return {
+            loaded: false,
             // relative: under a Login Portal alias, DSM itself is at /alias/
             src: "webman/3rdparty/synofile/index.html?t=" + Date.now(),
             frameStyle: "display:block;width:100%;height:100%;border:0;background:" + (theme === "light" ? "#e6e7ed" : "#14171c"),
         };
+    },
+    /*
+     * Another app opening a folder: SYNO.SDS.AppLaunch("SYNO.SDS.SynoFile.
+     * Instance", { path: "/share/dir", select: "name" }), with the path as
+     * SynoFile shows it (share first, no /volumeN). DSM hands the params
+     * over for a new window and for the one already open alike: the first
+     * loads the page at the folder, the other gets a new tab there.
+     */
+    methods: {
+        openParam: function (inst, p) {
+            if (!p || typeof p.path !== "string" || !p.path) return;
+            var frame = this.$refs.frame;
+            if (this.loaded && frame && frame.contentWindow) {
+                frame.contentWindow.postMessage({ type: "synofile:open", path: p.path, select: p.select || "" }, location.origin);
+                return;
+            }
+            this.src = "webman/3rdparty/synofile/index.html?path=" + encodeURIComponent(p.path) +
+                (p.select ? "&select=" + encodeURIComponent(p.select) : "") + "&t=" + Date.now();
+        },
     },
     // alone in the browser (a Login Portal alias or port): the tab says
     // SynoFile, with its icon, as DSM's own windows do

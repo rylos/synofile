@@ -1,3 +1,7 @@
+v0.8.11
+- Other DSM apps can open SynoFile at a folder: SYNO.SDS.AppLaunch("SYNO.SDS.SynoFile.Instance", { path: "/share/folder", select: "name" }). The window opens there, or, if already open, a new tab; select (optional) picks an item in it. The page takes ?path=…&select=… too.
+- The lock beside an encrypted shared folder is a line icon in the sidebar's grey, instead of the emoji in a box.
+
 v0.8.10
 - A columns view (Ctrl+3, or the third button beside list and grid): the folders above stand in columns on the left, each with the way down marked, and the folder under the cursor shows its contents on the right. Right arrow goes in, left arrow back up.
 - The info panel of a photo, a video or a song shows its size in pixels, duration, video and audio codecs, bitrate and subtitles, and the photo's camera, lens, exposure, date taken and place (with a link to the map). Camera RAW files too.
