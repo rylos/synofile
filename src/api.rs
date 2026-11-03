@@ -412,6 +412,14 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             }
             reply(out, &fsops::details(&real)?)
         }
+        "media" => {
+            let real = path_param("path")?;
+            // inside an archive there is no file to read: nothing to tell
+            if in_archive(&real)?.is_some_and(|(_, inner, _)| !inner.is_empty()) {
+                return reply(out, &json!({}));
+            }
+            reply(out, &crate::media::describe(&real))
+        }
         "usage" => {
             method(req, "POST")?;
             let body: Paths = req.json()?;

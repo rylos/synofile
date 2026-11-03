@@ -43,6 +43,7 @@ export const keyMethods = {
       if (ctrl && k.toLowerCase() === "i") return run(() => this.toggleInfo());
       if (ctrl && k === "1") return run(() => pane.setView("list"));
       if (ctrl && k === "2") return run(() => pane.setView("grid"));
+      if (ctrl && k === "3") return run(() => pane.setView("columns"));
       if (ctrl && k.toLowerCase() === "a") return run(() => pane.selectAll());
       if (ctrl && e.shiftKey && k.toLowerCase() === "c") return run(() => this.copyPaths(pane.targets(), isRemote(pane.path) ? "smb" : "nas"));
       if (ctrl && k.toLowerCase() === "c") return run(() => this.setClipboard("copy", pane));
@@ -93,6 +94,16 @@ export const keyMethods = {
       const step = grid ? pane.perRow || 1 : 1;
       const nav = { ArrowDown: step, ArrowUp: -step, PageDown: pane.pageSize(), PageUp: -pane.pageSize() };
       if (grid) Object.assign(nav, { ArrowRight: 1, ArrowLeft: -1 });
+      // columns: right goes into the folder under the cursor, left back up
+      if (pane.view === "columns" && !e.shiftKey && !ctrl && !e.altKey) {
+        if (k === "ArrowLeft") return run(() => pane.path !== "/" && pane.goUp());
+        if (k === "ArrowRight") return run(async () => {
+          const cur = pane.visible[pane.cursor];
+          if (!cur || !isDirLike(cur)) return;
+          await pane.go(cur.path);
+          pane.moveCursor(0);
+        });
+      }
       const opts = { extend: e.shiftKey, toggle: ctrl };
       if (k in nav) return run(() => pane.moveCursor(pane.cursor + nav[k], opts));
       if (k === "Home") return run(() => pane.moveCursor(0, opts));

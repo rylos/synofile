@@ -21,7 +21,7 @@ export const KEYS = [
   ["Invio", "Apri"], ["Backspace / Alt+↑", "Cartella superiore"], ["Alt+← / Alt+→", "Indietro / avanti"],
   ["Spazio", "Anteprima rapida"], ["Ctrl+I", "Pannello informazioni"], ["Ctrl+H", "Mostra o nascondi i file nascosti"],
   ["Ctrl+L", "Scrivi un percorso"], ["/", "Filtro fuzzy della cartella"], ["Ctrl+F", "Cerca nelle sottocartelle"],
-  ["Ctrl+1 / Ctrl+2", "Elenco / griglia"], ["Ctrl+B", "Barra laterale"], ["Ctrl+R", "Aggiorna"],
+  ["Ctrl+1 / Ctrl+2 / Ctrl+3", "Elenco / griglia / colonne"], ["Ctrl+B", "Barra laterale"], ["Ctrl+R", "Aggiorna"],
   ["Ctrl+C / Ctrl+X / Ctrl+V", "Copia / taglia / incolla"], ["Ctrl+A", "Seleziona tutto"], ["Ctrl+Shift+I", "Inverti selezione"],
   ["Insert", "Seleziona e vai avanti"], ["F2", "Rinomina"], ["Ctrl+Shift+N", "Nuova cartella"],
   ["Canc", "Sposta nel cestino"], ["Shift+Canc", "Elimina definitivamente"], ["Ctrl+D", "Aggiungi ai preferiti"],

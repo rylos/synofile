@@ -3,8 +3,8 @@
 
 import { api } from "./api.js";
 import { prefs } from "./prefs.js";
-import { t, count } from "./i18n.js";
-import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
+import { t, count, LOCALE } from "./i18n.js";
+import { esc, size, sizeParts, ezaDate, relative, dateTime, duration, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
 import { pickIcon } from "./iconpick.js";
 import { h, $, errorToast, toast } from "./ui.js";
@@ -28,6 +28,45 @@ const GRID_IMAGE_MAX = 8 * 1024 * 1024;
 const GRID_IMAGE_MAX_SLOW = 2 * 1024 * 1024;
 // the info panel waits for the selection to settle before reading the item
 const INFO_DELAY = 120;
+
+// camera RAW files: not shown as pictures, but their EXIF is worth reading
+const RAW_EXT = /\.(cr2|cr3|nef|nrw|arw|srf|sr2|dng|raf|orf|rw2|pef|srw|iiq|3fr|x3f)$/i;
+const isMedia = (e) => ["image", "video", "audio"].includes(previewKind(e)) || RAW_EXT.test(e.name);
+const num = (n, digits = 0) => n.toLocaleString(LOCALE, { maximumFractionDigits: digits });
+
+/** The info panel's lines for a photo, a video or a song (route media). */
+function mediaFacts(m) {
+  const rows = [];
+  const add = (label, value) => value && rows.push(`<dt>${label}</dt><dd>${value}</dd>`);
+  if (m.width && m.height) {
+    const mp = (m.width * m.height) / 1e6;
+    add(t("Dimensioni"), `${int(m.width)} × ${int(m.height)}${!m.duration && mp >= 1 ? ` <span style="color:var(--faint)">(${num(mp, 1)} MP)</span>` : ""}`);
+  }
+  if (m.duration) add(t("Durata"), esc(duration(m.duration * 1000)));
+  if (m.video) add(t("Video"), esc([m.video.codec, m.video.fps && `${num(m.video.fps, 2)} fps`, m.video.hdr].filter(Boolean).join(" · ")));
+  if (m.audio) {
+    const tracks = m.audioTracks > 1 ? t("{n} tracce", { n: m.audioTracks }) : "";
+    add(t("Audio"), esc([m.audio.codec, m.audio.rate && `${num(m.audio.rate / 1000, 1)} kHz`, m.audio.channels, tracks].filter(Boolean).join(" · ")));
+  }
+  if (m.subtitles) add(t("Sottotitoli"), int(m.subtitles));
+  if (m.bitrate) add(t("Bitrate"), `${int(m.bitrate)} kb/s`);
+  add(t("Fotocamera"), m.camera && esc(m.camera));
+  add(t("Obiettivo"), m.lens && esc(m.lens));
+  const shot = [
+    m.aperture && `f/${num(m.aperture, 1)}`,
+    m.exposure && (m.exposure < 1 ? `1/${Math.round(1 / m.exposure)} s` : `${num(m.exposure, 1)} s`),
+    m.iso && `ISO ${int(m.iso)}`,
+    m.focal && `${num(m.focal, 1)} mm${m.focal35 && Math.round(m.focal35) !== Math.round(m.focal) ? ` (${int(m.focal35)} mm eq.)` : ""}`,
+  ].filter(Boolean);
+  add(t("Scatto"), shot.length && esc(shot.join(" · ")));
+  add(t("Data di ripresa"), m.taken && esc(m.taken));
+  if (m.gps) {
+    const [lat, lon] = m.gps;
+    const url = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
+    add(t("Posizione"), `<a href="${url}" target="_blank" rel="noopener noreferrer">${lat}, ${lon}</a>`);
+  }
+  return rows.join("");
+}
 
 // the row height of the list: a CSS variable that changes with size and density
 let rowCache = { key: "", height: 30 };
@@ -59,6 +98,10 @@ export class Pane {
     this.loadSeq = 0; // each load() takes a number: only the latest one shows
     this.infoTimer = 0;
     this.infoAbort = null;
+    this.colCache = new Map(); // listings of the other columns, path → entries
+    this.colSeq = 0;
+    this.nextSeq = 0;
+    this.nextTimer = 0;
     this.build();
   }
 
@@ -79,6 +122,7 @@ export class Pane {
         <div class="seg views">
           <button data-v="list" title="${t("Elenco")} (Ctrl+1)">${svg("list")}</button>
           <button data-v="grid" title="${t("Griglia")} (Ctrl+2)">${svg("grid")}</button>
+          <button data-v="columns" title="${t("Colonne")} (Ctrl+3)">${svg("columns")}</button>
         </div>
         <button class="icon-btn b-hidden" title="${t("File nascosti")} (Ctrl+H)">${svg("eye")}</button>
         <button class="icon-btn b-split" title="${t("Doppio pannello")} (F3)">${svg("split")}</button>
@@ -89,8 +133,10 @@ export class Pane {
       </div>
       <div class="pane-main">
         <div class="view" tabindex="-1">
+          <div class="mcols"></div>
           <div class="list-head"></div>
           <div class="scroller" tabindex="0"><div class="rows"></div></div>
+          <div class="mnext"></div>
         </div>
         <aside class="info" hidden></aside>
       </div>
@@ -102,6 +148,9 @@ export class Pane {
     this.scroller = $(".scroller", this.el);
     this.rowsEl = $(".rows", this.el);
     this.infoEl = $(".info", this.el);
+    this.viewEl = $(".view", this.el);
+    this.mcolsEl = $(".mcols", this.el);
+    this.mnextEl = $(".mnext", this.el);
     this.statusEl = $(".statusbar", this.el);
 
     $(".b-back", this.el).onclick = () => this.goBack();
@@ -201,6 +250,8 @@ export class Pane {
   }
 
   async reload() {
+    this.colCache.clear();
+    this.colKey = null;
     const keep = new Set(this.sel);
     const cursorPath = this.visible[this.cursor]?.path;
     await this.load();
@@ -232,6 +283,7 @@ export class Pane {
         const data = await api.list(this.path);
         if (stale()) return;
         this.entries = data.entries.map((e) => ({ ...e, path: joinPath(this.path, e.name) }));
+        this.cacheColumn(this.path, this.entries);
         // the shares of an SMB server: like shared folders, not to be moved
         if (data.remote?.top) this.entries.forEach((e) => (e.share = { name: e.name, remote: true }));
         this.remote = data.remote || null;
@@ -328,6 +380,7 @@ export class Pane {
 
   setView(view) {
     this.view = view;
+    $(".empty-state", this.el)?.remove();
     this.app.rememberView(view, this);
     this.render();
     this.ensureVisible();
@@ -517,6 +570,7 @@ export class Pane {
     this.paint(true);
     this.renderStatus();
     this.renderInfo();
+    this.renderColumns();
   }
 
   renderChrome() {
@@ -580,6 +634,7 @@ export class Pane {
   }
 
   columns() {
+    if (this.view === "columns") return [{ key: "name", label: "Nome", width: "minmax(0, 1fr)" }];
     const cols = [{ key: "name", label: "Nome", width: "minmax(160px, 1fr)" }];
     if (this.search) cols.push({ key: "dir", label: "Cartella", width: "minmax(100px, .6fr)", cls: "" });
     for (const [key, c] of Object.entries(COLS)) if (prefs.columns[key]) cols.push({ key, ...c });
@@ -590,9 +645,9 @@ export class Pane {
     this.barWidth = null;
     const grid = this.view === "list";
     this.headEl.hidden = !grid;
-    if (!grid) return;
     const cols = this.columns();
     this.template = cols.map((c) => c.width).join(" ");
+    if (!grid) return;
     this.headEl.style.gridTemplateColumns = this.template;
     this.headEl.innerHTML = cols
       .map((c) => {
@@ -621,7 +676,8 @@ export class Pane {
             ? t("Nessun elemento corrisponde al filtro")
             : t("Cartella vuota");
       const html = `<div><i class="gi">${glyph({ kind: "d", name: "" })}</i>${msg}</div>`;
-      if (!empty) $(".view", this.el).append(h(`<div class="empty-state">${html}</div>`));
+      // in columns the message stays in the column of this folder
+      if (!empty) (this.view === "columns" ? this.scroller : this.viewEl).append(h(`<div class="empty-state">${html}</div>`));
       else empty.innerHTML = html;
     } else if (empty) empty.remove();
 
@@ -792,6 +848,10 @@ export class Pane {
    * down do not read every item's preview and owner on the way.
    */
   renderInfo() {
+    if (this.view === "columns") {
+      clearTimeout(this.nextTimer);
+      this.nextTimer = setTimeout(() => this.drawNext(), INFO_DELAY);
+    }
     this.infoEl.hidden = !prefs.info;
     clearTimeout(this.infoTimer);
     this.infoAbort?.abort();
@@ -876,6 +936,12 @@ export class Pane {
       } else if (st.remote) $(".owner", this.infoEl).textContent = st.server;
       else $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
       if (st.target) $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Destinazione")}</dt><dd style="font-family:var(--mono)">${esc(st.target)}</dd>`);
+      if (!st.archive && !st.remote && isMedia(e)) {
+        const m = await api.media(e.path, controller.signal);
+        if (controller.signal.aborted) return;
+        const html = mediaFacts(m);
+        if (html) $(".facts", this.infoEl).insertAdjacentHTML("afterend", `<dl class="facts media">${html}</dl>`);
+      }
     } catch {
       if (!controller.signal.aborted) $(".owner", this.infoEl).textContent = "—";
     } finally {
@@ -884,6 +950,139 @@ export class Pane {
   }
 
   // ---------- pointer ----------
+  // ---------- columns view ----------
+  // The folders above this one stand in columns on the left, each with the
+  // way down marked; this folder is the list in the middle, with all the
+  // usual keys and actions; the folder under the cursor peeks on the right.
+
+  cacheColumn(path, entries) {
+    this.colCache.delete(path);
+    this.colCache.set(path, entries);
+    // the 40 latest are plenty: a long path, and a few folders peeked at
+    while (this.colCache.size > 40) this.colCache.delete(this.colCache.keys().next().value);
+  }
+
+  async columnList(path) {
+    if (this.colCache.has(path)) return this.colCache.get(path);
+    let entries;
+    if (path === "/") {
+      const shares = await this.app.freshShares();
+      entries = shares.map((s) => ({ name: s.name, kind: "d", size: 0, mtime: 0, mode: 0o755, path: "/" + s.name, share: s }));
+    } else {
+      const data = await api.list(path);
+      entries = data.entries.map((e) => ({ ...e, path: joinPath(path, e.name) }));
+    }
+    this.cacheColumn(path, entries);
+    return entries;
+  }
+
+  /** The other columns: by name, folders first, hidden files as the pane shows them. */
+  sortColumn(entries) {
+    const list = prefs.showHidden ? [...entries] : entries.filter((e) => !isHidden(e));
+    return list.sort((a, b) => (prefs.foldersFirst ? (isDirLike(b) ? 1 : 0) - (isDirLike(a) ? 1 : 0) : 0) || collator.compare(a.name, b.name));
+  }
+
+  columnHTML(path, entries, on) {
+    let html = `<div class="mcol" data-path="${esc(path)}">`;
+    for (const e of this.sortColumn(entries)) {
+      const dir = isDirLike(e);
+      html += `<div class="mrow${e.path === on ? " on" : ""}${isHidden(e) ? " hidden-file" : ""}${dir ? " dir" : ""}" data-p="${esc(e.path)}" title="${esc(e.name)}">${iconHTML(e)}<span class="nm ${colorClass(e)}">${esc(e.name)}</span>${dir ? `<span class="mchev">${svg("chev")}</span>` : ""}</div>`;
+    }
+    return html + `</div>`;
+  }
+
+  /** A column's rows: a click opens that folder with the row picked, as Finder does. */
+  bindColumn(col) {
+    const path = col.dataset.path;
+    col.addEventListener("click", (ev) => {
+      const row = ev.target.closest(".mrow");
+      if (row) this.go(path, { select: row.dataset.p });
+    });
+    col.addEventListener("dblclick", (ev) => {
+      const row = ev.target.closest(".mrow");
+      const e = row && !row.classList.contains("dir") && this.colCache.get(path)?.find((x) => x.path === row.dataset.p);
+      if (e) this.app.open(this, e);
+    });
+    col.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    this.app.makeDropTarget(col, (ev) => {
+      const row = ev?.target.closest(".mrow.dir");
+      return row ? row.dataset.p : path === "/" ? null : path;
+    }, (ev) => ev.target.closest(".mrow.dir") || col);
+    const on = $(".mrow.on", col);
+    if (on) col.scrollTop = on.offsetTop - col.clientHeight / 2 + on.offsetHeight / 2;
+  }
+
+  /** The columns of the folders above this one, from the shared folders (or the connection) down. */
+  async renderColumns() {
+    if (this.view !== "columns") {
+      this.mcolsEl.replaceChildren();
+      this.mnextEl.replaceChildren();
+      this.viewEl.classList.remove("columns");
+      return;
+    }
+    this.viewEl.classList.add("columns");
+    const parts = this.path.split("/").filter(Boolean);
+    let base = "/";
+    if (isRemote(this.path)) base = "/" + parts.shift();
+    const chain = [];
+    let acc = base === "/" ? "" : base;
+    let at = base;
+    for (const p of parts) {
+      acc += "/" + p;
+      chain.push([at, acc]);
+      at = acc;
+    }
+    const key = `${prefs.showHidden}:${prefs.foldersFirst}:` + chain.map((c) => c.join(">")).join("|");
+    const seq = ++this.colSeq;
+    // the same columns as now (a selection change, a repaint): leave them be
+    if (key === this.colKey && this.mcolsEl.childElementCount === chain.length) return this.scrollColumns();
+    this.colKey = key;
+    const lists = await Promise.all(chain.map(([dir]) => this.columnList(dir).catch(() => [])));
+    if (seq !== this.colSeq || this.view !== "columns") return;
+    this.mcolsEl.innerHTML = chain.map(([dir, on], i) => this.columnHTML(dir, lists[i], on)).join("");
+    this.mcolsEl.querySelectorAll(".mcol").forEach((c) => this.bindColumn(c));
+    this.scrollColumns();
+  }
+
+  /** Keep the folder in view and the one peeked at beside it. */
+  scrollColumns() {
+    // this folder's column always whole; the one peeked at beside it as far as it fits
+    const v = this.viewEl;
+    v.scrollLeft = Math.max(0, Math.min(this.scroller.offsetLeft, v.scrollWidth - v.clientWidth));
+  }
+
+  /** The right-hand column: what the folder under the cursor holds, or the file itself. */
+  async drawNext() {
+    if (this.view !== "columns") return;
+    const list = this.selected();
+    const e = list.length === 1 ? list[0] : null;
+    const seq = ++this.nextSeq;
+    if (!e) return this.mnextEl.replaceChildren();
+    if (isDirLike(e) && !this.search) {
+      let entries;
+      try {
+        entries = await this.columnList(e.path);
+      } catch (err) {
+        if (seq === this.nextSeq) this.mnextEl.innerHTML = `<div class="mnote" style="color:var(--crit)">${esc(err.message)}</div>`;
+        return;
+      }
+      if (seq !== this.nextSeq) return;
+      this.mnextEl.innerHTML = entries.length ? this.columnHTML(e.path, entries, null) : `<div class="mnote">${t("Cartella vuota")}</div>`;
+      const col = $(".mcol", this.mnextEl);
+      if (col) this.bindColumn(col);
+    } else if (!isDirLike(e) && !prefs.info) {
+      // with the info panel open the file is shown there already
+      const kind = previewKind(e);
+      let preview = iconHTML(e, "keep");
+      if (e.thumb) preview = `<img src="${api.thumb(e.path, true)}" alt="">`;
+      else if (kind === "image" && e.size < 15 * 1024 * 1024 && !/\.(heic|heif|tiff?)$/i.test(e.name)) preview = `<img src="${api.view(e.path)}" alt="">`;
+      else if (isHeic(e.name) && e.size < HEIC_LIMIT) preview += `<img data-heic alt="">`;
+      this.mnextEl.innerHTML = `<div class="mfile"><div class="preview-box">${preview}</div><div class="mfname">${esc(e.name)}</div><div class="mfsub">${esc(kindLabel(e))} · ${size(e.size)}</div><div class="mfsub">${esc(dateTime(e.mtime))}</div></div>`;
+      fillHeic(this.mnextEl, () => e, 1024);
+    } else this.mnextEl.replaceChildren();
+    this.scrollColumns();
+  }
+
   indexAt(target) {
     const el = target.closest(".row, .tile");
     return el ? +el.dataset.i : -1;

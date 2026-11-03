@@ -1,3 +1,8 @@
+v0.8.10
+- A columns view (Ctrl+3, or the third button beside list and grid): the folders above stand in columns on the left, each with the way down marked, and the folder under the cursor shows its contents on the right. Right arrow goes in, left arrow back up.
+- The info panel of a photo, a video or a song shows its size in pixels, duration, video and audio codecs, bitrate and subtitles, and the photo's camera, lens, exposure, date taken and place (with a link to the map). Camera RAW files too.
+- The right-click menu highlights the item under the mouse in the darker blue of selected rows, instead of a bright blue; Delete in a dark red.
+
 v0.8.9
 - The grey buttons (Cancel, Close…) in outline style too, like the coloured ones: a light border and bold text instead of a filled background.
 

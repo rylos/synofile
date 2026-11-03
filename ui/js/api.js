@@ -191,6 +191,7 @@ export const api = {
   shares: () => call("shares"),
   list: (path) => call("list", { params: { path } }),
   stat: (path, signal) => call("stat", { params: { path }, signal }),
+  media: (path, signal) => call("media", { params: { path }, signal }),
   usage: (paths) => call("usage", { body: { paths } }),
   space: (path) => call("space", { params: { path } }),
   mkdir: (path, name, parents) => call("mkdir", { params: { path, name, parents: parents ? 1 : undefined }, body: {} }),
