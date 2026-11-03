@@ -1,3 +1,6 @@
+v0.8.9
+- The grey buttons (Cancel, Close…) in outline style too, like the coloured ones: a light border and bold text instead of a filled background.
+
 v0.8.8
 - Buttons in outline style: the main ones (Done, Save…) and the dangerous ones (Delete…) have a coloured border and text instead of a filled background.
 

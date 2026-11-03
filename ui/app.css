@@ -115,15 +115,15 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 12px; border-radius: 7px;
-  border: 1px solid var(--border-strong); background: var(--surface-2);
+  border: 1px solid var(--muted); background: transparent; font-weight: 600;
   cursor: pointer; white-space: nowrap;
 }
-.btn:hover { background: var(--surface-3); }
+.btn:hover { background: var(--surface-3); border-color: var(--text); }
 .btn.primary { background: transparent; border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .btn.primary:hover { background: var(--accent-soft); }
 .btn.danger { background: transparent; border-color: var(--crit); color: var(--crit); font-weight: 600; }
 .btn.danger:hover { background: var(--crit-soft); }
-.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); font-weight: 400; }
 .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
 .btn.small { padding: 3px 9px; font-size: .92em; }
 .btn:disabled { opacity: .45; pointer-events: none; }
