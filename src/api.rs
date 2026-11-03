@@ -133,7 +133,7 @@ fn package_only() -> Result<(), ApiError> {
 /// Becomes the DSM user for good, before touching the shared folders.
 fn become_user(user: &User) -> Result<(), ApiError> {
     identity::become_user(user).map_err(|e| ApiError::new(500, format!("cannot become {}: {e}", user.name)))?;
-    if !identity::dev() && !crate::caps::none_left() {
+    if !identity::dev() && !crate::caps::only_reading() {
         return Err(ApiError::new(500, "capabilities still held after dropping to the user"));
     }
     Ok(())

@@ -126,9 +126,12 @@ on the NAS tells whether setup ran and the transfer service is up.
 - DSM's web server runs `ui/api.cgi` per request as the package's
   unprivileged user. The static Rust binary asks DSM's `authenticate.cgi` who
   is logged in, refuses anyone outside `administrators`, then **becomes that
-  user** (groups, gid, uid, no capability left, `no_new_privs`) before it
-  touches a file.
-- That takes `CAP_SETUID` and `CAP_SETGID`. DSM 7 refuses `capabilities` in
+  user** (groups, gid, uid, `no_new_privs`) before it touches a file. The
+  only capability the user keeps is `CAP_DAC_READ_SEARCH`: an administrator
+  can open and read any folder (a backup owned by another machine's uid, a
+  read-only snapshot), while every change still goes through the user's
+  own permissions.
+- That takes `CAP_SETUID`, `CAP_SETGID` and `CAP_DAC_READ_SEARCH`. DSM 7 refuses `capabilities` in
   third-party packages (error 319), so `synofile setup`, as root, writes the
   file capability and gives the binaries to root.
 - `synofile daemon` keeps the transfers, reached over a Unix socket only the

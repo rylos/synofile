@@ -1,3 +1,6 @@
+v0.8.12
+- Administrators can open and read any folder, even one their user has no permission on: for example a btrbk backup received from a PC, owned by that PC's user, or a read-only snapshot. Preview, download and copying out work there; changing files still follows the user's own permissions. Run setup after installing (as always): it adds the read capability.
+
 v0.8.11
 - Other DSM apps can open SynoFile at a folder: SYNO.SDS.AppLaunch("SYNO.SDS.SynoFile.Instance", { path: "/share/folder", select: "name" }). The window opens there, or, if already open, a new tab; select (optional) picks an item in it. The page takes ?path=…&select=… too.
 - The lock beside an encrypted shared folder is a line icon in the sidebar's grey, instead of the emoji in a box.

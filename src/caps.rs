@@ -1,9 +1,12 @@
 //! The capabilities the package needs, and how they get there.
 //!
 //! Every file operation runs as the DSM user who asked for it, so the
-//! kernel applies that user's permissions and Synology ACLs. Becoming that
-//! user takes CAP_SETUID and CAP_SETGID, nothing more: the package never
-//! reads or writes a file with privileges of its own.
+//! kernel applies that user's permissions and Synology ACLs to everything
+//! that changes a file. Becoming that user takes CAP_SETUID and CAP_SETGID.
+//! Only administrators sign in to SynoFile, and an administrator may look
+//! everywhere: the user keeps CAP_DAC_READ_SEARCH, to read any file and
+//! open any folder (a backup received from another machine, owned by a uid
+//! the NAS does not know; a read-only snapshot). Writing stays the user's.
 //!
 //! DSM 7 refuses the `capabilities` field of conf/privilege in third-party
 //! packages ("invalid package privilege content", error 319), so the
@@ -17,6 +20,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
+const CAP_DAC_READ_SEARCH: u32 = 2;
 const CAP_SETGID: u32 = 6;
 const CAP_SETUID: u32 = 7;
 
@@ -26,6 +30,13 @@ const VFS_CAP_FLAGS_EFFECTIVE: u32 = 0x1;
 fn mask() -> u64 {
     (1 << CAP_SETUID) | (1 << CAP_SETGID)
 }
+
+/// What the binary carries: switching user, and reading everywhere.
+fn file_mask() -> u64 {
+    mask() | READ
+}
+
+const READ: u64 = 1 << CAP_DAC_READ_SEARCH;
 
 fn status_field(name: &str) -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
@@ -40,15 +51,16 @@ pub fn effective() -> bool {
     status_field("CapEff:").is_some_and(|eff| eff & mask() == mask())
 }
 
-/// Whether this process holds no capability at all, in any set.
-pub fn none_left() -> bool {
-    ["CapEff:", "CapPrm:", "CapInh:"].iter().all(|f| status_field(f) == Some(0))
+/// Whether this process holds no capability but reading, in any set: it
+/// can no longer become anyone else.
+pub fn only_reading() -> bool {
+    ["CapEff:", "CapPrm:", "CapInh:", "CapAmb:"].iter().all(|f| status_field(f).is_some_and(|v| v & !READ == 0))
 }
 
 /// The security.capability xattr value: revision 2, effective, permitted
-/// set = our two capabilities, nothing inheritable.
+/// set = our three capabilities, nothing inheritable.
 pub fn xattr_value() -> [u8; 20] {
-    let permitted = mask();
+    let permitted = file_mask();
     let words = [
         VFS_CAP_REVISION_2 | VFS_CAP_FLAGS_EFFECTIVE,
         permitted as u32,
@@ -111,30 +123,66 @@ pub fn install(binary: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Empties every capability set of the calling thread. Changing between
-/// two non-root uids keeps the permitted set, so dropping to a user does
-/// not do this by itself.
-pub fn clear() -> io::Result<()> {
-    #[repr(C)]
-    struct Header {
-        version: u32,
-        pid: i32,
-    }
-    #[repr(C)]
-    struct Data {
-        effective: u32,
-        permitted: u32,
-        inheritable: u32,
-    }
-    const LINUX_CAPABILITY_VERSION_3: u32 = 0x2008_0522;
+#[repr(C)]
+struct Header {
+    version: u32,
+    pid: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Data {
+    effective: u32,
+    permitted: u32,
+    inheritable: u32,
+}
+const LINUX_CAPABILITY_VERSION_3: u32 = 0x2008_0522;
+
+fn capset(bits: u32) -> io::Result<()> {
     let header = Header { version: LINUX_CAPABILITY_VERSION_3, pid: 0 };
-    let data = [Data { effective: 0, permitted: 0, inheritable: 0 }, Data { effective: 0, permitted: 0, inheritable: 0 }];
+    let none = Data { effective: 0, permitted: 0, inheritable: 0 };
+    let data = [Data { effective: bits, permitted: bits, inheritable: bits }, none];
     // SAFETY: the kernel reads a v3 header and two data structs
     let rc = unsafe { libc::syscall(libc::SYS_capset, &header as *const Header, data.as_ptr()) };
     if rc < 0 {
         return Err(io::Error::last_os_error());
     }
     Ok(())
+}
+
+/// After becoming the user: every capability goes but reading, which
+/// stays in every set and in the ambient one, so the programs the user's
+/// side runs (the worker, 7z, ffmpeg) read everywhere too. Without it in
+/// the permitted set (setup not run since an upgrade) nothing is left.
+/// Only system calls, no allocation: it runs between fork and exec.
+pub fn keep_reading() -> io::Result<()> {
+    let header = Header { version: LINUX_CAPABILITY_VERSION_3, pid: 0 };
+    let mut data = [Data { effective: 0, permitted: 0, inheritable: 0 }; 2];
+    // SAFETY: the kernel writes two data structs for a v3 header
+    let rc = unsafe { libc::syscall(libc::SYS_capget, &header as *const Header, data.as_mut_ptr()) };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let keep = data[0].permitted & READ as u32;
+    capset(keep)?;
+    if keep != 0 {
+        // SAFETY: plain prctl with integer arguments
+        let rc = unsafe {
+            libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_RAISE as libc::c_ulong, CAP_DAC_READ_SEARCH as libc::c_ulong, 0, 0)
+        };
+        if rc < 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+/// Empties every capability set of the calling thread. Changing between
+/// two non-root uids keeps the permitted set, so dropping to a user does
+/// not do this by itself.
+pub fn clear() -> io::Result<()> {
+    // SAFETY: plain prctl with integer arguments
+    unsafe { libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_CLEAR_ALL as libc::c_ulong, 0, 0, 0) };
+    capset(0)
 }
 
 /// `<target>/bin/synofile` of the installed package, as (target, bin);
@@ -151,8 +199,8 @@ mod tests {
 
     #[test]
     fn xattr_matches_setcap() {
-        // `setcap cap_setuid,cap_setgid+ep` writes exactly this
-        assert_eq!(xattr_value(), [0x01, 0, 0, 0x02, 0xc0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // `setcap cap_dac_read_search,cap_setuid,cap_setgid+ep` writes exactly this
+        assert_eq!(xattr_value(), [0x01, 0, 0, 0x02, 0xc4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     #[test]
