@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "synofile"
-version = "0.8.6"
+version = "0.8.7"
 dependencies = [
  "aes-gcm 0.10.3",
  "crc32fast",
@@ -3347,6 +3347,7 @@ dependencies = [
  "russh-sftp",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "smb",
  "tokio",
  "xxhash-rust",

@@ -16,6 +16,7 @@ mod edit;
 mod fsops;
 mod identity;
 mod jobs;
+mod names;
 mod remote;
 mod shares;
 mod space;

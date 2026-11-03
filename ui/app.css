@@ -687,6 +687,12 @@ dialog.xfer { max-width: min(96vw, 520px); }
 .drop-overlay div { padding: 14px 22px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); font-size: 15px; }
 
 .banner { margin: 10px; padding: 10px 14px; border-radius: 10px; background: var(--crit-soft); color: var(--crit); display: flex; gap: 10px; align-items: center; }
+/* messages over the panes (session, setup), one per kind */
+.body { position: relative; }
+.banners { position: absolute; z-index: 50; top: 4px; left: 240px; right: 0; display: flex; flex-direction: column; pointer-events: none; }
+.no-sidebar .banners { left: 0; }
+.banners .banner { pointer-events: auto; }
+.banner a { color: inherit; font-weight: 600; text-decoration: underline; white-space: nowrap; }
 .banner code { font-family: var(--mono); color: var(--text); background: var(--bg); padding: 2px 6px; border-radius: 4px; user-select: all; }
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
@@ -697,6 +703,7 @@ dialog.xfer { max-width: min(96vw, 520px); }
 
 @media (max-width: 760px) {
   .sidebar { display: none; }
+  .banners { left: 0; }
   .info { display: none; }
   .filter-box { width: 120px; }
   .xf-stats { grid-template-columns: repeat(2, 1fr); }

@@ -3,7 +3,7 @@
 // (/space) and sends a pruned tree; a click on a ring opens that folder,
 // the centre goes back up.
 
-import { api } from "./api.js";
+import { call } from "./api.js";
 import { t, count } from "./i18n.js";
 import { esc, size, int, baseName, joinPath } from "./format.js";
 import { svg, glyph, colorClass } from "./icons.js";
@@ -45,20 +45,27 @@ export function spaceAnalysis(path, onOpen) {
   const nodePath = (chain) => chain.slice(1).reduce((p, n) => joinPath(p, n.n), base);
   const here = () => nodePath(trail);
 
+  // each reading replaces the one before: closing, Aggiorna or a click
+  // elsewhere stop it, and a late answer is never drawn over a newer one
+  let reading = null;
   async function load(target) {
+    reading?.abort();
+    const mine = (reading = new AbortController());
     chart.innerHTML = `<div class="sp-wait"><div class="loading-bar"></div><span>${t("Analisi di {p}…", { p: esc(target) })}</span></div>`;
     stats.textContent = "";
     try {
-      const answer = await api.space(target);
-      if (closed) return;
+      const answer = await call("space", { params: { path: target }, signal: mine.signal });
+      if (closed || reading !== mine) return;
       data = answer;
       base = target;
       view = data.root;
       trail = [view];
       draw();
     } catch (e) {
-      if (closed) return;
+      if (closed || reading !== mine || e.name === "AbortError") return;
       chart.innerHTML = `<div class="sp-wait error">${esc(e.message)}</div>`;
+    } finally {
+      if (reading === mine) reading = null;
     }
   }
 
@@ -202,7 +209,10 @@ export function spaceAnalysis(path, onOpen) {
       up();
     }
   });
-  dlg.addEventListener("close", () => (closed = true));
+  dlg.addEventListener("close", () => {
+    closed = true;
+    reading?.abort();
+  });
   load(path).catch(errorToast);
 }
 

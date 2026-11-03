@@ -5,6 +5,7 @@
  "annullato": "geannuleerd",
  "archivi: copia prima i file sul NAS": "archieven: kopieer de bestanden eerst naar de NAS",
  "archivio protetto da password: usa «Estrai»": "archief met wachtwoord: gebruik ‘Uitpakken’",
+ "blocchi mancanti": "ontbrekende blokken",
  "blocco incompleto": "onvolledig blok",
  "blocco non valido": "ongeldig blok",
  "cartella condivisa {} inesistente": "gedeelde map {} bestaat niet",
@@ -91,5 +92,9 @@
  "il file è cambiato sul NAS da quando l'hai aperto": "het bestand is op de NAS gewijzigd sinds je het opende",
  "il file è cambiato sul server da quando l'hai aperto": "het bestand is op de server gewijzigd sinds je het opende",
  "il file non è testo UTF-8: l'editor lo rovinerebbe": "het bestand is geen UTF-8-tekst: de editor zou het beschadigen",
- "non è un file di testo": "geen tekstbestand"
+ "non è un file di testo": "geen tekstbestand",
+ "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "de prullenbak van DSM kan het niet opnemen (bereikt via een symbolische koppeling buiten de gedeelde map?): het is niet verwijderd",
+ "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "de sleutel van de server is nog niet gecontroleerd: open Verbinding bewerken en sla op",
+ "la chiave delle connessioni è danneggiata": "de sleutel van de verbindingen is beschadigd",
+ "pulizia dei file temporanei in corso: riprova tra poco": "de tijdelijke bestanden worden nog opgeruimd: probeer het zo opnieuw"
 }

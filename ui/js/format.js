@@ -152,5 +152,8 @@ export function ext(name) {
   return i > 0 ? name.slice(i + 1).toLowerCase() : "";
 }
 
+/** A folder, or a link to one: what opens on a double click. */
+export const isDirLike = (e) => e.kind === "d" || !!e.link_dir;
+
 /** Natural order: "file2" before "file10", accents and case folded. */
 export const collator = { compare: (a, b) => intl().collator.compare(a, b) };

@@ -270,4 +270,12 @@ export default {
   "Utenti e gruppi": "Users and groups",
   "Aggiungi utente o gruppo: cerca per nome…": "Add a user or group: search by name…",
   "Modifiche da salvare: {n}": "Changes to save: {n}",
+  "errore {n}": "error {n}",
+  "Accedi a DSM": "Sign in to DSM",
+  "Nessuna sessione DSM: accedi a DSM, poi torna qui.": "No DSM session: sign in to DSM, then come back here.",
+  "Rilascia per caricare in": "Drop to upload to",
+  "Pulisci completati": "Clear finished",
+  "Posizioni": "Places",
+  "Sessione DSM scaduta": "DSM session expired",
+  "Salvate {a} modifiche su {n}, le altre no: {e}": "Saved {a} of {n} changes, not the others: {e}",
 };

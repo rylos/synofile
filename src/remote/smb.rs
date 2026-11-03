@@ -35,8 +35,7 @@ pub struct Smb {
 
 impl Smb {
     pub fn connect(conn: &Conn) -> io::Result<Self> {
-        let mut config = ClientConfig::default();
-        config.dfs = false;
+        let mut config = ClientConfig { dfs: false, ..Default::default() };
         config.connection.timeout = Some(Duration::from_secs(20));
         if conn.port != 0 {
             config.connection.port = Some(conn.port);
@@ -274,7 +273,7 @@ impl Fs for Smb {
 
     fn space(&self, path: &[String]) -> Option<(u64, u64)> {
         let share = path.first()?;
-        let r = self.open(&[share.clone()], &FileCreateArgs::make_open_existing(FileAccessMask::new().with_file_read_attributes(true))).ok()?;
+        let r = self.open(std::slice::from_ref(share), &FileCreateArgs::make_open_existing(FileAccessMask::new().with_file_read_attributes(true))).ok()?;
         let info = match &r {
             Resource::Directory(d) => d.query_fs_info::<FileFsFullSizeInformation>().ok(),
             _ => None,

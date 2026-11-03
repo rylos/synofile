@@ -507,4 +507,12 @@ export default {
   "Utenti e gruppi": "Usuários e grupos",
   "Aggiungi utente o gruppo: cerca per nome…": "Adicionar usuário ou grupo: buscar por nome…",
   "Modifiche da salvare: {n}": "Alterações a salvar: {n}",
+  "errore {n}": "erro {n}",
+  "Accedi a DSM": "Entrar no DSM",
+  "Nessuna sessione DSM: accedi a DSM, poi torna qui.": "Nenhuma sessão do DSM: entre no DSM e depois volte aqui.",
+  "Rilascia per caricare in": "Solte para enviar para",
+  "Pulisci completati": "Limpar concluídos",
+  "Posizioni": "Locais",
+  "Sessione DSM scaduta": "Sessão do DSM expirada",
+  "Salvate {a} modifiche su {n}, le altre no: {e}": "Salvas {a} de {n} alterações, as demais não: {e}",
 };

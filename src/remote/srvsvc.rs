@@ -48,7 +48,7 @@ fn put_string(b: &mut Vec<u8>, s: &str) {
     for c in w {
         b.extend(c.to_le_bytes());
     }
-    while b.len() % 4 != 0 {
+    while !b.len().is_multiple_of(4) {
         b.push(0);
     }
 }

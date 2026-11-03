@@ -1,3 +1,15 @@
+v0.8.7
+- SynoFile opened from its own address (webman/3rdparty/synofile/index.html) with DSM's session expired now says so with a "Log in to DSM" link, and reloads by itself once you are back with a session. A new DSM login in another tab no longer leaves an open SynoFile stuck on "session expired": it takes the new session and goes on.
+- Bug fix for uploading folders with subfolders: only the first level was created and the files further down failed.
+- Bug fix for uploads to SMB and SFTP connections, broken by the four chunks at once of 0.8.6.
+- Uploads: a file whose answer got lost on the way is no longer reported as failed; two uploads of the same name no longer mix; a failed or cancelled file leaves nothing behind (and leftovers older than a day are cleared); "Newer" really keeps the newer file instead of always overwriting; "Skip" on an existing folder now merges it, uploading what is missing; a full disk or an expired session stops the transfer with one message instead of retrying every file.
+- Deleting to the Recycle Bin through a symbolic link that leads out of the shared folder no longer deletes for good: the item is left in place with an error.
+- Security: the password of a RAR archive no longer shows in the process list; interrupted jobs no longer keep connection passwords in their journal; an SFTP server's key is remembered even when the first login fails, instead of trusting any key from then on; the temporary files of uploads and of the editor no longer follow symbolic links.
+- The editor saving to a symbolic link saves the file it points to and keeps the link; a full disk while saving no longer leaves the file empty.
+- Faster: DSM's check of the session is remembered for 20 seconds instead of running on every request (about 16 ms to 5 ms per request); the page starts with one request instead of five; folders with thousands of photos list much faster; the page asks the NAS for transfers every minute instead of every 6 seconds when nothing is running, and not at all while hidden.
+- The interface no longer redraws every pane at each folder change (a double click could get lost), a slow answer no longer shows a folder other than the one opened, the info panel waits for the selection to settle, the keyboard Menu key opens the menu of the current item, and the folder picker enters a folder on double click.
+- Smaller fixes: the speed chart no longer repeats samples after Retry, the transfer drawer and the space analysis no longer pile up work, the Permissions dialog reports what was saved when a save stops halfway, Compress with an invalid name says why, smb:// addresses with # or ? are copied right, and the last untranslated strings are translated.
+
 v0.8.6
 - Uploads from the browser twice as fast: four chunks of 16 MiB go at once instead of one of 8 MiB, so DSM's check of the session on every chunk no longer holds them up. From 120 to about 245 MiB/s on 2.5 GbE, close to SMB.
 

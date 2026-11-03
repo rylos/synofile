@@ -4,7 +4,7 @@
 import { api } from "./api.js";
 import { prefs } from "./prefs.js";
 import { t, count } from "./i18n.js";
-import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator, joinPath, parentOf, baseName, int } from "./format.js";
+import { esc, size, sizeParts, ezaDate, relative, dateTime, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph } from "./icons.js";
 import { pickIcon } from "./iconpick.js";
 import { h, $, errorToast, toast } from "./ui.js";
@@ -22,7 +22,15 @@ const COLS = {
 
 const isHidden = (e) => e.name.startsWith(".");
 const isToday = (sec) => sec > 0 && new Date(sec * 1000).toDateString() === new Date().toDateString();
-const isDirLike = (e) => e.kind === "d" || e.link_dir;
+// pictures a grid draws from the original file, when the NAS has no thumbnail
+const GRID_IMAGE_MAX = 8 * 1024 * 1024;
+// on a remote server or a USB drive each one is read in full: small ones only
+const GRID_IMAGE_MAX_SLOW = 2 * 1024 * 1024;
+// the info panel waits for the selection to settle before reading the item
+const INFO_DELAY = 120;
+
+// the row height of the list: a CSS variable that changes with size and density
+let rowCache = { key: "", height: 30 };
 
 export class Pane {
   constructor(app, state = {}) {
@@ -48,6 +56,9 @@ export class Pane {
     this.recycle = false;
     this.dirSizes = new Map();
     this.typeahead = { text: "", at: 0 };
+    this.loadSeq = 0; // each load() takes a number: only the latest one shows
+    this.infoTimer = 0;
+    this.infoAbort = null;
     this.build();
   }
 
@@ -139,7 +150,10 @@ export class Pane {
   }
 
   rowHeight() {
-    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--row")) || 30;
+    const root = document.documentElement;
+    const key = `${root.dataset.size}/${root.dataset.density}`;
+    if (rowCache.key !== key) rowCache = { key, height: parseFloat(getComputedStyle(root).getPropertyValue("--row")) || 30 };
+    return rowCache.height;
   }
 
   // ---------- navigation ----------
@@ -197,13 +211,16 @@ export class Pane {
   }
 
   async load() {
+    // A→B→A: only the latest load may show, even for the same path
+    const seq = ++this.loadSeq;
+    const stale = () => seq !== this.loadSeq;
     this.loading = true;
     this.error = null;
     this.renderChrome();
-    const myPath = this.path;
     try {
       if (this.path === "/") {
-        const { shares } = await api.shares();
+        const shares = await this.app.freshShares();
+        if (stale()) return;
         this.entries = shares.map((s) => ({
           name: s.name, kind: "d", size: 0, mtime: 0, mode: 0o755, path: "/" + s.name, share: s,
         }));
@@ -213,7 +230,7 @@ export class Pane {
         this.remote = null;
       } else {
         const data = await api.list(this.path);
-        if (myPath !== this.path) return;
+        if (stale()) return;
         this.entries = data.entries.map((e) => ({ ...e, path: joinPath(this.path, e.name) }));
         // the shares of an SMB server: like shared folders, not to be moved
         if (data.remote?.top) this.entries.forEach((e) => (e.share = { name: e.name, remote: true }));
@@ -229,11 +246,11 @@ export class Pane {
         }
       }
     } catch (e) {
-      if (myPath !== this.path) return;
+      if (stale()) return;
       this.entries = [];
       this.error = e.message;
     } finally {
-      if (myPath === this.path) {
+      if (!stale()) {
         this.loading = false;
         this.refilter();
         this.render();
@@ -718,6 +735,8 @@ export class Pane {
     this.paintKey = key;
     this.paintList = list;
     const cut = this.app.cutPaths();
+    const slow = isRemote(this.path) || !!this.app.removableShare(this.path);
+    const imageMax = slow ? GRID_IMAGE_MAX_SLOW : GRID_IMAGE_MAX;
     let html = "";
     for (let r = firstRow; r < lastRow; r++) {
       for (let c = 0; c < this.perRow; c++) {
@@ -728,8 +747,8 @@ export class Pane {
         const kind = previewKind(e);
         let thumb = iconHTML(e, "keep");
         if (e.thumb) thumb = `<img loading="lazy" src="${api.thumb(e.path)}" alt="">`;
-        else if (kind === "image" && e.size < 8 * 1024 * 1024 && !/\.(heic|heif|tiff?)$/i.test(e.name)) thumb = `<img loading="lazy" src="${api.view(e.path)}" alt="">`;
-        else if (isHeic(e.name) && e.size < HEIC_LIMIT) thumb += `<img data-heic alt="">`;
+        else if (kind === "image" && e.size < imageMax && !/\.(heic|heif|tiff?)$/i.test(e.name)) thumb = `<img loading="lazy" src="${api.view(e.path)}" alt="">`;
+        else if (isHeic(e.name) && e.size < Math.min(HEIC_LIMIT, imageMax)) thumb += `<img data-heic alt="">`;
         const sub = isDirLike(e) ? "" : size(e.size);
         html += `<div class="${cls}" data-i="${i}" draggable="true" style="left:${8 + c * cw}px;top:${4 + r * this.tileH}px;width:${cw - 6}px;height:${this.tileH - 6}px">
           <div class="thumb">${thumb}</div><div class="tname ${colorClass(e)}" title="${esc(e.name)}">${esc(e.name)}</div>${sub ? `<div class="tsub">${sub}</div>` : ""}</div>`;
@@ -768,12 +787,23 @@ export class Pane {
     this.statusEl.innerHTML = html;
   }
 
-  async renderInfo() {
+  /**
+   * The info panel follows the selection once it settles: arrows held
+   * down do not read every item's preview and owner on the way.
+   */
+  renderInfo() {
     this.infoEl.hidden = !prefs.info;
+    clearTimeout(this.infoTimer);
+    this.infoAbort?.abort();
+    this.infoAbort = null;
+    if (!prefs.info) return;
+    this.infoTimer = setTimeout(() => this.drawInfo(), INFO_DELAY);
+  }
+
+  async drawInfo() {
     if (!prefs.info) return;
     // a folder just opened shows itself, not its first item
     const list = this.selected();
-    const token = (this.infoToken = Symbol());
     if (!list.length) {
       const name = (this.path.split("/").length === 2 && isRemote(this.path) ? this.app.connName(this.path) : baseName(this.path)) || t("Cartelle condivise");
       const dirEntry = { name, kind: "d", mode: 0o755, path: this.path };
@@ -836,9 +866,10 @@ export class Pane {
       $(".owner", this.infoEl).textContent = e.share.comment || "—";
       return;
     }
+    const controller = (this.infoAbort = new AbortController());
     try {
-      const st = await api.stat(e.path);
-      if (token !== this.infoToken) return;
+      const st = await api.stat(e.path, controller.signal);
+      if (controller.signal.aborted) return;
       if (st.archive) {
         $(".owner", this.infoEl).textContent = "—";
         $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Archivio")}</dt><dd>${esc(st.owner)}</dd>`);
@@ -846,7 +877,9 @@ export class Pane {
       else $(".owner", this.infoEl).textContent = `${st.owner} : ${st.group}`;
       if (st.target) $(".facts", this.infoEl).insertAdjacentHTML("beforeend", `<dt>${t("Destinazione")}</dt><dd style="font-family:var(--mono)">${esc(st.target)}</dd>`);
     } catch {
-      if (token === this.infoToken) $(".owner", this.infoEl).textContent = "—";
+      if (!controller.signal.aborted) $(".owner", this.infoEl).textContent = "—";
+    } finally {
+      if (this.infoAbort === controller) this.infoAbort = null;
     }
   }
 
@@ -884,6 +917,8 @@ export class Pane {
     });
     s.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();
+      // the Menu key or Shift+F10: the item under the cursor, not the empty space
+      if (ev.button !== 2 && !["mouse", "pen", "touch"].includes(ev.pointerType) && this.indexAt(ev.target) < 0) return this.keyboardMenu();
       const i = this.indexAt(ev.target);
       if (i >= 0 && !this.sel.has(this.visible[i].path)) this.moveCursor(i);
       if (i < 0) {
@@ -957,6 +992,22 @@ export class Pane {
       ev.dataTransfer.setDragImage(ghost, 10, 10);
       setTimeout(() => ghost.remove());
     });
+  }
+
+  /** The context menu opened from the keyboard, under the cursor's row. */
+  keyboardMenu() {
+    if (!this.visible.length) {
+      const r = this.scroller.getBoundingClientRect();
+      return this.app.contextMenu(this, null, r.left + 40, r.top + 20);
+    }
+    const cur = this.visible[this.cursor];
+    if (!this.sel.has(cur.path)) this.moveCursor(this.cursor);
+    else this.ensureVisible();
+    // scrolled into view just now: draw the rows there before measuring
+    this.paint();
+    const row = this.rowsEl.querySelector(`[data-i="${this.cursor}"]`);
+    const r = (row || this.scroller).getBoundingClientRect();
+    this.app.contextMenu(this, cur, r.left + Math.min(60, r.width / 2), row ? r.bottom : r.top + 20);
   }
 
   bindDrop() {

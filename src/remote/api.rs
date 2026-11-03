@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 
 use super::{Conn, Entry, Fs, Kind};
 use crate::cgi::{self, ApiError, Request};
-use crate::transfer;
+use crate::transfer::{self, UploadStore};
 
 fn reply(out: &mut impl Write, value: &impl serde::Serialize) -> Result<(), ApiError> {
     cgi::json(out, 200, value)?;
@@ -97,24 +97,37 @@ impl Edit {
     }
 }
 
+/// The user's connections as the interface sees them (no secrets), and
+/// the public half of the user's SSH key.
+pub fn list(user: &str) -> Value {
+    public_list(user, &super::load(user))
+}
+
+fn public_list(user: &str, list: &[Conn]) -> Value {
+    let key = super::ssh_key(user, false).ok().flatten().map(|(_, public)| public);
+    json!({ "conns": list.iter().map(Conn::public).collect::<Vec<_>>(), "key": key })
+}
+
 /// The routes `conns…`, before the CGI becomes the user.
 pub fn conns(req: &Request, out: &mut impl Write, user: &str) -> Result<(), ApiError> {
     let mut list = super::load(user);
     match req.route.as_str() {
-        "conns" => {
-            let key = super::ssh_key(user, false).ok().flatten().map(|(_, public)| public);
-            reply(out, &json!({ "conns": list.iter().map(Conn::public).collect::<Vec<_>>(), "key": key }))
-        }
+        "conns" => reply(out, &public_list(user, &list)),
         "conns/save" => {
             post(req)?;
             let edit: Edit = req.json()?;
             let saved = list.iter().position(|c| c.id == edit.id && !edit.id.is_empty());
             let mut c = edit.apply(saved.map(|i| &list[i]))?;
             // an SFTP server's key is remembered now, so a later change shows
+            if c.kind == Kind::Sftp
+                && c.host_key.is_empty()
+                && let Ok(s) = super::sftp::Sftp::connect(&with_key(user, c.clone()))
+            {
+                c.host_key = s.host_key.clone();
+            }
+            // the login failed (a wrong password, say): the key is learnt all the same
             if c.kind == Kind::Sftp && c.host_key.is_empty() {
-                if let Ok(s) = super::sftp::Sftp::connect(&with_key(user, c.clone())) {
-                    c.host_key = s.host_key.clone();
-                }
+                let _ = super::pin_host_key(user, &mut c);
             }
             match saved {
                 Some(i) => list[i] = c.clone(),
@@ -142,7 +155,12 @@ pub fn conns(req: &Request, out: &mut impl Write, user: &str) -> Result<(), ApiE
             post(req)?;
             let edit: Edit = req.json()?;
             let saved = list.iter().find(|c| c.id == edit.id && !edit.id.is_empty()).cloned();
-            let c = with_key(user, edit.apply(saved.as_ref())?);
+            let mut c = with_key(user, edit.apply(saved.as_ref())?);
+            // a saved server whose key is not known yet (out of reach when saved) learns it now
+            if let Some(i) = list.iter().position(|s| s.id == c.id && !c.id.is_empty() && s.host_key.is_empty()) {
+                let _ = super::pin_host_key(user, &mut c);
+                list[i].host_key = c.host_key.clone();
+            }
             let start = std::time::Instant::now();
             let (fs, home, host_key) = match c.kind {
                 Kind::Smb => (c.connect().map_err(ApiError::from)?, String::new(), String::new()),
@@ -166,11 +184,8 @@ pub fn conns(req: &Request, out: &mut impl Write, user: &str) -> Result<(), ApiE
 }
 
 /// The connection with the user's SSH key, when it logs in with it.
-pub fn with_key(user: &str, mut c: Conn) -> Conn {
-    if c.kind == Kind::Sftp && c.auth == "key" && c.ssh_key.is_empty() {
-        c.ssh_key = super::ssh_key(user, false).ok().flatten().map(|(private, _)| private).unwrap_or_default();
-    }
-    c
+pub fn with_key(user: &str, c: Conn) -> Conn {
+    super::with_user_key(user, c)
 }
 
 /// Where a connection opens, below its root.
@@ -190,8 +205,11 @@ fn first_of_paths(req: &Request) -> Option<Vec<String>> {
     list.first().is_some_and(|p| super::split(p).is_some()).then_some(list)
 }
 
+/// A connection, the server opened, and the parts of the path below it.
+type Opened<'a> = (&'a Conn, Box<dyn Fs>, Vec<String>);
+
 /// Opens the connection a path names.
-fn open<'a>(conns: &'a [Conn], vpath: &str) -> Result<(&'a Conn, Box<dyn Fs>, Vec<String>), ApiError> {
+fn open<'a>(conns: &'a [Conn], vpath: &str) -> Result<Opened<'a>, ApiError> {
     let (id, parts) = super::split(vpath).ok_or_else(|| ApiError::bad_request("invalid path"))??;
     let conn = conns
         .iter()
@@ -201,12 +219,19 @@ fn open<'a>(conns: &'a [Conn], vpath: &str) -> Result<(&'a Conn, Box<dyn Fs>, Ve
     Ok((conn, fs, parts))
 }
 
+/// Whether a request may be about a remote path, so the connections have
+/// to be read before the CGI becomes the user. `usage` has its paths in
+/// the body.
+pub fn wants_conns(req: &Request) -> bool {
+    req.route == "usage" || remote_param(req).is_some() || (req.route == "download" && first_of_paths(req).is_some())
+}
+
 /// A route about a remote path, or None for the shared folders.
 pub fn serve(req: &Request, out: &mut impl Write, conns: &[Conn]) -> Option<Result<(), ApiError>> {
-    if req.route == "download" {
-        if let Some(paths) = first_of_paths(req) {
-            return Some(download(req, out, conns, &paths));
-        }
+    if req.route == "download"
+        && let Some(paths) = first_of_paths(req)
+    {
+        return Some(download(req, out, conns, &paths));
     }
     let vpath = remote_param(req)?;
     Some(route(req, out, conns, vpath))
@@ -327,22 +352,17 @@ fn route(req: &Request, out: &mut impl Write, conns: &[Conn], vpath: &str) -> Re
             let (_, fs, dir) = open(conns, vpath)?;
             let name = req.require("name")?;
             super::valid_name(name)?;
-            reply(out, &upload(req, fs.as_ref(), &dir, name)?)
-        }
-        "upload/status" => {
-            let (_, fs, dir) = open(conns, vpath)?;
-            let name = req.require("name")?;
-            super::valid_name(name)?;
-            let have = fs.stat(&child(&dir, &part_name(name))).map(|e| e.size).unwrap_or(0);
-            let exists = fs.stat(&child(&dir, name)).is_ok();
-            reply(out, &json!({ "received": have, "exists": exists }))
+            let up = transfer::Upload::from_request(req)?;
+            let mut store = RemoteUpload::new(fs.as_ref(), &dir, name, &up.id);
+            reply(out, &transfer::receive(&mut store, &up, &mut crate::cgi::body())?)
         }
         "upload/abort" => {
             post(req)?;
             let (_, fs, dir) = open(conns, vpath)?;
             let name = req.require("name")?;
             super::valid_name(name)?;
-            let _ = fs.remove(&child(&dir, &part_name(name)), false);
+            let id = transfer::upload_id(req)?;
+            RemoteUpload::new(fs.as_ref(), &dir, name, &id).remove_part();
             reply(out, &json!({ "ok": true }))
         }
         "thumb" => Err(ApiError::not_found(t!("nessuna miniatura", "no thumbnail"))),
@@ -355,10 +375,6 @@ fn child(dir: &[String], name: &str) -> Vec<String> {
     let mut p = dir.to_vec();
     p.push(name.to_string());
     p
-}
-
-pub fn part_name(name: &str) -> String {
-    format!(".{name}.synofile-upload")
 }
 
 /// Sizes of remote items, for the info panel.
@@ -500,45 +516,75 @@ fn zip(out: &mut impl Write, fs: &dyn Fs, roots: &[Vec<String>]) -> Result<(), A
     Ok(())
 }
 
-fn upload(req: &Request, fs: &dyn Fs, dir: &[String], name: &str) -> Result<transfer::UploadState, ApiError> {
-    let offset: u64 = req.param("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
-    let total: u64 = req.require("total")?.parse().map_err(|_| ApiError::bad_request("total"))?;
-    let overwrite = req.param("overwrite") == Some("1");
-    if req.length > transfer::MAX_CHUNK || offset + req.length > total {
-        return Err(ApiError::bad_request(t!("blocco non valido", "invalid chunk")));
+/// An upload into a folder of a server: the same rules as on the NAS
+/// (`transfer::receive`). Both SMB and SFTP write at any offset, past the
+/// end of the file too, so chunks may come in any order.
+struct RemoteUpload<'a> {
+    fs: &'a dyn Fs,
+    dir: Vec<String>,
+    target: Vec<String>,
+    part: Vec<String>,
+    /// the original's time, set on the file once renamed: on the hidden
+    /// file it would make it look stale to another upload's sweep
+    mtime: std::cell::Cell<Option<i64>>,
+}
+
+impl<'a> RemoteUpload<'a> {
+    fn new(fs: &'a dyn Fs, dir: &[String], name: &str, id: &str) -> Self {
+        Self { fs, dir: dir.to_vec(), target: child(dir, name), part: child(dir, &transfer::upload_part_name(name, id)), mtime: Default::default() }
     }
-    let target = child(dir, name);
-    let part = child(dir, &part_name(name));
-    let mut w = if offset == 0 {
-        if !overwrite && fs.stat(&target).is_ok() {
-            return Err(ApiError::conflict(t!("esiste già", "already exists")));
+}
+
+impl transfer::UploadStore for RemoteUpload<'_> {
+    fn target(&self) -> io::Result<Option<transfer::Existing>> {
+        // servers answer a missing name in their own ways: any failure is none
+        Ok(self.fs.stat(&self.target).ok().map(|e| transfer::Existing { dir: e.is_dir(), file: e.kind == 'f', size: e.size, mtime: e.mtime }))
+    }
+
+    fn write(&mut self, create: bool, at: u64, body: &mut dyn Read, length: u64) -> io::Result<Option<u64>> {
+        let exists = self.fs.stat(&self.part).is_ok();
+        let mut w = match (exists, create) {
+            (true, _) => self.fs.writer(&self.part, Some(at))?,
+            // the first chunk creates it; sent again, it opens it as it is
+            (false, true) => self.fs.writer(&self.part, None)?,
+            (false, false) => return Ok(None),
+        };
+        let copied = copy(&mut body.take(length), &mut w)?;
+        w.finish()?;
+        Ok(Some(copied))
+    }
+
+    fn complete(&self, total: u64) -> io::Result<bool> {
+        Ok(self.fs.stat(&self.part).is_ok_and(|e| e.size == total))
+    }
+
+    fn set_mtime(&self, mtime: i64) {
+        self.mtime.set(Some(mtime));
+    }
+
+    fn commit(&self, replace: bool) -> io::Result<()> {
+        // a server's rename never replaces
+        if replace && self.fs.stat(&self.target).is_ok_and(|e| !e.is_dir()) {
+            self.fs.remove(&self.target, false)?;
         }
-        fs.writer(&part, None)?
-    } else {
-        let have = fs.stat(&part).map_err(|_| ApiError::conflict(t!("upload da ricominciare", "the upload has to start again")))?.size;
-        if have != offset {
-            return Err(ApiError::new(409, format!("offset {have}")));
+        self.fs.rename(&self.part, &self.target)?;
+        if let Some(mtime) = self.mtime.get() {
+            self.fs.set_mtime(&self.target, mtime);
         }
-        fs.writer(&part, Some(offset))?
-    };
-    let copied = copy(&mut io::stdin().lock().take(req.length), &mut w)?;
-    w.finish()?;
-    if copied != req.length {
-        return Err(ApiError::bad_request(t!("blocco incompleto", "incomplete chunk")));
+        Ok(())
     }
-    let received = offset + copied;
-    if received < total {
-        return Ok(transfer::UploadState { received, done: false });
+
+    fn remove_part(&self) {
+        let _ = self.fs.remove(&self.part, false);
     }
-    if let Some(mtime) = req.param("mtime").and_then(|m| m.parse::<i64>().ok()) {
-        fs.set_mtime(&part, mtime);
+
+    fn sweep(&self) {
+        let Ok(items) = self.fs.list(&self.dir) else { return };
+        let day_ago = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64) - 24 * 3600;
+        for e in items {
+            if e.kind == 'f' && e.name.starts_with('.') && e.name.ends_with(&format!(".{}", transfer::UPLOAD_TAG)) && e.mtime < day_ago {
+                let _ = self.fs.remove(&child(&self.dir, &e.name), false);
+            }
+        }
     }
-    if overwrite && fs.stat(&target).is_ok_and(|e| !e.is_dir()) {
-        fs.remove(&target, false)?;
-    }
-    fs.rename(&part, &target).map_err(|e| {
-        let _ = fs.remove(&part, false);
-        ApiError::from(e)
-    })?;
-    Ok(transfer::UploadState { received, done: true })
 }

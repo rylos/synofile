@@ -4,12 +4,45 @@
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 /// Largest JSON body accepted: a selection of a few thousand paths.
 const MAX_JSON: usize = 4 * 1024 * 1024;
+
+/// Whether anything read the body yet.
+static BODY_TOUCHED: AtomicBool = AtomicBool::new(false);
+/// Largest unread body read away before answering: an upload chunk.
+const MAX_DISCARD: u64 = 80 * 1024 * 1024;
+
+/// The request body. Every reader takes it from here, so that an answer
+/// given without it (a refused chunk) can read it away first: it counts
+/// as read from the first read, not from being handed over.
+pub fn body() -> Body {
+    Body
+}
+
+pub struct Body;
+
+impl Read for Body {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        BODY_TOUCHED.store(true, Ordering::Relaxed);
+        io::stdin().lock().read(buf)
+    }
+}
+
+/// Reads away a body nobody read. A program that answers and exits with
+/// the body still unsent makes the web server cut the connection, and the
+/// browser then sees a network error instead of the answer ("already
+/// exists", "not logged in"). A body partly read is left alone: its rest
+/// may never come.
+pub fn discard_unread(length: u64) {
+    if length > 0 && length <= MAX_DISCARD && !BODY_TOUCHED.swap(true, Ordering::Relaxed) {
+        let _ = io::copy(&mut io::stdin().lock().take(length), &mut io::sink());
+    }
+}
 
 pub struct Request {
     pub method: String,
@@ -45,7 +78,7 @@ impl Request {
             return Err(ApiError::bad_request("request body too large"));
         }
         let mut body = vec![0; length];
-        io::stdin().read_exact(&mut body)?;
+        self::body().read_exact(&mut body)?;
         serde_json::from_slice(&body).map_err(|e| ApiError::bad_request(format!("invalid request: {e}")))
     }
 }
@@ -101,11 +134,17 @@ pub fn percent_encode(text: &str) -> String {
 pub struct ApiError {
     pub status: u16,
     pub message: String,
+    /// for a 401: why DSM's login was not accepted (`X-Synofile-Auth`)
+    pub auth: Option<&'static str>,
 }
 
 impl ApiError {
     pub fn new(status: u16, message: impl Into<String>) -> Self {
-        Self { status, message: message.into() }
+        Self { status, message: message.into(), auth: None }
+    }
+    pub fn with_auth(mut self, why: &'static str) -> Self {
+        self.auth = Some(why);
+        self
     }
     pub fn bad_request(message: impl Into<String>) -> Self {
         Self::new(400, message)
@@ -125,6 +164,8 @@ impl From<io::Error> for ApiError {
             io::ErrorKind::PermissionDenied => 403,
             io::ErrorKind::InvalidInput => 400,
             io::ErrorKind::AlreadyExists => 409,
+            // a full volume or quota: retrying will not help
+            _ if matches!(e.raw_os_error(), Some(libc::ENOSPC | libc::EDQUOT)) => 507,
             _ => 500,
         };
         Self::new(status, crate::fsops::describe(&e))
@@ -144,6 +185,7 @@ fn reason(status: u16) -> &'static str {
         416 => "Range Not Satisfiable",
         422 => "Unprocessable Content",
         503 => "Service Unavailable",
+        507 => "Insufficient Storage",
         _ => "Internal Server Error",
     }
 }
@@ -176,11 +218,11 @@ pub fn error(out: &mut impl Write, err: &ApiError) -> io::Result<()> {
     // (error_page … /dsm_error_page), and the message with it: those leave
     // as 422, the real status in a header the client reads back.
     let status = if matches!(err.status, 403 | 404 | 500..=599) { 422 } else { err.status };
-    head(
-        out,
-        status,
-        &[("Content-Type", "application/json; charset=utf-8"), ("Content-Length", &length), ("X-Synofile-Status", &real)],
-    )?;
+    let mut headers = vec![("Content-Type", "application/json; charset=utf-8"), ("Content-Length", length.as_str()), ("X-Synofile-Status", real.as_str())];
+    if let Some(why) = err.auth {
+        headers.push(("X-Synofile-Auth", why));
+    }
+    head(out, status, &headers)?;
     out.write_all(&body)
 }
 
@@ -225,6 +267,28 @@ mod tests {
         assert_eq!(q["x"], "");
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%4"), "%4");
+    }
+
+    #[test]
+    fn full_disk_is_507() {
+        assert_eq!(ApiError::from(io::Error::from_raw_os_error(libc::ENOSPC)).status, 507);
+        assert_eq!(ApiError::from(io::Error::from_raw_os_error(libc::EDQUOT)).status, 507);
+        assert_eq!(ApiError::from(io::Error::from_raw_os_error(libc::EIO)).status, 500);
+        assert_eq!(ApiError::from(io::Error::from_raw_os_error(libc::ENOENT)).status, 404);
+    }
+
+    #[test]
+    fn auth_reason_is_a_header() {
+        let mut out = Vec::new();
+        error(&mut out, &ApiError::new(401, "x").with_auth("nocookie")).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("Status: 401 "));
+        assert!(text.contains("X-Synofile-Auth: nocookie\r\n"));
+        let mut out = Vec::new();
+        error(&mut out, &ApiError::new(507, "full")).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.starts_with("Status: 422 ") && text.contains("X-Synofile-Status: 507"));
+        assert!(!text.contains("X-Synofile-Auth"));
     }
 
     #[test]

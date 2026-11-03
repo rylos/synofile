@@ -308,11 +308,10 @@ fn parse_tar_line(line: &str) -> Option<Member> {
         if let Some(i) = name.find(" -> ") {
             name.truncate(i);
         }
-    } else if kind == 'h' {
-        if let Some(i) = name.find(" link to ") {
+    } else if kind == 'h'
+        && let Some(i) = name.find(" link to ") {
             name.truncate(i);
         }
-    }
     Some(Member {
         path: normalise(&name),
         raw: name,

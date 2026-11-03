@@ -258,15 +258,97 @@ pub fn store(user: &str, conns: &[Conn]) -> io::Result<()> {
     write_private(&user_file(user), &serde_json::to_vec_pretty(&stored).map_err(io::Error::other)?)
 }
 
+/// The connection with the user's own SynoFile key, when it logs in with it.
+pub fn with_user_key(user: &str, mut c: Conn) -> Conn {
+    if c.kind == Kind::Sftp && c.auth == "key" && c.ssh_key.is_empty() {
+        c.ssh_key = ssh_key(user, false).ok().flatten().map(|(private, _)| private).unwrap_or_default();
+    }
+    c
+}
+
+/// The connections a job names, as the user keeps them now, secrets
+/// included: a job back from the journal on disk has none. A connection
+/// deleted since stays as it was, without secrets, and fails to log in.
+pub fn with_secrets(user: &str, conns: &[Conn]) -> Vec<Conn> {
+    let saved = load(user);
+    conns.iter().map(|c| with_user_key(user, saved.iter().find(|s| s.id == c.id).cloned().unwrap_or_else(|| c.clone()))).collect()
+}
+
+/// Whether this process may pin a server's key: only the package's own,
+/// which keep the connections. A process running as the user (browsing,
+/// a job) cannot save what it learns, so it accepts no unknown key.
+pub fn may_pin() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let d = dir();
+    let probe = if d.exists() { d } else { crate::var_dir() };
+    // SAFETY: geteuid has no preconditions
+    std::fs::metadata(probe).is_ok_and(|m| m.uid() == unsafe { libc::geteuid() })
+}
+
+/// How long the first look at an SFTP server's key may take: the CGI waits
+/// on it, and the daemon answers the CGI within 15 seconds.
+const PIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Pins the key of an SFTP server none is known for yet (the server was
+/// out of reach when the connection was saved): learnt now, without
+/// logging in, and saved with the user's connections, so from then on
+/// only that key is accepted. Package processes only (`may_pin`).
+pub fn pin_host_key(user: &str, conn: &mut Conn) -> io::Result<()> {
+    if conn.kind != Kind::Sftp || !conn.host_key.is_empty() {
+        return Ok(());
+    }
+    if !may_pin() {
+        return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+    }
+    let key = sftp::server_key(conn, PIN_TIMEOUT)?;
+    let mut saved = load(user);
+    if let Some(s) = saved.iter_mut().find(|s| s.id == conn.id) {
+        if !s.host_key.is_empty() {
+            // pinned by someone else meanwhile: that one counts
+            conn.host_key = s.host_key.clone();
+            return Ok(());
+        }
+        if s.kind == conn.kind && s.host.eq_ignore_ascii_case(&conn.host) && s.port == conn.port {
+            s.host_key = key.clone();
+            store(user, &saved)?;
+        }
+    }
+    conn.host_key = key;
+    Ok(())
+}
+
+/// Writes `data` to `path` all at once (temporary file, then rename),
+/// readable by the package only.
 fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
+    let tmp = write_temp(path, data)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
+
+/// `data` in a new file beside `path`, mode 0600, named after this process
+/// so two writers never share it.
+fn write_temp(path: &Path, data: &[u8]) -> io::Result<PathBuf> {
     use std::os::unix::fs::OpenOptionsExt;
-    std::fs::create_dir_all(dir())?;
-    let tmp = path.with_extension("tmp");
+    std::fs::create_dir_all(path.parent().unwrap_or(Path::new("/")))?;
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{}.tmp", std::process::id()));
+    let tmp = path.with_file_name(name);
     let _ = std::fs::remove_file(&tmp);
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp)?;
-    f.write_all(data)?;
-    f.sync_all()?;
-    std::fs::rename(tmp, path)
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .mode(0o600)
+        .open(&tmp)
+        .and_then(|mut f| f.write_all(data).and_then(|()| f.sync_all()));
+    match written {
+        Ok(()) => Ok(tmp),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
 }
 
 pub fn random_bytes<const N: usize>() -> io::Result<[u8; N]> {
@@ -279,16 +361,50 @@ pub fn new_id() -> String {
     hex(&random_bytes::<6>().unwrap_or_default())
 }
 
+/// The key that seals the secrets, made on first use. Two processes
+/// starting at once agree on one key (a lock, and a rename that never
+/// replaces); a key file of the wrong size is an error, never replaced:
+/// that would lose every password sealed with it.
 fn key() -> io::Result<[u8; 32]> {
-    let path = dir().join("key");
-    if let Ok(b) = std::fs::read(&path) {
-        if let Ok(k) = b.try_into() {
-            return Ok(k);
+    key_at(&dir().join("key"))
+}
+
+fn key_at(path: &Path) -> io::Result<[u8; 32]> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::fd::AsRawFd;
+    let read = |path: &Path| -> io::Result<Option<[u8; 32]>> {
+        match std::fs::read(path) {
+            Ok(b) => b.try_into().map(Some).map_err(|_| io::Error::other(t!("la chiave delle connessioni è danneggiata", "the connections' key is damaged"))),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
         }
+    };
+    if let Some(k) = read(path)? {
+        return Ok(k);
+    }
+    let dir = path.parent().unwrap_or(Path::new("/"));
+    std::fs::create_dir_all(dir)?;
+    let mut lock_name = path.file_name().unwrap_or_default().to_os_string();
+    lock_name.push(".lock");
+    let lock = std::fs::OpenOptions::new().write(true).create(true).custom_flags(libc::O_NOFOLLOW).mode(0o600).open(dir.join(lock_name))?;
+    // SAFETY: flock on a descriptor we own; released when `lock` closes
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // made by another process while this one waited
+    if let Some(k) = read(path)? {
+        return Ok(k);
     }
     let k = random_bytes::<32>()?;
-    write_private(&path, &k)?;
-    Ok(k)
+    let tmp = write_temp(path, &k)?;
+    let placed = crate::fsops::rename_noreplace(&tmp, path);
+    let _ = std::fs::remove_file(&tmp);
+    match placed {
+        Ok(()) => Ok(k),
+        // one made without the lock after all: that one is the key
+        Err(e) if e.raw_os_error() == Some(libc::EEXIST) => read(path)?.ok_or(e),
+        Err(e) => Err(e),
+    }
 }
 
 fn seal(key: &[u8; 32], text: &str) -> String {
@@ -317,7 +433,7 @@ fn hex(b: &[u8]) -> String {
 }
 
 fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
@@ -343,32 +459,6 @@ pub fn ssh_key(user: &str, create: bool) -> io::Result<Option<(String, String)>>
 /// errno for the messages fsops::describe already has.
 pub fn errno(code: i32) -> io::Error {
     io::Error::from_raw_os_error(code)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_paths() {
-        let (id, parts) = split("/:ab12/Share/a b").unwrap().unwrap();
-        assert_eq!(id, "ab12");
-        assert_eq!(parts, vec!["Share", "a b"]);
-        assert!(split("/Share/x").is_none());
-        assert!(split("/:ab12/../x").unwrap().is_err());
-        assert_eq!(join("ab12", &parts), PathBuf::from("/:ab12/Share/a b"));
-        assert!(is_remote(Path::new("/:x/y")));
-        assert!(!is_remote(Path::new("/volume1/x")));
-    }
-
-    #[test]
-    fn seals_and_opens() {
-        let key = [7u8; 32];
-        let s = seal(&key, "pässword");
-        assert_eq!(open(&key, &s).as_deref(), Some("pässword"));
-        assert_eq!(open(&[8u8; 32], &s), None);
-        assert_eq!(unhex(&hex(&[0, 255, 16])), Some(vec![0, 255, 16]));
-    }
 }
 
 /// Development only: `synofile remote <op> <path> [arg]` against the
@@ -443,4 +533,78 @@ pub fn probe(args: &[&str]) -> std::process::ExitCode {
 #[cfg(debug_assertions)]
 fn other_err(e: impl std::fmt::Display) -> io::Error {
     io::Error::other(e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_paths() {
+        let (id, parts) = split("/:ab12/Share/a b").unwrap().unwrap();
+        assert_eq!(id, "ab12");
+        assert_eq!(parts, vec!["Share", "a b"]);
+        assert!(split("/Share/x").is_none());
+        assert!(split("/:ab12/../x").unwrap().is_err());
+        assert_eq!(join("ab12", &parts), PathBuf::from("/:ab12/Share/a b"));
+        assert!(is_remote(Path::new("/:x/y")));
+        assert!(!is_remote(Path::new("/volume1/x")));
+    }
+
+    #[test]
+    fn seals_and_opens() {
+        let key = [7u8; 32];
+        let s = seal(&key, "pässword");
+        assert_eq!(open(&key, &s).as_deref(), Some("pässword"));
+        assert_eq!(open(&[8u8; 32], &s), None);
+        assert_eq!(unhex(&hex(&[0, 255, 16])), Some(vec![0, 255, 16]));
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("synofile-key-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn one_key_for_concurrent_first_uses() {
+        let dir = scratch("race");
+        let path = dir.join("key");
+        let keys: Vec<[u8; 32]> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8).map(|_| s.spawn(|| key_at(&path).unwrap())).collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        assert!(keys.iter().all(|k| *k == keys[0]));
+        assert_eq!(std::fs::read(&path).unwrap(), keys[0]);
+        // read again, not made again
+        assert_eq!(key_at(&path).unwrap(), keys[0]);
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        // no temporary files left behind
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).filter(|n| n.to_string_lossy().ends_with(".tmp")).collect();
+        assert!(left.is_empty(), "{left:?}");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn damaged_key_is_an_error_not_replaced() {
+        let dir = scratch("short");
+        let path = dir.join("key");
+        std::fs::write(&path, b"too short").unwrap();
+        assert!(key_at(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"too short");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn private_writes_replace_whole_files() {
+        let dir = scratch("write");
+        let path = dir.join("u.json");
+        write_private(&path, b"one").unwrap();
+        write_private(&path, b"two").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"two");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

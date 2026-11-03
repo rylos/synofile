@@ -4,7 +4,7 @@
 
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{FileTypeExt, MetadataExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
 use crate::cgi::{self, ApiError, Request};
@@ -277,72 +277,467 @@ fn raw_header(
 
 /// Largest chunk of an upload: the interface sends 16 MiB, several at once.
 pub const MAX_CHUNK: u64 = 64 * 1024 * 1024;
+/// Suffix of the hidden file an upload is written into.
+pub const UPLOAD_TAG: &str = "synofile-upload";
 
-pub fn upload_part(dir: &Path, name: &str) -> PathBuf {
-    dir.join(format!(".{name}.synofile-upload"))
+/// One chunk of an upload, as the query of `upload` describes it.
+#[derive(Debug, Clone)]
+pub struct Upload {
+    pub offset: u64,
+    pub length: u64,
+    pub total: u64,
+    /// seconds, given to the file when complete
+    pub mtime: Option<i64>,
+    /// replace the target if there is one
+    pub overwrite: bool,
+    /// replace the target only if older than `mtime`, skip the file otherwise
+    pub newer: bool,
+    /// the client's name for this attempt at the file
+    pub id: String,
 }
 
-#[derive(serde::Serialize)]
+impl Upload {
+    pub fn from_request(req: &Request) -> Result<Self, ApiError> {
+        let number = |name: &str| -> Result<u64, ApiError> { req.require(name)?.parse().map_err(|_| ApiError::bad_request(format!("invalid {name}"))) };
+        let up = Self {
+            offset: req.param("offset").map_or(Ok(0), |_| number("offset"))?,
+            length: req.length,
+            total: number("total")?,
+            mtime: req.param("mtime").and_then(|m| m.parse().ok()),
+            overwrite: req.param("overwrite") == Some("1"),
+            newer: req.param("newer") == Some("1"),
+            id: upload_id(req)?,
+        };
+        up.check()?;
+        Ok(up)
+    }
+
+    fn check(&self) -> Result<(), ApiError> {
+        let end = self.offset.checked_add(self.length);
+        let empty = self.length == 0 && self.total != 0;
+        if self.length > MAX_CHUNK || empty || end.is_none_or(|end| end > self.total) {
+            return Err(ApiError::bad_request(t!("blocco non valido", "invalid chunk")));
+        }
+        if self.newer && self.mtime.is_none() {
+            return Err(ApiError::bad_request("newer without mtime"));
+        }
+        Ok(())
+    }
+
+    fn end(&self) -> u64 {
+        self.offset + self.length
+    }
+
+    fn is_last(&self) -> bool {
+        self.end() == self.total
+    }
+
+    fn replaces(&self) -> bool {
+        self.overwrite || self.newer
+    }
+}
+
+/// The `id` of an upload request: 8 to 32 of [0-9a-z], so it is safe in a
+/// file name.
+pub fn upload_id(req: &Request) -> Result<String, ApiError> {
+    let id = req.require("id")?;
+    if (8..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase()) {
+        Ok(id.to_string())
+    } else {
+        Err(ApiError::bad_request("invalid upload id"))
+    }
+}
+
+/// The hidden name an upload of `name` is written under:
+/// `.{name}.{id}.synofile-upload`, within the 255 bytes of a name.
+pub fn upload_part_name(name: &str, id: &str) -> String {
+    crate::names::part_name(name, &format!("{id}.{UPLOAD_TAG}"))
+}
+
+/// Whether a name is an upload's hidden file.
+fn is_upload_part(name: &[u8]) -> bool {
+    name.starts_with(b".") && name.ends_with(format!(".{UPLOAD_TAG}").as_bytes())
+}
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
 pub struct UploadState {
     pub received: u64,
     pub done: bool,
+    /// `newer`: the target was already as recent, nothing written
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub skipped: bool,
+}
+
+/// What is at the target's name.
+#[derive(Debug, Clone, Copy)]
+pub struct Existing {
+    pub dir: bool,
+    pub file: bool,
+    pub size: u64,
+    pub mtime: i64,
+}
+
+/// Where an upload goes: a folder of the NAS or of a remote server. The
+/// rules of an upload (`receive`) are the same for both.
+pub trait UploadStore {
+    /// What is at the target's name, if anything.
+    fn target(&self) -> io::Result<Option<Existing>>;
+    /// Writes `length` bytes of `body` into the hidden file from `at` on,
+    /// and says how many there were. `create`: the first chunk, which makes
+    /// the file if missing (never emptying it: a chunk sent again must not
+    /// lose the others). `None`: the file is not there.
+    fn write(&mut self, create: bool, at: u64, body: &mut dyn Read, length: u64) -> io::Result<Option<u64>>;
+    /// Whether the hidden file holds all `total` bytes.
+    fn complete(&self, total: u64) -> io::Result<bool>;
+    fn set_mtime(&self, mtime: i64);
+    /// Renames the hidden file to the target, over it if `replace`.
+    fn commit(&self, replace: bool) -> io::Result<()>;
+    fn remove_part(&self);
+    /// Removes the hidden files of uploads abandoned beside it.
+    fn sweep(&self);
 }
 
 /// One chunk of an upload. The data goes into a hidden file beside the
 /// target, renamed into place with the last chunk. The first chunk creates
 /// the file; the ones between may come in any order, at once (each writes
 /// its own range); the interface sends the last one when all the others
-/// are in.
-pub fn upload(req: &Request, dir: &Path, name: &str) -> Result<UploadState, ApiError> {
-    let offset: u64 = req.param("offset").and_then(|v| v.parse().ok()).unwrap_or(0);
-    let total: u64 = req.require("total")?.parse().map_err(|_| ApiError::bad_request("total"))?;
-    let overwrite = req.param("overwrite") == Some("1");
-    if req.length > MAX_CHUNK || offset + req.length > total {
-        return Err(ApiError::bad_request(t!("blocco non valido", "invalid chunk")));
-    }
-    let target = dir.join(name);
-    let part = upload_part(dir, name);
-    let mut file = if offset == 0 {
-        if !overwrite && fs::symlink_metadata(&target).is_ok() {
-            return Err(ApiError::conflict(t!("esiste già", "already exists")));
+/// are in. The last one sent again after it went through is answered done.
+pub fn receive(store: &mut impl UploadStore, up: &Upload, body: &mut dyn Read) -> Result<UploadState, ApiError> {
+    if up.offset == 0 {
+        if let Some(t) = store.target()? {
+            if t.dir {
+                return Err(ApiError::conflict(t!("è una cartella", "is a folder")));
+            }
+            // a file of one chunk sent again because the answer was lost:
+            // the same size and time is the one that just arrived
+            if !up.overwrite && up.is_last() && t.file && t.size == up.total && up.mtime == Some(t.mtime) {
+                return Ok(UploadState { received: up.total, done: true, skipped: false });
+            }
+            if up.newer && up.mtime.is_some_and(|m| t.mtime >= m) {
+                return Ok(UploadState { received: 0, done: true, skipped: true });
+            }
+            if !up.replaces() {
+                return Err(ApiError::conflict(t!("esiste già", "already exists")));
+            }
         }
-        OpenOptions::new().write(true).create(true).truncate(true).open(&part)?
-    } else {
-        OpenOptions::new().write(true).open(&part).map_err(|_| ApiError::conflict(t!("upload da ricominciare", "the upload has to start again")))?
+        // only a file of several chunks leaves a hidden file when cut
+        // short: a folder of small files is not listed again for each
+        if !up.is_last() {
+            store.sweep();
+        }
+    }
+    let Some(copied) = store.write(up.offset == 0, up.offset, body, up.length)? else {
+        if up.is_last() && store.target()?.is_some_and(|t| t.file && t.size == up.total) {
+            return Ok(UploadState { received: up.total, done: true, skipped: false });
+        }
+        return Err(ApiError::conflict(t!("upload da ricominciare", "the upload has to start again")));
     };
-    file.seek(SeekFrom::Start(offset))?;
-    let copied = io::copy(&mut io::stdin().lock().take(req.length), &mut file)?;
-    if copied != req.length {
+    if copied != up.length {
         return Err(ApiError::bad_request(t!("blocco incompleto", "incomplete chunk")));
     }
-    let received = offset + copied;
-    if received < total {
-        return Ok(UploadState { received, done: false });
+    if !up.is_last() {
+        return Ok(UploadState { received: up.end(), done: false, skipped: false });
     }
-    if let Some(mtime) = req.param("mtime").and_then(|m| m.parse::<i64>().ok()) {
-        let times = [
-            libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT },
-            libc::timespec { tv_sec: mtime as _, tv_nsec: 0 },
-        ];
-        // SAFETY: an open descriptor and two timespecs
-        unsafe { libc::futimens(std::os::fd::AsRawFd::as_raw_fd(&file), times.as_ptr()) };
+    if !store.complete(up.total)? {
+        return Err(ApiError::conflict(t!("blocchi mancanti", "missing chunks")));
     }
-    drop(file);
-    if overwrite {
-        fs::rename(&part, &target)?;
-    } else {
-        rename_noreplace(&part, &target).map_err(|e| {
-            let _ = fs::remove_file(&part);
-            ApiError::from(e)
-        })?;
+    if let Some(mtime) = up.mtime {
+        store.set_mtime(mtime);
     }
-    Ok(UploadState { received, done: true })
+    store.commit(up.replaces()).map_err(|e| {
+        store.remove_part();
+        if e.kind() == io::ErrorKind::AlreadyExists { ApiError::conflict(t!("esiste già", "already exists")) } else { ApiError::from(e) }
+    })?;
+    Ok(UploadState { received: up.total, done: true, skipped: false })
+}
+
+/// An upload into a folder of the NAS.
+pub struct LocalUpload {
+    dir: PathBuf,
+    target: PathBuf,
+    part: PathBuf,
+}
+
+impl LocalUpload {
+    pub fn new(dir: &Path, name: &str, id: &str) -> Self {
+        Self { dir: dir.to_path_buf(), target: dir.join(name), part: dir.join(upload_part_name(name, id)) }
+    }
+
+    pub fn part(&self) -> &Path {
+        &self.part
+    }
+
+    /// Removes the hidden files of uploads abandoned as of `now`.
+    fn sweep_at(&self, now: std::time::SystemTime) {
+        let Ok(entries) = fs::read_dir(&self.dir) else { return };
+        for e in entries.flatten() {
+            if !is_upload_part(e.file_name().as_encoded_bytes()) {
+                continue;
+            }
+            if let Ok(m) = e.metadata()
+                && m.is_file()
+                && crate::names::abandoned(&m, now)
+            {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
+
+    /// The hidden file, never through a symlink, and only a plain file.
+    fn open_part(&self, create: bool) -> io::Result<Option<File>> {
+        let file = match OpenOptions::new().write(true).create(create).custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC).open(&self.part) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::NotFound && !create => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        if !file.metadata()?.is_file() {
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+        }
+        Ok(Some(file))
+    }
+}
+
+impl UploadStore for LocalUpload {
+    fn target(&self) -> io::Result<Option<Existing>> {
+        match fs::symlink_metadata(&self.target) {
+            Ok(m) => Ok(Some(Existing { dir: m.is_dir(), file: m.is_file(), size: m.len(), mtime: m.mtime() })),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn write(&mut self, create: bool, at: u64, body: &mut dyn Read, length: u64) -> io::Result<Option<u64>> {
+        let Some(mut file) = self.open_part(create)? else { return Ok(None) };
+        file.seek(SeekFrom::Start(at))?;
+        // in 1 MiB reads: a chunk is 16 MiB, and the body comes through a pipe
+        Ok(Some(io::copy(&mut io::BufReader::with_capacity(1 << 20, body.take(length)), &mut file)?))
+    }
+
+    fn complete(&self, total: u64) -> io::Result<bool> {
+        let Some(file) = self.open_part(false)? else { return Ok(false) };
+        if file.metadata()?.len() != total {
+            return Ok(false);
+        }
+        if total == 0 {
+            return Ok(true);
+        }
+        // a chunk that never came is a hole in the file
+        // SAFETY: an open descriptor
+        let hole = unsafe { libc::lseek(std::os::fd::AsRawFd::as_raw_fd(&file), 0, libc::SEEK_HOLE) };
+        if hole < 0 {
+            let e = io::Error::last_os_error();
+            // a file system without SEEK_HOLE: the size has to do
+            return if e.raw_os_error() == Some(libc::EINVAL) { Ok(true) } else { Err(e) };
+        }
+        Ok(hole as u64 >= total)
+    }
+
+    fn set_mtime(&self, mtime: i64) {
+        let Ok(path) = std::ffi::CString::new(self.part.as_os_str().as_encoded_bytes()) else { return };
+        let times = [libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT }, libc::timespec { tv_sec: mtime as _, tv_nsec: 0 }];
+        // SAFETY: a valid C string and two timespecs
+        unsafe { libc::utimensat(libc::AT_FDCWD, path.as_ptr(), times.as_ptr(), libc::AT_SYMLINK_NOFOLLOW) };
+    }
+
+    fn commit(&self, replace: bool) -> io::Result<()> {
+        if replace { fs::rename(&self.part, &self.target) } else { rename_noreplace(&self.part, &self.target) }
+    }
+
+    fn remove_part(&self) {
+        let _ = fs::remove_file(&self.part);
+    }
+
+    fn sweep(&self) {
+        self.sweep_at(std::time::SystemTime::now());
+    }
+}
+
+/// One chunk of an upload into a folder of the NAS, the body on stdin.
+pub fn upload(req: &Request, dir: &Path, name: &str) -> Result<UploadState, ApiError> {
+    let up = Upload::from_request(req)?;
+    receive(&mut LocalUpload::new(dir, name, &up.id), &up, &mut crate::cgi::body())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::process::Command;
+
+    fn tempdir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("synofile-up-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn chunk(offset: u64, length: u64, total: u64) -> Upload {
+        Upload { offset, length, total, mtime: Some(1_700_000_000), overwrite: false, newer: false, id: "abcd1234".into() }
+    }
+
+    fn send(dir: &Path, name: &str, up: &Upload, data: &[u8]) -> Result<UploadState, ApiError> {
+        let mut body = io::Cursor::new(data[up.offset as usize..(up.offset + up.length) as usize].to_vec());
+        receive(&mut LocalUpload::new(dir, name, &up.id), up, &mut body)
+    }
+
+    fn parts(dir: &Path) -> Vec<String> {
+        let mut v: Vec<String> = fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| is_upload_part(n.as_bytes())).collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn upload_in_any_order_and_idempotent() {
+        let dir = tempdir("order");
+        let data: Vec<u8> = (0..40u32).map(|i| i as u8).collect();
+        // chunk 0, then 2 before 1, then the last
+        assert_eq!(send(&dir, "f.bin", &chunk(0, 10, 40), &data).unwrap(), UploadState { received: 10, done: false, skipped: false });
+        // the first chunk again (a retry) does not empty the file
+        send(&dir, "f.bin", &chunk(20, 10, 40), &data).unwrap();
+        send(&dir, "f.bin", &chunk(0, 10, 40), &data).unwrap();
+        send(&dir, "f.bin", &chunk(10, 10, 40), &data).unwrap();
+        assert_eq!(parts(&dir), vec![".f.bin.abcd1234.synofile-upload"]);
+        let done = send(&dir, "f.bin", &chunk(30, 10, 40), &data).unwrap();
+        assert_eq!(done, UploadState { received: 40, done: true, skipped: false });
+        assert_eq!(fs::read(dir.join("f.bin")).unwrap(), data);
+        assert_eq!(fs::metadata(dir.join("f.bin")).unwrap().mtime(), 1_700_000_000);
+        assert!(parts(&dir).is_empty());
+        // the last chunk sent again: done, not "start again"
+        assert_eq!(send(&dir, "f.bin", &chunk(30, 10, 40), &data).unwrap(), done);
+        // a chunk in between, with the file gone, has to start again
+        assert_eq!(send(&dir, "f.bin", &chunk(10, 10, 40), &data).unwrap_err().status, 409);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn single_chunk_sent_again_is_done() {
+        let dir = tempdir("single");
+        let data = b"hello".to_vec();
+        let up = chunk(0, 5, 5);
+        assert!(send(&dir, "s.txt", &up, &data).unwrap().done);
+        // the answer was lost: the same chunk again is not "already exists"
+        assert!(send(&dir, "s.txt", &up, &data).unwrap().done);
+        // another file with that name still is
+        let other = Upload { mtime: Some(1_600_000_000), ..chunk(0, 5, 5) };
+        assert_eq!(send(&dir, "s.txt", &other, &data).unwrap_err().status, 409);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_refuses_missing_chunks() {
+        let dir = tempdir("holes");
+        let data = vec![7u8; 3 * 8192];
+        send(&dir, "h.bin", &chunk(0, 8192, 3 * 8192), &data).unwrap();
+        // the middle chunk never came: the size is right, the hole shows
+        let err = send(&dir, "h.bin", &chunk(2 * 8192, 8192, 3 * 8192), &data).unwrap_err();
+        assert_eq!(err.status, 409);
+        assert!(!dir.join("h.bin").exists());
+        // it can still come, then the last again
+        send(&dir, "h.bin", &chunk(8192, 8192, 3 * 8192), &data).unwrap();
+        assert!(send(&dir, "h.bin", &chunk(2 * 8192, 8192, 3 * 8192), &data).unwrap().done);
+        assert_eq!(fs::read(dir.join("h.bin")).unwrap(), data);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_conflicts_and_newer() {
+        let dir = tempdir("newer");
+        let data = b"new content".to_vec();
+        let len = data.len() as u64;
+        fs::write(dir.join("a.txt"), "old").unwrap();
+        // neither overwrite nor newer: refused
+        assert_eq!(send(&dir, "a.txt", &chunk(0, len, len), &data).unwrap_err().status, 409);
+        // newer, the file on the NAS more recent: skipped, nothing written
+        let mut up = chunk(0, len, len);
+        up.newer = true;
+        up.mtime = Some(i64::MIN / 2);
+        assert_eq!(send(&dir, "a.txt", &up, &data).unwrap(), UploadState { received: 0, done: true, skipped: true });
+        assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "old");
+        assert!(parts(&dir).is_empty());
+        // newer, the file on the NAS older: replaced
+        up.mtime = Some(i64::from(i32::MAX));
+        assert!(send(&dir, "a.txt", &up, &data).unwrap().done);
+        assert_eq!(fs::read(dir.join("a.txt")).unwrap(), data);
+        // overwrite
+        let mut up = chunk(0, 3, 3);
+        up.overwrite = true;
+        assert!(send(&dir, "a.txt", &up, b"xyz").unwrap().done);
+        assert_eq!(fs::read_to_string(dir.join("a.txt")).unwrap(), "xyz");
+        // a folder is never replaced
+        fs::create_dir(dir.join("d")).unwrap();
+        assert_eq!(send(&dir, "d", &up, b"xyz").unwrap_err().status, 409);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_of_an_empty_file() {
+        let dir = tempdir("empty");
+        assert!(send(&dir, "e", &chunk(0, 0, 0), b"").unwrap().done);
+        assert_eq!(fs::metadata(dir.join("e")).unwrap().len(), 0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_never_writes_through_a_symlink() {
+        let dir = tempdir("link");
+        fs::write(dir.join("victim"), "keep").unwrap();
+        let up = chunk(0, 4, 8);
+        std::os::unix::fs::symlink(dir.join("victim"), dir.join(upload_part_name("x", &up.id))).unwrap();
+        assert!(send(&dir, "x", &up, b"evil....").is_err());
+        assert_eq!(fs::read_to_string(dir.join("victim")).unwrap(), "keep");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_with_a_long_name() {
+        let dir = tempdir("long");
+        let name = "è".repeat(127); // 254 bytes, the longest even count
+        let data = vec![1u8; 20];
+        send(&dir, &name, &chunk(0, 10, 20), &data).unwrap();
+        let p = parts(&dir);
+        assert_eq!(p.len(), 1);
+        assert!(p[0].len() <= 255 && p[0].ends_with(".abcd1234.synofile-upload"));
+        assert!(send(&dir, &name, &chunk(10, 10, 20), &data).unwrap().done);
+        assert_eq!(fs::read(dir.join(&name)).unwrap(), data);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_sweeps_abandoned_parts() {
+        let dir = tempdir("sweep");
+        let old = dir.join(".gone.zzzz9999.synofile-upload");
+        let legacy = dir.join(".legacy.synofile-upload");
+        let fresh = dir.join(".busy.yyyy8888.synofile-upload");
+        for p in [&old, &legacy, &fresh] {
+            fs::write(p, "x").unwrap();
+        }
+        // a file just written is not abandoned, even with an old mtime
+        let two_days = std::time::SystemTime::now() - std::time::Duration::from_secs(48 * 3600);
+        File::options().write(true).open(&fresh).unwrap().set_modified(two_days).unwrap();
+        let data = vec![0u8; 20];
+        send(&dir, "n", &chunk(0, 10, 20), &data).unwrap();
+        assert!(old.exists() && legacy.exists() && fresh.exists());
+        // two days on, they all are; the upload under way is not touched by its own sweep
+        let store = LocalUpload::new(&dir, "x", "abcd1234");
+        store.sweep_at(std::time::SystemTime::now() + std::time::Duration::from_secs(48 * 3600));
+        assert!(!old.exists() && !legacy.exists() && !fresh.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn upload_checks_its_parameters() {
+        assert!(chunk(0, 10, 20).check().is_ok());
+        assert!(chunk(15, 10, 20).check().is_err());
+        assert!(chunk(u64::MAX, 10, 20).check().is_err());
+        assert!(chunk(0, MAX_CHUNK + 1, u64::MAX).check().is_err());
+        assert!(chunk(5, 0, 20).check().is_err());
+        let mut up = chunk(0, 10, 20);
+        up.newer = true;
+        up.mtime = None;
+        assert!(up.check().is_err());
+        assert_eq!(upload_part_name("a.txt", "abcd1234"), ".a.txt.abcd1234.synofile-upload");
+        assert!(is_upload_part(b".a.txt.abcd1234.synofile-upload"));
+        assert!(!is_upload_part(b"a.synofile-upload"));
+    }
 
     #[test]
     fn tar_unpacks_with_gnu_tar() {

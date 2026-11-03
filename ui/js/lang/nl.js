@@ -507,4 +507,12 @@ export default {
   "Utenti e gruppi": "Gebruikers en groepen",
   "Aggiungi utente o gruppo: cerca per nome…": "Gebruiker of groep toevoegen: zoeken op naam…",
   "Modifiche da salvare: {n}": "Op te slaan wijzigingen: {n}",
+  "errore {n}": "fout {n}",
+  "Accedi a DSM": "Aanmelden bij DSM",
+  "Nessuna sessione DSM: accedi a DSM, poi torna qui.": "Geen DSM-sessie: meld u aan bij DSM en kom dan hier terug.",
+  "Rilascia per caricare in": "Loslaten om te uploaden naar",
+  "Pulisci completati": "Voltooide wissen",
+  "Posizioni": "Locaties",
+  "Sessione DSM scaduta": "DSM-sessie verlopen",
+  "Salvate {a} modifiche su {n}, le altre no: {e}": "{a} van {n} wijzigingen opgeslagen, de rest niet: {e}",
 };

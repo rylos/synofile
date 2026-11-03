@@ -47,7 +47,9 @@ pub struct Spec {
     /// bytes per second, 0 for no limit
     #[serde(default)]
     pub limit: u64,
-    /// delete: the shares whose recycle bin takes the items
+    /// delete: the shares whose recycle bin takes the items. When it is not
+    /// empty the bin was asked for, and an item none of them takes is an
+    /// error, never a deletion for good
     #[serde(default)]
     pub recycle: Vec<RecycleRoot>,
     /// it or en, for the messages
@@ -73,12 +75,27 @@ pub struct Spec {
     pub remotes: Vec<crate::remote::Conn>,
 }
 
+impl Spec {
+    /// The spec as the journal keeps it on disk: no archive password and no
+    /// secrets of the connections, which come back from the connection
+    /// store (`remote::with_secrets`) when the job is run again.
+    pub fn without_secrets(&self) -> Spec {
+        let mut spec = self.clone();
+        spec.password = None;
+        for c in &mut spec.remotes {
+            c.password.clear();
+            c.ssh_key.clear();
+        }
+        spec
+    }
+}
+
 /// The message of a job that failed for want of the archive's password.
 pub const NEED_PASSWORD: &str = "need_password";
 
 /// A share with DSM's recycle bin enabled: its name for synorecycle, and
 /// its folder ("homes" for a personal home).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecycleRoot {
     pub name: String,
     pub path: PathBuf,
@@ -154,4 +171,50 @@ pub enum Command {
     Cancel,
     Limit { bps: u64 },
     Answer { id: u64, action: Policy, all: bool },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn journal_spec_keeps_no_secrets() {
+        let conn = crate::remote::Conn {
+            id: "ab12".into(),
+            kind: crate::remote::Kind::Sftp,
+            host: "server".into(),
+            user: "marco".into(),
+            host_key: "ssh-ed25519 AAAA".into(),
+            password: "conn-pässword".into(),
+            ssh_key: "-----BEGIN OPENSSH PRIVATE KEY-----secret".into(),
+            ..Default::default()
+        };
+        let spec = Spec {
+            op: Op::Extract,
+            sources: vec![PathBuf::from("/volume1/a.rar")],
+            dest: Some(PathBuf::from("/:ab12/x")),
+            conflict: Policy::Ask,
+            verify: false,
+            limit: 0,
+            recycle: Vec::new(),
+            lang: "it".into(),
+            name: None,
+            level: None,
+            into_folder: false,
+            password: Some("archive-secret".into()),
+            members: Vec::new(),
+            remotes: vec![conn],
+        };
+        let clean = spec.without_secrets();
+        let text = serde_json::to_string(&clean).unwrap();
+        for secret in ["conn-pässword", "secret", "PRIVATE KEY", "archive-secret"] {
+            assert!(!text.contains(secret), "{secret} in {text}");
+        }
+        // what is not secret stays, so the job can run again
+        assert_eq!(clean.remotes[0].host_key, "ssh-ed25519 AAAA");
+        assert_eq!(clean.remotes[0].id, "ab12");
+        assert_eq!(clean.sources, spec.sources);
+        // the original is untouched
+        assert_eq!(spec.password.as_deref(), Some("archive-secret"));
+    }
 }

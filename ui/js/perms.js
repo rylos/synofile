@@ -9,8 +9,10 @@ import { svg } from "./icons.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { dialog, toast, errorToast } from "./ui.js";
 
-// DSM asks for each kind apart; the ones a NAS lacks (domain, LDAP) fail and are left out
+// DSM asks for each kind apart
 const KINDS = ["local_user", "local_group", "domain_user", "domain_group", "ldap_user", "ldap_group"];
+// the ones a NAS without a domain or LDAP lacks: DSM answers them with error 403, and they are left out
+const OPTIONAL = new Set(["domain_user", "domain_group", "ldap_user", "ldap_group"]);
 const LEVELS = [
   ["none", "Nessun accesso"],
   ["ro", "Lettura"],
@@ -34,10 +36,18 @@ async function load(share) {
     ...KINDS.map((kind) =>
       dsm("SYNO.Core.Share.Permission", "list", { name, user_group_type: JSON.stringify(kind), offset: 0, limit: 5000 })
         .then((d) => (d.items || []).map((p) => ({ kind, name: p.name, level: levelOf(p) })))
-        .catch(() => []),
+        .catch((e) => {
+          if (OPTIONAL.has(kind) && dsmCode(e) === 403) return [];
+          throw e;
+        }),
     ),
   ]);
   return { info, all: lists.flat() };
+}
+
+/** DSM's error code of a failed `dsm()` call. */
+function dsmCode(e) {
+  return e.code ?? +(/^DSM (\d+)/.exec(e.message || "")?.[1] || 0);
 }
 
 /** The permissions dialog of a shared folder. */
@@ -219,26 +229,37 @@ export async function sharePermissions(share) {
     if (!changed.length && !advChanged) return dlg.close();
     const btn = dlg.querySelector(".btn.primary");
     btn.disabled = true;
+    // one request per kind, then the advanced settings: what went through is
+    // kept as saved, so a second Save sends only what is left
+    const todo = changes();
+    let saved = 0;
     try {
       for (const kind of KINDS) {
         const ps = changed.filter((p) => p.kind === kind);
-        if (ps.length)
-          await dsm("SYNO.Core.Share.Permission", "set", {
-            name,
-            user_group_type: JSON.stringify(kind),
-            permissions: JSON.stringify(ps.map((p) => ({ name: p.name, ...flags(p.level) }))),
-          });
+        if (!ps.length) continue;
+        await dsm("SYNO.Core.Share.Permission", "set", {
+          name,
+          user_group_type: JSON.stringify(kind),
+          permissions: JSON.stringify(ps.map((p) => ({ name: p.name, ...flags(p.level) }))),
+        });
+        ps.forEach((p) => (p.was = p.level));
+        saved += ps.length;
       }
-      if (advChanged)
+      if (advChanged) {
         await dsm("SYNO.Core.Share", "set", {
           name,
           shareinfo: JSON.stringify({ name: share.name, vol_path: info.vol_path || "/" + share.volume, advanceperm: adv }),
         });
+        ADVANCED.forEach(([k]) => (info[k] = adv[k]));
+      }
       dlg.close();
       toast(t("Permessi di «{x}» salvati", { x: share.name }), { kind: "ok" });
     } catch (err) {
       btn.disabled = false;
-      errorToast(new Error(t("Permessi non salvati: {e}", { e: err.message })));
+      recount();
+      errorToast(new Error(saved
+        ? t("Salvate {a} modifiche su {n}, le altre no: {e}", { a: saved, n: todo, e: err.message })
+        : t("Permessi non salvati: {e}", { e: err.message })));
     }
   };
 }

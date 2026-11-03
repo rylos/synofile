@@ -148,7 +148,7 @@ pub fn analyse(root: &Path, share: &Path, budget: Duration) -> Analysis {
         } else {
             unreadable.fetch_add(1, Ordering::Relaxed);
         }
-        files.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        files.sort_unstable_by_key(|f| std::cmp::Reverse(f.1));
         let rest: Vec<_> = files.split_off(files.len().min(KEEP_FILES));
         let mut more = Vec::with_capacity(subdirs.len());
         {
@@ -264,7 +264,7 @@ fn prune(dirs: &[Dir], id: usize, floor: u64, depth: usize) -> Node {
             other_files += 1;
         }
     }
-    c.sort_unstable_by(|a, b| b.s.cmp(&a.s));
+    c.sort_unstable_by_key(|n| std::cmp::Reverse(n.s));
     if other > 0 {
         c.push(Node { n: String::new(), s: other, k: 'o', f: other_files, c: Vec::new() });
     }

@@ -43,7 +43,7 @@ pub struct Info {
 #[serde(tag = "cmd", rename_all = "lowercase")]
 pub enum Request {
     Ping,
-    Submit { user: User, spec: Spec, info: Info },
+    Submit { user: User, spec: Box<Spec>, info: Info },
     List { user: String, since: u64 },
     Control {
         user: String,
@@ -123,6 +123,9 @@ struct Job {
     start_instant: Option<Instant>,
     finished_at: Option<Instant>,
     force: bool,
+    /// back from the journal, its temporary files still being removed: it
+    /// cannot run again yet, and its journal entry stays until done
+    cleaning: bool,
 }
 
 impl Job {
@@ -140,7 +143,9 @@ impl Job {
             self.finished_at = Some(Instant::now());
             self.view.finished = Some(now_ms());
             self.stdin = None;
-            let _ = std::fs::remove_file(journal_path(self.view.id));
+            if !self.cleaning {
+                let _ = std::fs::remove_file(journal_path(self.view.id));
+            }
         }
     }
 
@@ -177,7 +182,13 @@ type Jobs = Arc<Mutex<VecDeque<Job>>>;
 pub fn run() -> std::process::ExitCode {
     let path = socket_path();
     let _ = std::fs::remove_file(&path);
-    let listener = match UnixListener::bind(&path) {
+    // the socket is born 0600: no moment where others could connect
+    // SAFETY: umask has no preconditions; no other thread runs yet
+    let old_mask = unsafe { libc::umask(0o077) };
+    let bound = UnixListener::bind(&path);
+    // SAFETY: as above
+    unsafe { libc::umask(old_mask) };
+    let listener = match bound {
         Ok(l) => l,
         Err(e) => {
             eprintln!("{}: cannot listen: {e}", path.display());
@@ -186,7 +197,13 @@ pub fn run() -> std::process::ExitCode {
     };
     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     eprintln!("{} synofile daemon listening on {}", stamp(), path.display());
-    let jobs: Jobs = Arc::new(Mutex::new(recover()));
+    let jobs: Jobs = Arc::new(Mutex::new(VecDeque::new()));
+    // the jobs a restart cut short come back in the background: cleaning
+    // up after them may take a while, the interface should not wait
+    {
+        let jobs = Arc::clone(&jobs);
+        std::thread::spawn(move || recover(&jobs));
+    }
     let mut next_id = now_ms();
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -221,6 +238,26 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
     match request {
         Request::Ping => serde_json::json!({ "ok": true, "can_switch_user": crate::caps::effective() || crate::identity::dev() }),
         Request::Submit { user, spec, info } => {
+            // the clean-up of a job a restart cut short removes every
+            // temporary file in its destination: a new job writing there
+            // now would lose its own
+            if let Some(dest) = &info.dest {
+                let list = jobs.lock().unwrap();
+                if list.iter().any(|j| j.cleaning && j.view.info.dest.as_deref().is_some_and(|d| overlaps(d, dest))) {
+                    return serde_json::json!({ "error": t!("pulizia dei file temporanei in corso: riprova tra poco", "the temporary files are still being cleaned up: try again shortly") });
+                }
+            }
+            let mut spec = *spec;
+            // An SFTP server with no key known yet gets it pinned now, by
+            // the package: the worker runs as the user and takes no
+            // unknown key. A server out of reach fails in the job.
+            // The CGI waits 15 s for this answer: pinning stops after 6.
+            let start = std::time::Instant::now();
+            for c in &mut spec.remotes {
+                if start.elapsed() < std::time::Duration::from_secs(6) {
+                    let _ = crate::remote::pin_host_key(&user.name, c);
+                }
+            }
             let view = JobView {
                 id: new_id,
                 op: spec.op,
@@ -240,7 +277,7 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                 samples: Vec::new(),
                 interrupted: false,
             };
-            journal(&JournalEntry { id: new_id, user: user.clone(), spec: spec.clone(), info: view.info.clone(), created: view.created });
+            journal(&JournalEntry { id: new_id, user: user.clone(), spec: spec.without_secrets(), info: view.info.clone(), created: view.created });
             let job = Job {
                 view,
                 owner: user.name.clone(),
@@ -254,6 +291,7 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                 finished_at: None,
                 // deletions are quick and should not wait behind a big copy
                 force: false,
+                cleaning: false,
             };
             let force = job.spec.op == Op::Delete;
             {
@@ -303,7 +341,7 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                     ok
                 }
                 "cancel" if job.view.state == State::Queued => {
-                    job.view.msg = t!("annullato", "cancelled").into();
+                    job.view.msg = t!("annullato", "cancelled");
                     job.set_state(State::Cancelled);
                     true
                 }
@@ -340,6 +378,9 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                     schedule(jobs);
                     return serde_json::json!({ "ok": true });
                 }
+                "retry" | "dismiss" if job.cleaning => {
+                    return serde_json::json!({ "error": t!("pulizia dei file temporanei in corso: riprova tra poco", "the temporary files are still being cleaned up: try again shortly") });
+                }
                 "retry" if job.view.state.finished() => {
                     // the same job again, with the archive's password
                     let mut spec = job.spec.clone();
@@ -349,7 +390,12 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                     let (user, info) = (job.user.clone(), job.view.info.clone());
                     list.remove(index);
                     drop(list);
-                    return handle(Request::Submit { user, spec, info }, jobs, new_id);
+                    // the connections as saved now: a job back from the
+                    // journal has no secrets, and a password may have changed
+                    if !spec.remotes.is_empty() {
+                        spec.remotes = crate::remote::with_secrets(&user.name, &spec.remotes);
+                    }
+                    return handle(Request::Submit { user, spec: Box::new(spec), info }, jobs, new_id);
                 }
                 "dismiss" if job.view.state.finished() => {
                     list.remove(index);
@@ -496,7 +542,7 @@ fn follow(jobs: &Jobs, id: u64, stdout: std::process::ChildStdout) {
         let mut list = jobs.lock().unwrap();
         if let Some(job) = list.iter_mut().find(|j| j.view.id == id) {
             job.sample(true);
-            job.view.msg = t!("il processo di copia si è interrotto inaspettatamente", "the copy process stopped unexpectedly").into();
+            job.view.msg = t!("il processo di copia si è interrotto inaspettatamente", "the copy process stopped unexpectedly");
             job.set_state(State::Failed);
         }
     }
@@ -525,77 +571,114 @@ fn journal_path(id: u64) -> PathBuf {
 }
 
 fn journal(entry: &JournalEntry) {
+    use std::os::unix::fs::OpenOptionsExt;
     let path = journal_path(entry.id);
     let dir = path.parent().unwrap();
     let _ = std::fs::create_dir_all(dir);
     let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    // no secrets in it (`Spec::without_secrets`), still the package's only:
+    // it names the user's files
     let tmp = path.with_extension("tmp");
-    // the spec may hold an archive password: readable by the package only
-    let written = serde_json::to_vec(entry).ok().and_then(|b| std::fs::write(&tmp, b).ok());
+    let written = serde_json::to_vec(entry).ok().and_then(|b| {
+        let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp).ok()?;
+        f.write_all(&b).ok()
+    });
     if written.is_some() {
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
         let _ = std::fs::rename(&tmp, &path);
+    } else {
+        let _ = std::fs::remove_file(&tmp);
     }
 }
 
-/// The jobs a restart cut short: cleaned up, shown as interrupted.
-fn recover() -> VecDeque<Job> {
+/// The jobs a restart cut short: shown as interrupted, then cleaned up.
+/// Whether one folder is the other or holds it.
+fn overlaps(a: &str, b: &str) -> bool {
+    let inside = |x: &str, y: &str| x == y || x.strip_prefix(y).is_some_and(|rest| rest.starts_with('/') || y.ends_with('/'));
+    inside(a, b) || inside(b, a)
+}
+
+fn recover(jobs: &Jobs) {
     let dir = crate::var_dir().join("journal");
     let mut entries: Vec<JournalEntry> = std::fs::read_dir(&dir)
         .map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "json")).filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok()).collect())
         .unwrap_or_default();
     entries.sort_by_key(|e| e.id);
-    let mut list = VecDeque::new();
-    for e in entries {
-        crate::lang::set(&e.spec.lang);
-        if e.spec.op != Op::Delete && e.spec.dest.is_some() {
-            let mut clean = e.spec.clone();
-            clean.op = Op::Cleanup;
-            match start_worker(&e.user, &clean) {
-                Ok(mut child) => {
-                    drop(child.stdin.take());
-                    let _ = child.wait();
-                }
-                Err(err) => eprintln!("{} cleanup of job {} failed: {err}", stamp(), e.id),
+    // shown at once as interrupted; the ones with a destination keep their
+    // journal entry until their temporary files are gone
+    let mut cleanups = Vec::new();
+    {
+        let mut list = jobs.lock().unwrap();
+        // before any job submitted since the start, oldest first
+        for e in entries.into_iter().rev() {
+            crate::lang::set(&e.spec.lang);
+            eprintln!("{} job {} was interrupted by the restart", stamp(), e.id);
+            let needs_cleanup = e.spec.op != Op::Delete && e.spec.dest.is_some();
+            if needs_cleanup {
+                let mut clean = e.spec.clone();
+                clean.op = Op::Cleanup;
+                cleanups.push((e.id, e.user.clone(), clean));
             }
+            list.push_front(interrupted(e, needs_cleanup));
         }
-        eprintln!("{} job {} was interrupted by the restart", stamp(), e.id);
-        let view = JobView {
-            id: e.id,
-            op: e.spec.op,
-            info: e.info,
-            state: State::Queued,
-            created: e.created,
-            started: None,
-            finished: None,
-            active_ms: 0,
-            progress: Progress::default(),
-            conflict: None,
-            errors: Vec::new(),
-            msg: t!("interrotto dal riavvio del pacchetto", "interrupted by a restart of the package").into(),
-            verify: e.spec.verify,
-            limit: e.spec.limit,
-            policy: e.spec.conflict,
-            samples: Vec::new(),
-            interrupted: true,
-        };
-        let mut job = Job {
-            view,
-            owner: e.user.name.clone(),
-            user: e.user,
-            spec: e.spec,
-            stdin: None,
-            run_since: None,
-            active: Duration::ZERO,
-            last_sample: None,
-            start_instant: None,
-            finished_at: None,
-            force: false,
-        };
-        job.set_state(State::Failed);
-        list.push_back(job);
     }
-    list
+    for (id, user, mut clean) in cleanups.into_iter().rev() {
+        crate::lang::set(&clean.lang);
+        // remote destinations: the connections as saved, secrets included
+        if !clean.remotes.is_empty() {
+            clean.remotes = crate::remote::with_secrets(&user.name, &clean.remotes);
+        }
+        match start_worker(&user, &clean) {
+            Ok(mut child) => {
+                drop(child.stdin.take());
+                let _ = child.wait();
+            }
+            Err(err) => eprintln!("{} cleanup of job {id} failed: {err}", stamp()),
+        }
+        let mut list = jobs.lock().unwrap();
+        if let Some(job) = list.iter_mut().find(|j| j.view.id == id) {
+            job.cleaning = false;
+        }
+        let _ = std::fs::remove_file(journal_path(id));
+    }
+}
+
+/// A job of the journal, as the interface shows it after a restart.
+fn interrupted(e: JournalEntry, cleaning: bool) -> Job {
+    let view = JobView {
+        id: e.id,
+        op: e.spec.op,
+        info: e.info,
+        state: State::Queued,
+        created: e.created,
+        started: None,
+        finished: None,
+        active_ms: 0,
+        progress: Progress::default(),
+        conflict: None,
+        errors: Vec::new(),
+        msg: t!("interrotto dal riavvio del pacchetto", "interrupted by a restart of the package"),
+        verify: e.spec.verify,
+        limit: e.spec.limit,
+        policy: e.spec.conflict,
+        samples: Vec::new(),
+        interrupted: true,
+    };
+    let mut job = Job {
+        view,
+        owner: e.user.name.clone(),
+        user: e.user,
+        spec: e.spec,
+        stdin: None,
+        run_since: None,
+        active: Duration::ZERO,
+        last_sample: None,
+        start_instant: None,
+        finished_at: None,
+        force: false,
+        cleaning,
+    };
+    job.set_state(State::Failed);
+    job
 }
 
 pub fn now_ms() -> u64 {
@@ -617,4 +700,18 @@ pub fn call(request: &serde_json::Value) -> io::Result<serde_json::Value> {
     let mut line = String::new();
     BufReader::new(&stream).read_line(&mut line)?;
     serde_json::from_str(&line).map_err(io::Error::other)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overlaps;
+
+    #[test]
+    fn folders_overlap() {
+        assert!(overlaps("/Film", "/Film"));
+        assert!(overlaps("/Film", "/Film/2024"));
+        assert!(overlaps("/Film/2024", "/Film"));
+        assert!(!overlaps("/Film", "/Filmati"));
+        assert!(!overlaps("/Film/a", "/Film/b"));
+    }
 }

@@ -63,7 +63,8 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
     if !meta.is_dir() {
         return Err(ApiError::bad_request(t!("non è una cartella", "not a folder")));
     }
-    let thumbs: Vec<std::ffi::OsString> =
+    // a set: a folder of photos has thousands of entries in both
+    let thumbs: std::collections::HashSet<std::ffi::OsString> =
         fs::read_dir(dir.join("@eaDir")).map(|d| d.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
     let mut entries = Vec::new();
     for item in fs::read_dir(dir)?.flatten() {
@@ -74,7 +75,7 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
         let path = item.path();
         let Ok(meta) = fs::symlink_metadata(&path) else { continue };
         let mut e = entry(&path, name, &meta);
-        e.thumb = e.kind == 'f' && thumbs.iter().any(|t| *t == item.file_name());
+        e.thumb = e.kind == 'f' && thumbs.contains(&item.file_name());
         entries.push(e);
     }
     Ok(Listing { entries, writable: access(dir, libc::W_OK | libc::X_OK) })
@@ -291,7 +292,7 @@ pub fn search(root: &Path, pattern: &Pattern, limit: usize, budget: Duration) ->
     while let Some(rel) = queue.pop_front() {
         let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
         for item in rd.flatten() {
-            if (scanned % 256 == 0 && Instant::now() > deadline) || hits.len() >= limit {
+            if (scanned.is_multiple_of(256) && Instant::now() > deadline) || hits.len() >= limit {
                 return SearchResult { hits, scanned, partial: true };
             }
             let name = item.file_name().to_string_lossy().into_owned();
@@ -326,20 +327,20 @@ pub fn space(path: &Path) -> Option<(u64, u64)> {
 /// An I/O error in words the interface shows as they are.
 pub fn describe(e: &io::Error) -> String {
     match e.raw_os_error() {
-        Some(libc::EACCES) | Some(libc::EPERM) => t!("permesso negato", "permission denied").into(),
-        Some(libc::ENOENT) => t!("non esiste più", "no longer exists").into(),
-        Some(libc::EEXIST) => t!("esiste già", "already exists").into(),
-        Some(libc::ENOSPC) => t!("spazio esaurito sul volume", "the volume is full").into(),
-        Some(libc::EDQUOT) => t!("quota disco superata", "disk quota exceeded").into(),
-        Some(libc::EROFS) => t!("il volume è in sola lettura", "the volume is read-only").into(),
-        Some(libc::ENOTEMPTY) => t!("la cartella non è vuota", "the folder is not empty").into(),
-        Some(libc::ENAMETOOLONG) => t!("nome troppo lungo", "name too long").into(),
-        Some(libc::EISDIR) => t!("è una cartella", "is a folder").into(),
-        Some(libc::ENOTDIR) => t!("non è una cartella", "not a folder").into(),
-        Some(libc::EXDEV) => t!("volumi diversi", "different volumes").into(),
-        Some(libc::EIO) => t!("errore di lettura o scrittura del disco", "disk read or write error").into(),
-        Some(libc::EBUSY) => t!("in uso", "in use").into(),
-        Some(libc::ELOOP) => t!("troppi collegamenti simbolici", "too many symbolic links").into(),
+        Some(libc::EACCES) | Some(libc::EPERM) => t!("permesso negato", "permission denied"),
+        Some(libc::ENOENT) => t!("non esiste più", "no longer exists"),
+        Some(libc::EEXIST) => t!("esiste già", "already exists"),
+        Some(libc::ENOSPC) => t!("spazio esaurito sul volume", "the volume is full"),
+        Some(libc::EDQUOT) => t!("quota disco superata", "disk quota exceeded"),
+        Some(libc::EROFS) => t!("il volume è in sola lettura", "the volume is read-only"),
+        Some(libc::ENOTEMPTY) => t!("la cartella non è vuota", "the folder is not empty"),
+        Some(libc::ENAMETOOLONG) => t!("nome troppo lungo", "name too long"),
+        Some(libc::EISDIR) => t!("è una cartella", "is a folder"),
+        Some(libc::ENOTDIR) => t!("non è una cartella", "not a folder"),
+        Some(libc::EXDEV) => t!("volumi diversi", "different volumes"),
+        Some(libc::EIO) => t!("errore di lettura o scrittura del disco", "disk read or write error"),
+        Some(libc::EBUSY) => t!("in uso", "in use"),
+        Some(libc::ELOOP) => t!("troppi collegamenti simbolici", "too many symbolic links"),
         _ => e.to_string(),
     }
 }

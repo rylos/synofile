@@ -1,6 +1,6 @@
 [package]
 name = "synofile"
-version = "0.8.6"
+version = "0.8.7"
 edition = "2024"
 license = "MIT"
 description = "Synology DSM package: a fast, dark file manager for the shared folders, with a detailed transfer dialog"
@@ -22,6 +22,8 @@ russh = { version = "0.54", default-features = false, features = ["ring", "rsa"]
 russh-sftp = "2.4"
 tokio = { version = "1", features = ["rt", "net", "time", "io-util"] }
 aes-gcm = "0.10"
+# the login cache's keys (already built for russh)
+sha2 = { version = "0.10", default-features = false }
 
 [profile.release]
 lto = true

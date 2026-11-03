@@ -112,7 +112,9 @@ export function t(text, vars) {
   return out;
 }
 
+// made once per language: count() runs for every row of the status bar and info panel
 let rules = null;
+let rulesLocale = null;
 
 /**
  * "1 file" / "3 file", "1 cartella" / "3 cartelle". The plural may be a
@@ -121,7 +123,10 @@ let rules = null;
  * Italian uses one word for both, the plural key is `word|pl`.
  */
 export function count(n, one, many, fmt = (x) => x) {
-  if (!rules || rules.resolvedOptions().locale !== new Intl.PluralRules(LOCALE).resolvedOptions().locale) rules = new Intl.PluralRules(LOCALE);
+  if (rulesLocale !== LOCALE) {
+    rules = new Intl.PluralRules(LOCALE);
+    rulesLocale = LOCALE;
+  }
   const form = rules.select(n);
   if (form === "one" || (LANG === "it" && n === 1)) return `${fmt(n)} ${t(one)}`;
   const key = one === many ? `${many}|pl` : many;
