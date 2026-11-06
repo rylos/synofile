@@ -394,10 +394,15 @@ function renderButton() {
   const running = list.filter(active);
   const btn = $("#xfer-btn");
   btn.classList.toggle("active", running.length > 0);
-  btn.classList.toggle("attention", running.some((j) => j.state === "conflict" || j.state === "paused"));
+  const attention = running.some((j) => j.state === "conflict" || j.state === "paused");
+  btn.classList.toggle("attention", attention);
   const recentFail = list.some((j) => j.state === "failed" && !j._seenFail);
   btn.classList.toggle("failed", recentFail && !running.length);
-  $("#xfer-count").textContent = running.length || (recentFail ? "!" : "");
+  // one transfer: the ring says it already; the number counts from two,
+  // or marks the one waiting for an answer
+  const many = running.length > 1 || attention;
+  btn.classList.toggle("counted", many || (recentFail && !running.length));
+  $("#xfer-count").textContent = many ? running.length : recentFail && !running.length ? "!" : "";
   let total = 0;
   let done = 0;
   for (const j of running) {
@@ -581,6 +586,7 @@ class JobDialog {
     const r = route(job);
     const state = shownState(job);
     $(".ttl", d).textContent = finished(job) ? (state === "done" ? t(op.done) : title(job)) : t(op.running);
+    $(".ttl", d).title = title(job);
     const chip = $(".chip", d);
     chip.className = "chip " + state;
     chip.textContent = t(STATE[state]);
@@ -692,7 +698,7 @@ class JobDialog {
           setTimeout(() => $("input", form)?.focus());
         }
       } else {
-        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : `${t(STATE[job.state])}: ${job.msg}`;
+        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : !job.msg || job.msg === t(STATE[job.state]) ? t(STATE[job.state]) : `${t(STATE[job.state])}: ${job.msg}`;
         sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`;
       }
     } else sum.hidden = true;

@@ -1,3 +1,8 @@
+v0.8.14
+- The transfer window keeps its width with a long file name: the title ends in "…" (the whole name on hover) and the state stays in view.
+- A cancelled transfer says "Cancelled" once, instead of "Cancelled: cancelled".
+- The number on the transfers button shows from two transfers on: with one, the ring already says it. It still shows on a transfer waiting for an answer (paused, or a name conflict), and "!" after a failure.
+
 v0.8.13
 - Empty the Recycle Bin: from the right-click menu of a #recycle folder, from inside it, and from the menu of a shared folder in the sidebar. It asks first; what is in the bin is deleted for good.
 - The #recycle folder's icon shows whether the bin is full or empty. The bin folder itself can no longer be moved to the bin or deleted: it is emptied instead.

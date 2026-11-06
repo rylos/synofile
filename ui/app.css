@@ -183,9 +183,9 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
   border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
   display: none; place-items: center; line-height: 16px;
 }
-.xfer-btn.active .xfer-count, .xfer-btn.attention .xfer-count { display: grid; }
+.xfer-btn.counted .xfer-count { display: grid; }
 .xfer-btn.attention .xfer-count { background: var(--warn); }
-.xfer-btn.failed .xfer-count { background: var(--crit); display: grid; }
+.xfer-btn.failed .xfer-count { background: var(--crit); }
 
 /* ---------- sidebar ---------- */
 .sidebar {
@@ -596,6 +596,8 @@ dialog.xfer { max-width: min(96vw, 520px); }
 .xf-head .op svg { width: 14px; height: 14px; }
 .xf-head .tt { flex: 1; min-width: 0; }
 .xf-head .tt h2 { margin: 0; font-size: 1em; display: flex; align-items: center; gap: 8px; }
+.xf-head .tt h2 .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xf-head .tt h2 .chip { flex: none; }
 .xf-head .tt .route { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 1px; }
 .xf-head .tt .route span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: .95em; }
 .xf-head .tt .route svg { width: 13px; height: 13px; flex: none; color: var(--faint); }
