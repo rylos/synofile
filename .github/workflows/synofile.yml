@@ -1,0 +1,163 @@
+name: Build n Release SynoFile Package
+
+env:
+  # --- Edit these when reusing for a different package ---
+  REPO_NAME: "synofile"
+  SPK_PREFIX: "SynoFile"
+  HELPER_NAME: "synofile"
+
+  # --- Runner config, shouldn't need to change ---
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-spk:
+    name: Build Package
+    runs-on: ubuntu-latest
+
+    # SynoFile is x86_64 and DSM 7 only (INFO.in: arch="x86_64",
+    # os_min_ver="7.0-40000"), built by build.sh with cargo, so there is no
+    # arch/DSM matrix and no synology-package-builder step.
+    env:
+      ARCH_LABEL: "x86_64"
+      DSM_SUFFIX: "DSM-7.x"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Get release tag
+        id: get_latest_tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "new_tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            # Get most recent release including pre-releases
+            response=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/007revad/${REPO_NAME}/releases?per_page=1")
+            latest_tag=$(echo "$response" | jq -r 'if type == "array" then .[0].tag_name // empty else empty end')
+            if [ -z "$latest_tag" ]; then
+              echo "ERROR: Could not determine release tag. API response:" >&2
+              echo "$response" >&2
+              exit 1
+            fi
+            echo "new_tag=$latest_tag" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if SPKs already exist in release
+        id: check_assets
+        run: |
+          existing=$(curl -s "https://api.github.com/repos/007revad/${REPO_NAME}/releases/tags/${{ steps.get_latest_tag.outputs.new_tag }}" \
+            | jq -r '.assets[].name' | grep -c '\.spk' || true)
+          echo "spk_count=$existing" >> $GITHUB_OUTPUT
+
+      # ring (pulled in by russh) compiles C, and the musl target needs musl-gcc
+      - name: Install build tools
+        if: steps.check_assets.outputs.spk_count == '0'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          rustup target add x86_64-unknown-linux-musl
+
+      # build.sh: cargo test, cargo build --release, compile the setuid helper
+      # with the SHA-256 of that binary baked in, pack dist/synofile-<ver>.spk
+      - name: Build package
+        if: steps.check_assets.outputs.spk_count == '0'
+        run: |
+          set -euo pipefail
+          ./build.sh
+          ls -l ./dist
+
+      # The helper's hash is compiled in, so check the finished spk: the
+      # helper is there, is a static x86-64 binary, and carries the SHA-256
+      # of the bin/synofile and bin/synofile-worker in the same spk.
+      - name: Verify setuid helper in package
+        if: steps.check_assets.outputs.spk_count == '0'
+        run: |
+          set -euo pipefail
+
+          spk=$(ls ./dist/*.spk | head -n1)
+          workdir=$(mktemp -d)
+          tar -xf "$spk" -C "$workdir" package.tgz conf/privilege
+          tar -xf "$workdir/package.tgz" -C "$workdir" \
+            bin/synofile bin/synofile-worker bin/helper/${HELPER_NAME}-helper
+
+          helper="$workdir/bin/helper/${HELPER_NAME}-helper"
+          if [ ! -s "$helper" ]; then
+            echo "::error::${HELPER_NAME}-helper missing or empty in $spk"
+            exit 1
+          fi
+
+          file_out=$(file -b "$helper")
+          echo "${HELPER_NAME}-helper: $file_out"
+          echo "$file_out" | grep -Eq "x86-64" \
+            || { echo "::error::helper is not x86-64 (got: $file_out)"; exit 1; }
+          echo "$file_out" | grep -q "statically linked" \
+            || { echo "::error::helper is not statically linked (got: $file_out)"; exit 1; }
+
+          for f in synofile synofile-worker; do
+            sum=$(sha256sum "$workdir/bin/$f" | cut -d' ' -f1)
+            grep -aq "$sum" "$helper" \
+              || { echo "::error::helper does not contain the SHA-256 of bin/$f ($sum)"; exit 1; }
+          done
+          echo "OK: helper carries the SHA-256 of synofile and synofile-worker"
+
+          grep -q 'bin/helper/synofile-helper' "$workdir/conf/privilege" \
+            || { echo "::error::conf/privilege has no entry for bin/helper/synofile-helper"; exit 1; }
+
+          rm -rf "$workdir"
+
+      - name: Rename package
+        if: steps.check_assets.outputs.spk_count == '0'
+        run: |
+          ls -l ./dist
+          for f in ./dist/*.spk; do
+            mv "$f" "./dist/${SPK_PREFIX}-${ARCH_LABEL}-${{ steps.get_latest_tag.outputs.new_tag }}-${DSM_SUFFIX}.spk"
+          done
+          ls -l ./dist
+
+      - name: Upload Package
+        if: steps.check_assets.outputs.spk_count == '0'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.SPK_PREFIX }}-${{ env.ARCH_LABEL }}-${{ env.DSM_SUFFIX }}
+          path: ./dist/*.spk
+
+      - name: Release
+        if: steps.check_assets.outputs.spk_count == '0'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_latest_tag.outputs.new_tag }}
+          make_latest: false
+          fail_on_unmatched_files: false
+          files: |
+            ./dist/*.spk
+
+  notify-spkrepo:
+    runs-on: ubuntu-latest
+    needs: [build-spk]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - name: Trigger spkrepo index rebuild
+        run: |
+          curl -fsSL \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.SYNC_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/repos/007revad/007revad.github.io/dispatches \
+            --data '{
+              "event_type": "spk-release",
+              "client_payload": {
+                "repo":    "${{ github.repository }}",
+                "tag":     "${{ github.event.release.tag_name }}"
+              }
+            }'
