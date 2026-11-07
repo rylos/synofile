@@ -49,7 +49,7 @@ tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui etc
 
 sed "s/@VERSION@/$version/" spk/INFO.in > "$work/spk/INFO"
 # WIZARD_UIFILES: a step of the install and upgrade wizard says to run setup
-cp -r spk/conf spk/scripts spk/WIZARD_UIFILES "$work/spk/"
+#cp -r spk/conf spk/scripts spk/WIZARD_UIFILES "$work/spk/"
 cp ui/images/icon_72.png "$work/spk/PACKAGE_ICON.PNG"
 cp ui/images/icon_256.png "$work/spk/PACKAGE_ICON_256.PNG"
 
