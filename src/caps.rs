@@ -204,6 +204,21 @@ mod tests {
     }
 
     #[test]
+    fn helper_writes_the_same_capabilities() {
+        // spk/helper/synofile-helper.c carries its own copy of the 20 bytes
+        let src = include_str!("../spk/helper/synofile-helper.c");
+        let start = src.find("CAPS[20] = {").expect("CAPS in the helper") + "CAPS[20] = {".len();
+        let body = &src[start..start + src[start..].find('}').unwrap()];
+        let bytes: Vec<u8> = body
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.strip_prefix("0x").map_or_else(|| s.parse().unwrap(), |h| u8::from_str_radix(h, 16).unwrap()))
+            .collect();
+        assert_eq!(bytes, xattr_value());
+    }
+
+    #[test]
     fn hardens_only_the_installed_package() {
         let installed = Path::new("/volume2/@appstore/synofile/bin/synofile");
         assert_eq!(

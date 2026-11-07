@@ -23,6 +23,13 @@ mkdir -p "$work/pkg/bin" "$work/spk"
 cp "target/$target/release/synofile" "$work/pkg/bin/synofile"
 # the same program under another name: it starts as the worker, and has no capabilities
 cp "target/$target/release/synofile" "$work/pkg/bin/synofile-worker"
+
+# the setuid helper postinst runs: it gives bin/synofile its capabilities,
+# and only to the binary whose SHA-256 is compiled into it
+hash=$(sha256sum "$work/pkg/bin/synofile" | cut -d' ' -f1)
+mkdir -p "$work/pkg/bin/helper"
+${CC:-cc} -O2 -static -Wall -DEXPECTED_SHA256="\"$hash\"" \
+    -o "$work/pkg/bin/helper/synofile-helper" spk/helper/synofile-helper.c
 cp -r ui "$work/pkg/ui"
 cp -r etc "$work/pkg/etc"
 # DSM serves the interface without Cache-Control, so browsers keep old files
@@ -41,12 +48,11 @@ find "$work/pkg/ui/js" -name '*.js' -exec sed -i \
 tar -C "$work/pkg" --owner=0 --group=0 -czf "$work/spk/package.tgz" bin ui etc
 
 sed "s/@VERSION@/$version/" spk/INFO.in > "$work/spk/INFO"
-# WIZARD_UIFILES: a step of the install and upgrade wizard says to run setup
-cp -r spk/conf spk/scripts spk/WIZARD_UIFILES "$work/spk/"
+cp -r spk/conf spk/scripts "$work/spk/"
 cp ui/images/icon_72.png "$work/spk/PACKAGE_ICON.PNG"
 cp ui/images/icon_256.png "$work/spk/PACKAGE_ICON_256.PNG"
 
 mkdir -p dist
 out="dist/synofile-$version.spk"
-tar -C "$work/spk" --owner=0 --group=0 -cf "$out" INFO package.tgz conf scripts WIZARD_UIFILES PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
+tar -C "$work/spk" --owner=0 --group=0 -cf "$out" INFO package.tgz conf scripts PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
 echo "$out"

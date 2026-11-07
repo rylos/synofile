@@ -1,23 +1,15 @@
 #!/bin/sh
+# DSM 7 refuses `capabilities` in conf/privilege for third-party packages,
+# so the setuid helper declared there gives bin/synofile its capabilities.
+# postinst runs on install and on upgrade, before the package starts, so the
+# daemon starts with them. If DSM did not make the helper setuid, nothing
+# happens: the interface then says to run `synofile setup` as before.
 
-PKG_NAME=$(basename "$SYNOPKG_PKGDEST")
-TARGET_DIR="/var/packages/$PKG_NAME/target"
+HELPER="/var/packages/synofile/target/bin/helper/synofile-helper"
 
-# Get DSM major version
-dsm=$(/usr/syno/bin/synogetkeyvalue /etc.defaults/VERSION majorversion)
-if [[ $dsm -ge 7 ]]; then
-    VAR_DIR="/var/packages/${PKG_NAME}/var"
-else
-    VAR_DIR="/var/packages/${PKG_NAME}/etc"
-fi
-
-if [[ $dsm -ge 7 ]]; then
-    HELPER="$TARGET_DIR/bin/helper/synofile-helper"
-    if [[ -u "$HELPER" ]]; then
-        result="$("$HELPER" 2>&1)"
-        rc=$?
-        echo "synofile postinst: exit=${rc} output: ${result}"
-    fi
+if [ -u "$HELPER" ] && [ -x "$HELPER" ]; then
+    out=$("$HELPER" 2>&1)
+    echo "synofile postinst: helper exit=$? $out"
 fi
 
 exit 0

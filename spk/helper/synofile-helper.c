@@ -212,13 +212,19 @@ static int install_copy(int dirfd, const char *name, gid_t gid, mode_t mode, int
     struct stat st;
     int src = -1, dst = -1, rc = -1;
 
-    src = openat(dirfd, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    /* O_NONBLOCK: a FIFO put in its place must not hang this process, which
+     * nobody but root can then kill (and with it the package install) */
+    src = openat(dirfd, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
     if (src < 0 || fstat(src, &st) < 0) {
         fail(name);
         goto out;
     }
     if (!S_ISREG(st.st_mode)) {
         fprintf(stderr, "synofile-helper: %s is not a regular file\n", name);
+        goto out;
+    }
+    if (fcntl(src, F_SETFL, 0) < 0) {
+        fail(name);
         goto out;
     }
     if (unlinkat(dirfd, TMP_NAME, 0) < 0 && errno != ENOENT) {

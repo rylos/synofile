@@ -100,8 +100,6 @@ which also brings the updates:
 1. Package Center > Settings > Package Sources > Add.
 2. Name `007revad`, location `https://spkrepo.007daver.workers.dev/`, then OK.
 3. Community, on the left: install SynoFile.
-4. Run `setup` and restart, the last two commands below, after the install
-   and after every update.
 
 **By hand:** take `synofile-<version>.spk` from the
 [releases](https://github.com/rylos/synofile/releases), or build it with
@@ -111,15 +109,17 @@ NAS (x86_64, DSM 7):
 ```sh
 scp -O synofile-*.spk admin@nas:
 ssh admin@nas 'sudo /usr/syno/bin/synopkg install synofile-*.spk'
-ssh admin@nas 'sudo /var/packages/synofile/target/bin/synofile setup'
-ssh admin@nas 'sudo /usr/syno/bin/synopkg restart synofile'
 ```
 
-Package Center's *Manual install* works too. **`setup` has to run again after
-every install or upgrade**; the interface says so, with the command, when the
-permissions are missing. An upgrade restarts the package: running transfers
-come back as interrupted. `curl -s http://127.0.0.1:5000/webman/3rdparty/synofile/api.cgi/health`
-on the NAS tells whether setup ran and the transfer service is up.
+Package Center's *Manual install* works too. Nothing else to run: since
+0.8.15 the package gives itself its permissions while it installs (see below).
+Should that ever fail, the interface says so and gives the fallback command,
+`sudo /var/packages/synofile/target/bin/synofile setup` followed by
+`sudo /usr/syno/bin/synopkg restart synofile`. An upgrade restarts the
+package: running transfers come back as interrupted.
+`curl -s http://127.0.0.1:5000/webman/3rdparty/synofile/api.cgi/health`
+on the NAS tells whether the permissions are there and the transfer service
+is up.
 
 ## How it works
 
@@ -132,8 +132,13 @@ on the NAS tells whether setup ran and the transfer service is up.
   read-only snapshot), while every change still goes through the user's
   own permissions.
 - That takes `CAP_SETUID`, `CAP_SETGID` and `CAP_DAC_READ_SEARCH`. DSM 7 refuses `capabilities` in
-  third-party packages (error 319), so `synofile setup`, as root, writes the
-  file capability and gives the binaries to root.
+  third-party packages (error 319), so a small setuid-root helper
+  (`spk/helper/synofile-helper.c`, by Dave Russell), declared in
+  `conf/privilege` and run by `postinst`, writes the file capability. It runs
+  nothing it is given: it copies `bin/synofile` and `bin/synofile-worker` to
+  new root-owned files, checking their SHA-256 against the one compiled into
+  it at build time, and only then sets the capability and renames them into
+  place. `synofile setup`, as root, does the same by hand.
 - `synofile daemon` keeps the transfers, reached over a Unix socket only the
   package can open. Each job runs in `synofile-worker`, already the user,
   reporting progress over a pipe. Unfinished jobs are journalled on disk.

@@ -1,3 +1,6 @@
+v0.8.15
+- No more `setup` over SSH after installing or upgrading: a small setuid helper, run by the package's install script, gives bin/synofile its permissions before the package starts. It sets them only on the binary built together with it (its SHA-256 is compiled in), copied to a new file owned by root. By Dave Russell. `synofile setup` stays for the case DSM does not run the helper; the interface still says so when the permissions are missing.
+
 v0.8.14
 - The transfer window keeps its width with a long file name: the title ends in "…" (the whole name on hover) and the state stays in view.
 - A cancelled transfer says "Cancelled" once, instead of "Cancelled: cancelled".
