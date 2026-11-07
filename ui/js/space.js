@@ -23,7 +23,8 @@ export function spaceAnalysis(path, onOpen) {
        <button class="icon-btn sp-close" title="${t("Chiudi")}">${svg("close")}</button></div>
      <div class="sp-crumbs"></div>
      <div class="sp-main">
-       <div class="sp-chart"><div class="sp-wait"><div class="loading-bar"></div><span>${t("Analisi di {p}…", { p: esc(path) })}</span></div></div>
+       <div class="sp-left"><div class="sp-chart"><div class="sp-wait"><div class="loading-bar"></div><span>${t("Analisi di {p}…", { p: esc(path) })}</span></div></div>
+         <div class="sp-label"></div></div>
        <div class="sp-side"><div class="sp-list"></div></div>
      </div>
      <div class="dlg-foot"><span class="left hint sp-stats"></span>
@@ -32,6 +33,7 @@ export function spaceAnalysis(path, onOpen) {
     { cls: "space" },
   );
   const chart = dlg.querySelector(".sp-chart");
+  const label = dlg.querySelector(".sp-label");
   const list = dlg.querySelector(".sp-list");
   const crumbs = dlg.querySelector(".sp-crumbs");
   const stats = dlg.querySelector(".sp-stats");
@@ -51,6 +53,7 @@ export function spaceAnalysis(path, onOpen) {
   async function load(target) {
     reading?.abort();
     const mine = (reading = new AbortController());
+    label.textContent = "";
     chart.innerHTML = `<div class="sp-wait"><div class="loading-bar"></div><span>${t("Analisi di {p}…", { p: esc(target) })}</span></div>`;
     stats.textContent = "";
     try {
@@ -114,13 +117,14 @@ export function spaceAnalysis(path, onOpen) {
     walk(view, trail, 0, Math.PI * 2, 0, HUES[0]);
     chart.innerHTML = `<svg viewBox="${-W / 2} ${-W / 2} ${W} ${W}" class="sp-svg">${paths}
       <circle r="${r0 - 2}" class="sp-centre"/>
-      <text class="sp-c1" y="-6"></text><text class="sp-c2" y="16"></text><text class="sp-c3" y="34"></text></svg>`;
+      <text class="sp-c1" y="2"></text><text class="sp-c2" y="24"></text></svg>`;
     const s = chart.querySelector("svg");
     const centre = (node) => {
       const n = node || view;
-      s.querySelector(".sp-c1").textContent = clip(n.k === "o" ? t("file più piccoli") : n.n || baseName(here()) || "/", 18);
-      s.querySelector(".sp-c2").textContent = size(n.s);
-      s.querySelector(".sp-c3").textContent = node && node !== view ? pct(n.s / view.s) : n.f ? count(n.f, "file", "file", int) : "";
+      // the name below the chart, where a long one fits; the centre keeps the numbers
+      label.textContent = label.title = n.k === "o" ? t("file più piccoli") : n.n || baseName(here()) || "/";
+      s.querySelector(".sp-c1").textContent = size(n.s);
+      s.querySelector(".sp-c2").textContent = node && node !== view ? pct(n.s / view.s) : n.f ? count(n.f, "file", "file", int) : "";
     };
     centre();
     s.onmousemove = (e) => {
@@ -233,8 +237,4 @@ function arc(r1, r2, a0, a1) {
 
 function pct(x) {
   return (x * 100).toLocaleString(undefined, { maximumFractionDigits: x < 0.1 ? 1 : 0 }) + "%";
-}
-
-function clip(s, n) {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
