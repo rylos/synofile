@@ -1,2 +1,23 @@
 #!/bin/sh
+
+PKG_NAME=$(basename "$SYNOPKG_PKGDEST")
+TARGET_DIR="/var/packages/$PKG_NAME/target"
+
+# Get DSM major version
+dsm=$(/usr/syno/bin/synogetkeyvalue /etc.defaults/VERSION majorversion)
+if [[ $dsm -ge 7 ]]; then
+    VAR_DIR="/var/packages/${PKG_NAME}/var"
+else
+    VAR_DIR="/var/packages/${PKG_NAME}/etc"
+fi
+
+if [[ $dsm -ge 7 ]]; then
+    HELPER="$TARGET_DIR/bin/helper/synofile-helper"
+    if [[ -u "$HELPER" ]]; then
+        result="$("$HELPER" 2>&1)"
+        rc=$?
+        echo "synofile postinst: exit=${rc} output: ${result}"
+    fi
+fi
+
 exit 0

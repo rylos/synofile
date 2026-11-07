@@ -12,5 +12,10 @@
         "user": "package",
         "group": "package",
         "permission": "0755"
+    }, {
+      "relpath": "bin/helper/synofile-helper",
+      "user": "root",
+      "group": "package",
+      "permission": "6550"
     }]
 }

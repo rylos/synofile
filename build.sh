@@ -23,6 +23,13 @@ mkdir -p "$work/pkg/bin" "$work/spk"
 cp "target/$target/release/synofile" "$work/pkg/bin/synofile"
 # the same program under another name: it starts as the worker, and has no capabilities
 cp "target/$target/release/synofile" "$work/pkg/bin/synofile-worker"
+
+# setuid helper
+hash=$(sha256sum "$work/pkg/bin/synofile" | cut -d' ' -f1)
+mkdir -p "$work/pkg/bin/helper"
+cc -O2 -static -Wall -DEXPECTED_SHA256="\"$hash\"" \
+    -o "$work/pkg/bin/helper/synofile-helper" spk/helper/synofile-helper.c
+
 cp -r ui "$work/pkg/ui"
 cp -r etc "$work/pkg/etc"
 # DSM serves the interface without Cache-Control, so browsers keep old files
