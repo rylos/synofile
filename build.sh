@@ -28,8 +28,28 @@ cp "target/$target/release/synofile" "$work/pkg/bin/synofile-worker"
 # and only to the binary whose SHA-256 is compiled into it
 hash=$(sha256sum "$work/pkg/bin/synofile" | cut -d' ' -f1)
 mkdir -p "$work/pkg/bin/helper"
-${CC:-cc} -O2 -static -Wall -DEXPECTED_SHA256="\"$hash\"" \
-    -o "$work/pkg/bin/helper/synofile-helper" spk/helper/synofile-helper.c
+helper="$work/pkg/bin/helper/synofile-helper"
+# linked with the musl Rust ships for this target, built for plain x86-64:
+# the build machine's own libc may target newer CPUs (CachyOS: x86-64-v3)
+# and die with SIGILL on a Celeron J3455. Only musl's headers come from
+# the system (musl-tools / musl).
+crt="$(rustc --print sysroot)/lib/rustlib/$target/lib/self-contained"
+musl_inc=""
+for d in /usr/lib/musl/include /usr/include/x86_64-linux-musl /usr/local/musl/include; do
+    [ -f "$d/stdio.h" ] && musl_inc=$d && break
+done
+[ -n "$musl_inc" ] || { echo "musl headers not found (install musl or musl-tools)" >&2; exit 1; }
+${CC:-cc} -O2 -march=x86-64 -mtune=generic -static -nostdlib -nostdinc \
+    -isystem "$musl_inc" -isystem "$(${CC:-cc} -print-file-name=include)" \
+    -Wall -Wextra -DEXPECTED_SHA256="\"$hash\"" -o "$helper" \
+    "$crt/crt1.o" "$crt/crti.o" "$crt/crtbegin.o" spk/helper/synofile-helper.c \
+    "$crt/libc.a" "$crt/crtend.o" "$crt/crtn.o"
+strip "$helper"
+# nothing beyond baseline x86-64: no AVX, BMI, MOVBE, POPCNT/LZCNT/TZCNT
+if objdump -d --no-show-raw-insn "$helper" | grep -qE '%[yz]mm|[[:space:]]v[a-z0-9]+[[:space:]]+.*%xmm|[[:space:]](shlx|shrx|sarx|rorx|andn|bzhi|pdep|pext|tzcnt|lzcnt|movbe|popcnt)[[:space:]]'; then
+    echo "$helper uses instructions beyond baseline x86-64" >&2
+    exit 1
+fi
 cp -r ui "$work/pkg/ui"
 cp -r etc "$work/pkg/etc"
 # DSM serves the interface without Cache-Control, so browsers keep old files
