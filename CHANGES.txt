@@ -1,8 +1,5 @@
 v0.8.15
-1. Changed to use a setuid helper so users don't need to run SSH commands when installing or upgrading the package.
-2. Added a GitHub workflow to compile the helper binary and run build.sh when: 
-  - A new release is published.
-  - The Workflow is run manually from the Actions menu.
+- Changed so users don't need to run SSH commands after installing or upgrading the package.
 
 v0.8.14
 - The transfer window keeps its width with a long file name: the title ends in "…" (the whole name on hover) and the state stays in view.
