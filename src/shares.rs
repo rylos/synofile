@@ -37,13 +37,10 @@ pub fn all(user: &User) -> Vec<Share> {
     shares.retain(|s| s.path.is_dir());
     shares.sort_by_key(|s| s.name.to_lowercase());
     let homes = shares.iter().find(|s| s.name == "homes").cloned();
-    if let Some(homes) = homes {
-        if user.home.is_dir() {
-            shares.insert(
-                0,
-                Share { name: HOME.into(), path: user.home.clone(), comment: String::new(), home: true, ..homes },
-            );
-        }
+    if let Some(homes) = homes
+        && user.home.is_dir()
+    {
+        shares.insert(0, Share { name: HOME.into(), path: user.home.clone(), comment: String::new(), home: true, ..homes });
     }
     shares
 }

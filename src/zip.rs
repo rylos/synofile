@@ -299,7 +299,8 @@ impl<W: Write> ZipWriter<W> {
 fn dos_time(mtime: i64) -> (u16, u16) {
     // SAFETY: localtime_r with valid pointers
     let tm = unsafe {
-        let t: libc::time_t = mtime.max(315_532_800) as libc::time_t;
+        // the width of time_t is whatever localtime_r takes on this target
+        let t = mtime.max(315_532_800) as _;
         let mut tm: libc::tm = std::mem::zeroed();
         libc::localtime_r(&t, &mut tm);
         tm

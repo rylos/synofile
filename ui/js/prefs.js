@@ -9,6 +9,7 @@ export const DEFAULTS = {
   theme: "dark", // dark, light, system
   icons: true,
   colors: true, // eza colours on names and icons
+  greySystem: true, // system folders (#recycle, #snapshot…) in grey
   llColumns: true, // eza colours on permissions, sizes and dates
   size: "normal", // small, normal, large
   density: "normal", // compact, normal
@@ -49,6 +50,7 @@ const LOCAL = "synofile.prefs";
 export const prefs = structuredClone(DEFAULTS);
 const listeners = new Set();
 
+/** fn(keys): the keys that changed, or null when everything may have. */
 export function onChange(fn) {
   listeners.add(fn);
 }
@@ -66,24 +68,46 @@ export function loadLocal() {
   apply();
 }
 
-export async function loadRemote() {
+/**
+ * The preferences kept on the NAS: `remote` when they came already (the
+ * init route), else asked for. Listeners hear about it when they differ
+ * from the local copy the page started with.
+ */
+export async function loadRemote(remote) {
+  const before = JSON.stringify(prefs);
   try {
-    const remote = await api.prefs();
+    if (remote === undefined) remote = await api.prefs();
     if (remote && Object.keys(remote).length) merge(remote);
   } catch {}
   apply();
+  if (JSON.stringify(prefs) !== before) {
+    try {
+      localStorage.setItem(LOCAL, JSON.stringify(prefs));
+    } catch {}
+    listeners.forEach((fn) => fn(null));
+  }
 }
 
 let timer = 0;
+/**
+ * Changes and keeps preferences. Listeners hear only the keys whose value
+ * really changed, so remembering the tabs after each folder opened does
+ * not redraw the panes.
+ */
 export function save(patch) {
-  if (patch) Object.assign(prefs, patch);
+  const keys = [];
+  for (const [k, v] of Object.entries(patch || {})) {
+    // the same object back may have been changed in place: count it
+    if ((v === prefs[k] && v && typeof v === "object") || JSON.stringify(prefs[k]) !== JSON.stringify(v)) keys.push(k);
+    prefs[k] = v;
+  }
   apply();
   try {
     localStorage.setItem(LOCAL, JSON.stringify(prefs));
   } catch {}
   clearTimeout(timer);
   timer = setTimeout(() => api.savePrefs(prefs).catch(() => {}), 700);
-  listeners.forEach((fn) => fn(prefs));
+  if (keys.length || !patch) listeners.forEach((fn) => fn(patch ? keys : null));
 }
 
 /** The look of the page follows the preferences at once. */
@@ -98,6 +122,7 @@ export function apply() {
   if (app) {
     app.classList.toggle("no-icons", !prefs.icons);
     app.classList.toggle("no-colors", !prefs.colors);
+    app.classList.toggle("grey-system", !!prefs.greySystem);
     app.classList.toggle("no-ll", !prefs.llColumns);
     app.classList.toggle("no-sidebar", !prefs.sidebar);
   }

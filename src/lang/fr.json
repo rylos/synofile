@@ -5,6 +5,7 @@
  "annullato": "annulé",
  "archivi: copia prima i file sul NAS": "archives : copiez d'abord les fichiers sur le NAS",
  "archivio protetto da password: usa «Estrai»": "archive protégée par mot de passe : utilisez « Extraire »",
+ "blocchi mancanti": "blocs manquants",
  "blocco incompleto": "bloc incomplet",
  "blocco non valido": "bloc non valide",
  "cartella condivisa {} inesistente": "dossier partagé {} inexistant",
@@ -91,5 +92,9 @@
  "il file è cambiato sul NAS da quando l'hai aperto": "le fichier a changé sur le NAS depuis que tu l'as ouvert",
  "il file è cambiato sul server da quando l'hai aperto": "le fichier a changé sur le serveur depuis que tu l'as ouvert",
  "il file non è testo UTF-8: l'editor lo rovinerebbe": "le fichier n'est pas du texte UTF-8 : l'éditeur l'abîmerait",
- "non è un file di testo": "ce n'est pas un fichier texte"
+ "non è un file di testo": "ce n'est pas un fichier texte",
+ "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "la corbeille de DSM ne peut pas le prendre (atteint par un lien symbolique hors du dossier partagé ?) : il n'a pas été supprimé",
+ "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "la clé du serveur n'est pas encore vérifiée : ouvre Modifier la connexion et enregistre",
+ "la chiave delle connessioni è danneggiata": "la clé des connexions est endommagée",
+ "pulizia dei file temporanei in corso: riprova tra poco": "nettoyage des fichiers temporaires en cours : réessaie dans un instant"
 }

@@ -6,7 +6,7 @@
 //! the kernel decides what that user may read and change.
 
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -29,6 +29,7 @@ pub fn serve() -> io::Result<()> {
     crate::lang::set(req.param("lang").unwrap_or("it"));
     let mut out = io::BufWriter::with_capacity(256 * 1024, io::stdout().lock());
     let result = route(&req, &mut out);
+    cgi::discard_unread(req.length);
     if let Err(err) = result {
         cgi::error(&mut out, &err)?;
     }
@@ -47,22 +48,27 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
         cgi::json(out, 200, &json!({ "version": VERSION, "capabilities": crate::caps::effective(), "on_file": on_file, "daemon": daemon }))?;
         return Ok(());
     }
-    let name = auth::require_admin()?;
-    let user = identity::lookup(&name)?;
-    let shares = shares::all(&user);
-    // read as the package, which owns them
-    let conns: Vec<_> = crate::remote::load(&user.name).into_iter().map(|c| crate::remote::api::with_key(&user.name, c)).collect();
+    let (name, groups) = auth::require_admin(req)?;
+    let user = identity::lookup_with(&name, &groups)?;
 
     match req.route.as_str() {
-        // ---- as the package user ----
+        // ---- as the package user, which owns the daemon's socket, the
+        // preferences and the connections: no capability needed ----
         "whoami" => {
-            let daemon = daemon::call(&json!({"cmd": "ping"})).ok();
-            let setup = crate::caps::effective() || identity::dev();
-            reply(out, &json!({ "user": user.name, "version": VERSION, "asset": ASSET, "setup": setup, "daemon": daemon.is_some() }))
+            let me = whoami(&user);
+            package_only()?;
+            reply(out, &me)
         }
-        "prefs" => prefs(req, out, &user),
-        r if r == "conns" || r.starts_with("conns/") => crate::remote::api::conns(req, out, &user.name),
+        "prefs" => {
+            package_only()?;
+            prefs(req, out, &user)
+        }
+        r if r == "conns" || r.starts_with("conns/") => {
+            package_only()?;
+            crate::remote::api::conns(req, out, &user.name)
+        }
         "jobs" => {
+            package_only()?;
             let since: u64 = req.param("since").and_then(|s| s.parse().ok()).unwrap_or(0);
             let answer = ask_daemon(&json!({ "cmd": "list", "user": user.name, "since": since }))?;
             reply(out, &answer)
@@ -70,6 +76,10 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
         "jobs/new" => {
             method(req, "POST")?;
             let body: NewJob = req.json()?;
+            let shares = shares::all(&user);
+            let remote = body.sources.iter().chain(&body.dest).any(|p| crate::remote::split(p).is_some());
+            let conns = if remote { load_conns(&user) } else { Vec::new() };
+            package_only()?;
             let spec = job_spec(&shares, &conns, &user.name, &body)?;
             let info = daemon::Info { sources: body.sources.clone(), dest: body.dest.clone(), permanent: body.permanent };
             let answer = ask_daemon(&json!({ "cmd": "submit", "user": user, "spec": spec, "info": info, "lang": crate::lang::code() }))?;
@@ -77,23 +87,90 @@ fn route(req: &Request, out: &mut impl Write) -> Result<(), ApiError> {
         }
         "jobs/control" => {
             method(req, "POST")?;
+            package_only()?;
             let mut body: Value = req.json()?;
             body["cmd"] = json!("control");
             body["user"] = json!(user.name);
             body["lang"] = json!(crate::lang::code());
             reply(out, &ask_daemon(&body)?)
         }
+        "init" => {
+            // what the interface needs to start, in one request: the
+            // package's part first, then the shares as the user sees them
+            let me = whoami(&user);
+            let prefs = read_prefs(&user);
+            let conns = crate::remote::api::list(&user.name);
+            let shares = shares::all(&user);
+            become_user(&user)?;
+            reply(out, &json!({ "whoami": me, "prefs": prefs, "shares": shares_info(&user, &shares), "conns": conns }))
+        }
         _ => {
-            identity::become_user(&user).map_err(|e| ApiError::new(500, format!("cannot become {}: {e}", user.name)))?;
-            if !identity::dev() && !crate::caps::none_left() {
-                return Err(ApiError::new(500, "capabilities still held after dropping to the user"));
-            }
+            let shares = shares::all(&user);
+            // read as the package, which owns them, and only when needed
+            let conns = if crate::remote::api::wants_conns(req) { load_conns(&user) } else { Vec::new() };
+            become_user(&user)?;
             if let Some(result) = crate::remote::api::serve(req, out, &conns) {
                 return result;
             }
             as_user(req, out, &user, &shares, &conns)
         }
     }
+}
+
+/// The user's remote connections, with the SSH key of those that use it.
+/// An SFTP server's key is pinned by `conns/save`, `conns/test` and the
+/// daemon, which run without capabilities, never here.
+fn load_conns(user: &User) -> Vec<crate::remote::Conn> {
+    crate::remote::load(&user.name).into_iter().map(|c| crate::remote::api::with_key(&user.name, c)).collect()
+}
+
+/// Drops the capabilities a route run as the package does not need, so
+/// nothing it parses (requests, servers' answers) runs with them.
+fn package_only() -> Result<(), ApiError> {
+    crate::caps::clear().map_err(|e| ApiError::new(500, format!("cannot drop capabilities: {e}")))
+}
+
+/// Becomes the DSM user for good, before touching the shared folders.
+fn become_user(user: &User) -> Result<(), ApiError> {
+    identity::become_user(user).map_err(|e| ApiError::new(500, format!("cannot become {}: {e}", user.name)))?;
+    if !identity::dev() && !crate::caps::only_reading() {
+        return Err(ApiError::new(500, "capabilities still held after dropping to the user"));
+    }
+    Ok(())
+}
+
+fn whoami(user: &User) -> Value {
+    let daemon = daemon::call(&json!({"cmd": "ping"})).ok();
+    let setup = crate::caps::effective() || identity::dev();
+    json!({ "user": user.name, "version": VERSION, "asset": ASSET, "setup": setup, "daemon": daemon.is_some() })
+}
+
+/// The shared folders with their space and what the user may do there:
+/// run as the user.
+fn shares_info(user: &User, shares: &[Share]) -> Value {
+    let list: Vec<Value> = shares
+        .iter()
+        .map(|s| {
+            let (free, total) = fsops::space(&s.path).unwrap_or((0, 0));
+            let mut v = serde_json::to_value(s).unwrap_or_default();
+            v["free"] = json!(free);
+            v["total"] = json!(total);
+            v["readable"] = json!(fsops::access(&s.path, libc::R_OK | libc::X_OK));
+            v["writable"] = json!(fsops::access(&s.path, libc::W_OK | libc::X_OK));
+            v
+        })
+        .collect();
+    json!({ "shares": list, "user": user.name, "volumes": shares::volume_names(), "hostname": hostname() })
+}
+
+/// `rel` ("Foto/2024/Mare") below `dir`, each part a valid name.
+fn nested(dir: &Path, rel: &str) -> Result<PathBuf, ApiError> {
+    let mut path = dir.to_path_buf();
+    for part in rel.split('/') {
+        shares::valid_name(part)?;
+        path.push(part);
+    }
+    Ok(path)
 }
 
 /// The NAS's own name: an address typed with it is a shared folder.
@@ -268,23 +345,33 @@ fn send_member(out: &mut impl Write, real: &std::path::Path, inline: bool) -> Re
     Ok(true)
 }
 
+fn prefs_file(user: &User) -> PathBuf {
+    crate::var_dir().join("prefs").join(format!("{}.json", user.name.to_lowercase().replace(['/', '.'], "_")))
+}
+
+fn read_prefs(user: &User) -> Value {
+    std::fs::read(prefs_file(user)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({}))
+}
+
 fn prefs(req: &Request, out: &mut impl Write, user: &User) -> Result<(), ApiError> {
-    let dir = crate::var_dir().join("prefs");
-    let file = dir.join(format!("{}.json", user.name.to_lowercase().replace(['/', '.'], "_")));
-    if req.method == "POST" {
-        let value: Value = req.json()?;
-        let text = serde_json::to_vec(&value).map_err(|e| ApiError::bad_request(e.to_string()))?;
-        if text.len() > 256 * 1024 {
-            return Err(ApiError::bad_request(t!("preferenze troppo grandi", "preferences too large")));
-        }
-        std::fs::create_dir_all(&dir)?;
-        let tmp = file.with_extension("tmp");
-        std::fs::write(&tmp, text)?;
-        std::fs::rename(tmp, &file)?;
-        return reply(out, &json!({ "ok": true }));
+    if req.method != "POST" {
+        return reply(out, &read_prefs(user));
     }
-    let value: Value = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({}));
-    reply(out, &value)
+    let value: Value = req.json()?;
+    let text = serde_json::to_vec(&value).map_err(|e| ApiError::bad_request(e.to_string()))?;
+    if text.len() > 256 * 1024 {
+        return Err(ApiError::bad_request(t!("preferenze troppo grandi", "preferences too large")));
+    }
+    let file = prefs_file(user);
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    // two saves at once each write their own file, the last rename wins
+    let tmp = file.with_extension(format!("{}.tmp", std::process::id()));
+    std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, &file)).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })?;
+    reply(out, &json!({ "ok": true }))
 }
 
 #[derive(Deserialize)]
@@ -295,21 +382,7 @@ struct Paths {
 fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], conns: &[crate::remote::Conn]) -> Result<(), ApiError> {
     let path_param = |name: &str| -> Result<PathBuf, ApiError> { Ok(shares::resolve(shares, req.require(name)?)?.real) };
     match req.route.as_str() {
-        "shares" => {
-            let list: Vec<Value> = shares
-                .iter()
-                .map(|s| {
-                    let (free, total) = fsops::space(&s.path).unwrap_or((0, 0));
-                    let mut v = serde_json::to_value(s).unwrap_or_default();
-                    v["free"] = json!(free);
-                    v["total"] = json!(total);
-                    v["readable"] = json!(fsops::access(&s.path, libc::R_OK | libc::X_OK));
-                    v["writable"] = json!(fsops::access(&s.path, libc::W_OK | libc::X_OK));
-                    v
-                })
-                .collect();
-            reply(out, &json!({ "shares": list, "user": user.name, "volumes": shares::volume_names(), "hostname": hostname() }))
-        }
+        "shares" => reply(out, &shares_info(user, shares)),
         "list" => {
             let r = shares::resolve(shares, req.require("path")?)?;
             if let Some((_, inner, members)) = in_archive(&r.real)? {
@@ -329,15 +402,23 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
         }
         "stat" => {
             let real = path_param("path")?;
-            if let Some((file, inner, members)) = in_archive(&real)? {
-                if !inner.is_empty() {
-                    let m = archive::find(&members, &inner);
-                    let name = inner.rsplit('/').next().unwrap_or_default();
-                    let archive_name = file.file_name().unwrap_or_default().to_string_lossy();
-                    return reply(out, &json!({ "name": name, "kind": if m.is_some() { "f" } else { "d" }, "size": m.map_or(0, |m| m.size), "mtime": m.map_or(0, |m| m.mtime), "mode": m.map_or(0o755, |m| m.mode), "owner": archive_name, "group": "", "archive": true }));
-                }
+            if let Some((file, inner, members)) = in_archive(&real)?
+                && !inner.is_empty()
+            {
+                let m = archive::find(&members, &inner);
+                let name = inner.rsplit('/').next().unwrap_or_default();
+                let archive_name = file.file_name().unwrap_or_default().to_string_lossy();
+                return reply(out, &json!({ "name": name, "kind": if m.is_some() { "f" } else { "d" }, "size": m.map_or(0, |m| m.size), "mtime": m.map_or(0, |m| m.mtime), "mode": m.map_or(0o755, |m| m.mode), "owner": archive_name, "group": "", "archive": true }));
             }
             reply(out, &fsops::details(&real)?)
+        }
+        "media" => {
+            let real = path_param("path")?;
+            // inside an archive there is no file to read: nothing to tell
+            if in_archive(&real)?.is_some_and(|(_, inner, _)| !inner.is_empty()) {
+                return reply(out, &json!({}));
+            }
+            reply(out, &crate::media::describe(&real))
         }
         "usage" => {
             method(req, "POST")?;
@@ -347,13 +428,12 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             }
             let paths = body.paths.iter().map(|p| Ok(shares::resolve(shares, p)?.real)).collect::<Result<Vec<_>, ApiError>>()?;
             // folders inside an archive are counted from its listing
-            if let [one] = paths.as_slice() {
-                if let Some((_, inner, members)) = in_archive(one)? {
-                    if !inner.is_empty() {
-                        let (files, dirs, bytes) = archive::usage(&members, &inner);
-                        return reply(out, &json!({ "bytes": bytes, "files": files, "dirs": dirs + 1, "unreadable": 0, "partial": false }));
-                    }
-                }
+            if let [one] = paths.as_slice()
+                && let Some((_, inner, members)) = in_archive(one)?
+                && !inner.is_empty()
+            {
+                let (files, dirs, bytes) = archive::usage(&members, &inner);
+                return reply(out, &json!({ "bytes": bytes, "files": files, "dirs": dirs + 1, "unreadable": 0, "partial": false }));
             }
             reply(out, &fsops::usage(&paths, Duration::from_secs(25)))
         }
@@ -368,16 +448,11 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             method(req, "POST")?;
             let dir = path_param("path")?;
             let name = req.require("name")?;
-            shares::valid_name(name)?;
             if req.param("parents") == Some("1") {
                 // folder uploads: the whole relative path, created as needed
-                let mut path = dir;
-                for part in name.split('/') {
-                    shares::valid_name(part)?;
-                    path.push(part);
-                }
-                std::fs::create_dir_all(&path)?;
+                std::fs::create_dir_all(nested(&dir, name)?)?;
             } else {
+                shares::valid_name(name)?;
                 fsops::mkdir(&dir.join(name))?;
             }
             reply(out, &json!({ "ok": true }))
@@ -499,16 +574,9 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             let dir = path_param("dir")?;
             let name = req.require("name")?;
             shares::valid_name(name)?;
-            let _ = std::fs::remove_file(transfer::upload_part(&dir, name));
+            let id = transfer::upload_id(req)?;
+            let _ = std::fs::remove_file(transfer::LocalUpload::new(&dir, name, &id).part());
             reply(out, &json!({ "ok": true }))
-        }
-        "upload/status" => {
-            let dir = path_param("dir")?;
-            let name = req.require("name")?;
-            shares::valid_name(name)?;
-            let have = std::fs::metadata(transfer::upload_part(&dir, name)).map(|m| m.len()).unwrap_or(0);
-            let exists = std::fs::symlink_metadata(dir.join(name)).is_ok();
-            reply(out, &json!({ "received": have, "exists": exists }))
         }
         "exists" => {
             // which of these names are taken in a folder: the upload asks before sending
@@ -527,5 +595,21 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             reply(out, &json!({ "taken": taken }))
         }
         _ => Err(ApiError::not_found(format!("no route {}", req.route))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_folders_for_uploads() {
+        let dir = Path::new("/volume1/Foto");
+        assert_eq!(nested(dir, "2024").unwrap(), dir.join("2024"));
+        assert_eq!(nested(dir, "2024/Mare/giorno 1").unwrap(), dir.join("2024/Mare/giorno 1"));
+        for bad in ["", "/2024", "2024/", "a//b", "a/../b", "..", "./a", "a/.", "a/ /b", "a/b\0c"] {
+            assert!(nested(dir, bad).is_err(), "{bad:?}");
+        }
+        assert!(nested(dir, &format!("a/{}", "x".repeat(256))).is_err());
     }
 }

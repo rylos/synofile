@@ -31,6 +31,12 @@ pub struct Entry {
     pub link_dir: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub thumb: bool,
+    /// a read-only btrfs snapshot: it cannot be renamed, moved or deleted
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub readonly: bool,
+    /// for a recycle bin: whether something is in it
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full: Option<bool>,
 }
 
 fn kind(meta: &Metadata) -> char {
@@ -49,7 +55,24 @@ fn kind(meta: &Metadata) -> char {
 pub fn entry(path: &Path, name: String, meta: &Metadata) -> Entry {
     let kind = kind(meta);
     let link_dir = kind == 'l' && fs::metadata(path).is_ok_and(|m| m.is_dir());
-    Entry { name, kind, size: if kind == 'd' { 0 } else { meta.len() }, mtime: meta.mtime(), mode: meta.mode() & 0o7777, link_dir, thumb: false }
+    Entry { name, kind, size: if kind == 'd' { 0 } else { meta.len() }, mtime: meta.mtime(), mode: meta.mode() & 0o7777, link_dir, thumb: false, readonly: kind == 'd' && readonly_subvolume(path, meta), full: None }
+}
+
+/// Whether a folder is the top of a read-only btrfs subvolume: a snapshot
+/// (btrbk's, DSM's #snapshot). Only subvolume tops (inode 256) are asked.
+fn readonly_subvolume(path: &Path, meta: &Metadata) -> bool {
+    const BTRFS_FIRST_FREE_OBJECTID: u64 = 256;
+    // _IOR(0x94, 25, u64)
+    const BTRFS_IOC_SUBVOL_GETFLAGS: libc::c_ulong = 0x8008_9419;
+    const BTRFS_SUBVOL_RDONLY: u64 = 1 << 1;
+    if meta.ino() != BTRFS_FIRST_FREE_OBJECTID {
+        return false;
+    }
+    let Ok(dir) = fs::File::open(path) else { return false };
+    let mut flags: u64 = 0;
+    // SAFETY: an open directory and a u64 for the kernel to fill
+    let rc = unsafe { libc::ioctl(std::os::fd::AsRawFd::as_raw_fd(&dir), BTRFS_IOC_SUBVOL_GETFLAGS as _, &mut flags) };
+    rc == 0 && flags & BTRFS_SUBVOL_RDONLY != 0
 }
 
 #[derive(Serialize)]
@@ -63,7 +86,8 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
     if !meta.is_dir() {
         return Err(ApiError::bad_request(t!("non è una cartella", "not a folder")));
     }
-    let thumbs: Vec<std::ffi::OsString> =
+    // a set: a folder of photos has thousands of entries in both
+    let thumbs: std::collections::HashSet<std::ffi::OsString> =
         fs::read_dir(dir.join("@eaDir")).map(|d| d.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
     let mut entries = Vec::new();
     for item in fs::read_dir(dir)?.flatten() {
@@ -74,10 +98,18 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
         let path = item.path();
         let Ok(meta) = fs::symlink_metadata(&path) else { continue };
         let mut e = entry(&path, name, &meta);
-        e.thumb = e.kind == 'f' && thumbs.iter().any(|t| *t == item.file_name());
+        e.thumb = e.kind == 'f' && thumbs.contains(&item.file_name());
+        if e.kind == 'd' && e.name == crate::shares::RECYCLE {
+            e.full = Some(bin_full(&path));
+        }
         entries.push(e);
     }
     Ok(Listing { entries, writable: access(dir, libc::W_OK | libc::X_OK) })
+}
+
+/// Whether a recycle bin holds anything: one entry read, not the whole bin.
+fn bin_full(bin: &Path) -> bool {
+    fs::read_dir(bin).is_ok_and(|d| d.flatten().any(|i| !is_system_name(&i.file_name().to_string_lossy())))
 }
 
 pub fn access(path: &Path, mode: i32) -> bool {
@@ -291,7 +323,7 @@ pub fn search(root: &Path, pattern: &Pattern, limit: usize, budget: Duration) ->
     while let Some(rel) = queue.pop_front() {
         let Ok(rd) = fs::read_dir(root.join(&rel)) else { continue };
         for item in rd.flatten() {
-            if (scanned % 256 == 0 && Instant::now() > deadline) || hits.len() >= limit {
+            if (scanned.is_multiple_of(256) && Instant::now() > deadline) || hits.len() >= limit {
                 return SearchResult { hits, scanned, partial: true };
             }
             let name = item.file_name().to_string_lossy().into_owned();
@@ -326,20 +358,20 @@ pub fn space(path: &Path) -> Option<(u64, u64)> {
 /// An I/O error in words the interface shows as they are.
 pub fn describe(e: &io::Error) -> String {
     match e.raw_os_error() {
-        Some(libc::EACCES) | Some(libc::EPERM) => t!("permesso negato", "permission denied").into(),
-        Some(libc::ENOENT) => t!("non esiste più", "no longer exists").into(),
-        Some(libc::EEXIST) => t!("esiste già", "already exists").into(),
-        Some(libc::ENOSPC) => t!("spazio esaurito sul volume", "the volume is full").into(),
-        Some(libc::EDQUOT) => t!("quota disco superata", "disk quota exceeded").into(),
-        Some(libc::EROFS) => t!("il volume è in sola lettura", "the volume is read-only").into(),
-        Some(libc::ENOTEMPTY) => t!("la cartella non è vuota", "the folder is not empty").into(),
-        Some(libc::ENAMETOOLONG) => t!("nome troppo lungo", "name too long").into(),
-        Some(libc::EISDIR) => t!("è una cartella", "is a folder").into(),
-        Some(libc::ENOTDIR) => t!("non è una cartella", "not a folder").into(),
-        Some(libc::EXDEV) => t!("volumi diversi", "different volumes").into(),
-        Some(libc::EIO) => t!("errore di lettura o scrittura del disco", "disk read or write error").into(),
-        Some(libc::EBUSY) => t!("in uso", "in use").into(),
-        Some(libc::ELOOP) => t!("troppi collegamenti simbolici", "too many symbolic links").into(),
+        Some(libc::EACCES) | Some(libc::EPERM) => t!("permesso negato", "permission denied"),
+        Some(libc::ENOENT) => t!("non esiste più", "no longer exists"),
+        Some(libc::EEXIST) => t!("esiste già", "already exists"),
+        Some(libc::ENOSPC) => t!("spazio esaurito sul volume", "the volume is full"),
+        Some(libc::EDQUOT) => t!("quota disco superata", "disk quota exceeded"),
+        Some(libc::EROFS) => t!("il volume è in sola lettura", "the volume is read-only"),
+        Some(libc::ENOTEMPTY) => t!("la cartella non è vuota", "the folder is not empty"),
+        Some(libc::ENAMETOOLONG) => t!("nome troppo lungo", "name too long"),
+        Some(libc::EISDIR) => t!("è una cartella", "is a folder"),
+        Some(libc::ENOTDIR) => t!("non è una cartella", "not a folder"),
+        Some(libc::EXDEV) => t!("volumi diversi", "different volumes"),
+        Some(libc::EIO) => t!("errore di lettura o scrittura del disco", "disk read or write error"),
+        Some(libc::EBUSY) => t!("in uso", "in use"),
+        Some(libc::ELOOP) => t!("troppi collegamenti simbolici", "too many symbolic links"),
         _ => e.to_string(),
     }
 }

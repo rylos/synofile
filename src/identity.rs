@@ -21,9 +21,9 @@ pub fn dev() -> bool {
     cfg!(debug_assertions) && std::env::var_os("SYNOFILE_DEV_USER").is_some()
 }
 
-/// Looks `name` up in /etc/passwd and /etc/group. DSM user names are
+/// Looks `name` up in /etc/passwd and `groups` (/etc/group, already read). DSM user names are
 /// case-insensitive; the passwd spelling wins.
-pub fn lookup(name: &str) -> io::Result<User> {
+pub fn lookup_with(name: &str, groups: &str) -> io::Result<User> {
     if dev() {
         // SAFETY: plain getters
         let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
@@ -31,8 +31,7 @@ pub fn lookup(name: &str) -> io::Result<User> {
         return Ok(User { name: name.to_string(), uid, gid, groups: vec![gid], home });
     }
     let passwd = fs::read_to_string("/etc/passwd")?;
-    let groups = fs::read_to_string("/etc/group").unwrap_or_default();
-    parse(&passwd, &groups, name).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("unknown user {name}")))
+    parse(&passwd, groups, name).ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("unknown user {name}")))
 }
 
 fn parse(passwd: &str, groups: &str, name: &str) -> Option<User> {
@@ -44,13 +43,11 @@ fn parse(passwd: &str, groups: &str, name: &str) -> Option<User> {
     let mut list = vec![gid];
     for line in groups.lines() {
         let g: Vec<&str> = line.split(':').collect();
-        if g.len() >= 4 && g[3].split(',').any(|m| m.eq_ignore_ascii_case(fields[0])) {
-            if let Ok(id) = g[2].parse() {
-                if !list.contains(&id) {
+        if g.len() >= 4 && g[3].split(',').any(|m| m.eq_ignore_ascii_case(fields[0]))
+            && let Ok(id) = g[2].parse()
+                && !list.contains(&id) {
                     list.push(id);
                 }
-            }
-        }
     }
     Some(User { name: fields[0].to_string(), uid, gid, groups: list, home: PathBuf::from(fields[5]) })
 }
@@ -64,9 +61,9 @@ pub fn names(file: &str, id: u32) -> Option<String> {
     })
 }
 
-/// Becomes `user` for good: groups, gid, uid, then no capability left and
-/// none to gain through exec. Safe to call between fork and exec: only
-/// raw system calls, no allocation.
+/// Becomes `user` for good: groups, gid, uid, then no capability left but
+/// reading everywhere (see caps.rs), and none to gain through exec. Safe
+/// to call between fork and exec: only raw system calls, no allocation.
 pub fn become_user(user: &User) -> io::Result<()> {
     if dev() {
         return Ok(());
@@ -75,6 +72,11 @@ pub fn become_user(user: &User) -> io::Result<()> {
 }
 
 pub fn become_raw(uid: u32, gid: u32, groups: &[u32]) -> io::Result<()> {
+    // never root: the capabilities would come back with uid 0, and nobody
+    // signs in to SynoFile as root (no allocation here, see above)
+    if uid == 0 {
+        return Err(io::Error::from_raw_os_error(libc::EPERM));
+    }
     // SAFETY: system calls with valid arguments
     unsafe {
         if libc::setgroups(groups.len(), groups.as_ptr()) < 0
@@ -87,7 +89,7 @@ pub fn become_raw(uid: u32, gid: u32, groups: &[u32]) -> io::Result<()> {
             return Err(io::Error::last_os_error());
         }
     }
-    crate::caps::clear()?;
+    crate::caps::keep_reading()?;
     // SAFETY: plain getters
     if unsafe { libc::getuid() != uid || libc::geteuid() != uid || libc::getegid() != gid } {
         return Err(io::Error::other("identity change did not take"));
@@ -109,5 +111,12 @@ mod tests {
         assert_eq!(user.groups, vec![100, 101]);
         assert_eq!(user.home, PathBuf::from("/var/services/homes/Alice"));
         assert!(parse(passwd, groups, "nobody").is_none());
+    }
+
+    #[test]
+    fn never_becomes_root() {
+        // refused before any system call, so safe to try in a test
+        let e = become_raw(0, 0, &[0]).unwrap_err();
+        assert_eq!(e.raw_os_error(), Some(libc::EPERM));
     }
 }

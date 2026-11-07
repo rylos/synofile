@@ -63,9 +63,20 @@ export const ICON_CHOICES = EZA.choices;
 export const ICON_COLORS = ["", "red", "yellow", "green", "cyan", "purple", "white", "gray"];
 
 /** eza's icon for an entry (icon_for_file). */
+// a recycle bin, as the listing tells: full or empty
+const BIN = { true: EZA.dirs["#recycle"], false: "\u{e000}" };
+
+// folders the system keeps, not the user: DSM's, and those Windows, macOS
+// and Linux leave on drives and copied shares. Grey when the option is on.
+const SYSTEM_DIRS = new Set(["#recycle", "#snapshot", "#archive", "@tmp", "@sharebin", "$RECYCLE.BIN", "System Volume Information", ".Spotlight-V100", ".fseventsd", ".TemporaryItems", "lost+found"]);
+// DSM's own: they are not the user's to move, rename or delete
+const DSM_DIRS = new Set(["#recycle", "#snapshot", "#archive", "@tmp", "@sharebin"]);
+export const isDsmFolder = (e) => (e.kind === "d" || e.link_dir) && DSM_DIRS.has(e.name);
+export const isSystemFolder = (name) => SYSTEM_DIRS.has(name) || name.startsWith(".Trash-");
+
 export function glyph(entry) {
   if (entry.kind === "d" || entry.link_dir) {
-    return folderIcon(entry)?.g || autoFolderGlyph(entry.name);
+    return folderIcon(entry)?.g || (entry.full !== undefined && BIN[entry.full]) || autoFolderGlyph(entry.name);
   }
   if (EZA.names[entry.name]) return EZA.names[entry.name];
   const e = ext(entry.name);
@@ -75,7 +86,7 @@ export function glyph(entry) {
 
 /** eza's colour class for a name (FileType::get_file_type + the kinds). */
 export function colorClass(entry) {
-  if (entry.kind === "d") return "ez-dir";
+  if (entry.kind === "d") return isSystemFolder(entry.name) ? "ez-dir ez-sys" : "ez-dir";
   if (entry.kind === "l") return "ez-link";
   if (entry.kind === "o") return "ez-special";
   if (entry.mode & 0o111) return "ez-exec";
@@ -131,6 +142,7 @@ const P = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   split: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
@@ -169,6 +181,7 @@ const P = {
   palette: '<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 1 0 0 20c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a6 6 0 0 0 6-6c0-4.9-4.5-8.6-10-8.6z"/>',
   zap: '<path d="M13 2L3 14h9l-1 8 10-12h-9z"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
@@ -176,6 +189,8 @@ const P = {
   archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
   popout: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M10 14l6-6M11 8h5v5"/>',
   eject: '<path d="M12 4l8 10H4zM4 19h16"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c1.2-3.6 4.2-5.5 8-5.5s6.8 1.9 8 5.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.3 3.6-5 6.5-5s5.5 1.7 6.5 5M15.5 4.6a3.5 3.5 0 0 1 0 6.8M18 15.3c1.7.8 2.9 2.4 3.5 4.7"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
   redo: '<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/>',

@@ -1,3 +1,57 @@
+v0.8.14
+- The transfer window keeps its width with a long file name: the title ends in "…" (the whole name on hover) and the state stays in view.
+- A cancelled transfer says "Cancelled" once, instead of "Cancelled: cancelled".
+- The number on the transfers button shows from two transfers on: with one, the ring already says it. It still shows on a transfer waiting for an answer (paused, or a name conflict), and "!" after a failure.
+
+v0.8.13
+- Empty the Recycle Bin: from the right-click menu of a #recycle folder, from inside it, and from the menu of a shared folder in the sidebar. It asks first; what is in the bin is deleted for good.
+- The #recycle folder's icon shows whether the bin is full or empty. The bin folder itself can no longer be moved to the bin or deleted: it is emptied instead.
+- System folders in grey (Settings → Look, on by default): #recycle, #snapshot, #archive, @tmp, @sharebin, $RECYCLE.BIN, System Volume Information, .Trash-*, .Spotlight-V100, .fseventsd, .TemporaryItems, lost+found. A colour given by hand wins; the bin keeps showing full or empty in that colour.
+- The "backup" folder had a skull and crossbones by mistake: now it has the backup icon (a clock with an arrow).
+- The "dev" folder's braces are both solid, instead of one outlined and one solid.
+- Read-only snapshots (btrbk's, DSM's #snapshot) and what is inside them cannot be cut, moved, renamed or deleted: those items are no longer in the menu, and Del, F2 and Ctrl+X do nothing there. Copying out still works, and dragging out of a snapshot copies instead of moving.
+- The same for DSM's own folders (#snapshot, #recycle, #archive, @tmp, @sharebin): they cannot be cut, moved, renamed or deleted.
+
+v0.8.12
+- Administrators can open and read any folder, even one their user has no permission on: for example a btrbk backup received from a PC, owned by that PC's user, or a read-only snapshot. Preview, download and copying out work there; changing files still follows the user's own permissions. Run setup after installing (as always): it adds the read capability.
+
+v0.8.11
+- Other DSM apps can open SynoFile at a folder: SYNO.SDS.AppLaunch("SYNO.SDS.SynoFile.Instance", { path: "/share/folder", select: "name" }). The window opens there, or, if already open, a new tab; select (optional) picks an item in it. The page takes ?path=…&select=… too.
+- The lock beside an encrypted shared folder is a line icon in the sidebar's grey, instead of the emoji in a box.
+
+v0.8.10
+- A columns view (Ctrl+3, or the third button beside list and grid): the folders above stand in columns on the left, each with the way down marked, and the folder under the cursor shows its contents on the right. Right arrow goes in, left arrow back up.
+- The info panel of a photo, a video or a song shows its size in pixels, duration, video and audio codecs, bitrate and subtitles, and the photo's camera, lens, exposure, date taken and place (with a link to the map). Camera RAW files too.
+- The right-click menu highlights the item under the mouse in the darker blue of selected rows, instead of a bright blue; Delete in a dark red.
+
+v0.8.9
+- The grey buttons (Cancel, Close…) in outline style too, like the coloured ones: a light border and bold text instead of a filled background.
+
+v0.8.8
+- Buttons in outline style: the main ones (Done, Save…) and the dangerous ones (Delete…) have a coloured border and text instead of a filled background.
+
+v0.8.7
+- SynoFile opened from its own address (webman/3rdparty/synofile/index.html) with DSM's session expired now says so with a "Log in to DSM" link, and reloads by itself once you are back with a session. A new DSM login in another tab no longer leaves an open SynoFile stuck on "session expired": it takes the new session and goes on.
+- Bug fix for uploading folders with subfolders: only the first level was created and the files further down failed.
+- Bug fix for uploads to SMB and SFTP connections, broken by the four chunks at once of 0.8.6.
+- Uploads: a file whose answer got lost on the way is no longer reported as failed; two uploads of the same name no longer mix; a failed or cancelled file leaves nothing behind (and leftovers older than a day are cleared); "Newer" really keeps the newer file instead of always overwriting; "Skip" on an existing folder now merges it, uploading what is missing; a full disk or an expired session stops the transfer with one message instead of retrying every file.
+- Deleting to the Recycle Bin through a symbolic link that leads out of the shared folder no longer deletes for good: the item is left in place with an error.
+- Security: the password of a RAR archive no longer shows in the process list; interrupted jobs no longer keep connection passwords in their journal; an SFTP server's key is remembered even when the first login fails, instead of trusting any key from then on; the temporary files of uploads and of the editor no longer follow symbolic links.
+- The editor saving to a symbolic link saves the file it points to and keeps the link; a full disk while saving no longer leaves the file empty.
+- Faster: DSM's check of the session is remembered for 20 seconds instead of running on every request (about 16 ms to 5 ms per request); the page starts with one request instead of five; folders with thousands of photos list much faster; the page asks the NAS for transfers every minute instead of every 6 seconds when nothing is running, and not at all while hidden.
+- The interface no longer redraws every pane at each folder change (a double click could get lost), a slow answer no longer shows a folder other than the one opened, the info panel waits for the selection to settle, the keyboard Menu key opens the menu of the current item, and the folder picker enters a folder on double click.
+- Smaller fixes: the speed chart no longer repeats samples after Retry, the transfer drawer and the space analysis no longer pile up work, the Permissions dialog reports what was saved when a save stops halfway, Compress with an invalid name says why, smb:// addresses with # or ? are copied right, and the last untranslated strings are translated.
+
+v0.8.6
+- Uploads from the browser twice as fast: four chunks of 16 MiB go at once instead of one of 8 MiB, so DSM's check of the session on every chunk no longer holds them up. From 120 to about 245 MiB/s on 2.5 GbE, close to SMB.
+
+v0.8.5
+- Right-click a shared folder (in the sidebar or in the list of shared folders) > Permissions…: who may read or write it, as in DSM's Control Panel. Each user or group gets No access, Read, Read and write or Deny, and × takes one away. The search at the top adds the others by name, fzf-style as the filter does, domain and LDAP users and groups too where the NAS has them: hundreds are fine. Custom ACL permissions made in File Station are shown and left as they are. A second tab holds DSM's three advanced settings: disable directory browsing, disable modification of existing files, disable file downloading.
+
+v0.8.4
+- SynoFile opened on its own page (webman/3rdparty/synofile/index.html) speaks DSM's language, the one it last saw in DSM, instead of the browser's.
+- Right-click a shared folder in the sidebar > Description… to change or remove its description, the one DSM's Control Panel shows.
+
 v0.8.3
 - SynoFile in DSM's Login Portal: Control Panel > Login Portal > Applications > SynoFile gives it an alias (https://nas/synofile/), HTTP/HTTPS ports of its own or a domain, with DSM's login page in front, as File Station has. The browser tab then says SynoFile, with its icon. Handy behind a reverse proxy.
 - A button in the top bar opens SynoFile in a browser window of its own; Open in File Station still works from there while DSM's tab stays open.

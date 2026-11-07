@@ -176,7 +176,7 @@ impl Engine {
             // nothing of an interrupted copy is cleaned on a server
             Op::Cleanup => Ok(()),
             Op::Compress | Op::Extract => {
-                self.fatal = Some(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first").into());
+                self.fatal = Some(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first"));
                 Ok(())
             }
         }
@@ -194,7 +194,7 @@ impl Engine {
 
     fn r_transfer(&mut self) -> Step<()> {
         let Some(dest) = self.spec.dest.clone() else {
-            self.fatal = Some(t!("manca la destinazione", "no destination").into());
+            self.fatal = Some(t!("manca la destinazione", "no destination"));
             return Ok(());
         };
         let sources = self.spec.sources.clone();
@@ -206,7 +206,7 @@ impl Engine {
         match ends.dst.stat(&dest) {
             Ok(m) if m.dir => {}
             Ok(_) => {
-                self.fatal = Some(t!("la destinazione non è una cartella", "the destination is not a folder").into());
+                self.fatal = Some(t!("la destinazione non è una cartella", "the destination is not a folder"));
                 return Ok(());
             }
             Err(e) => {
@@ -250,12 +250,11 @@ impl Engine {
         }
 
         self.r_scan(&ends, &slow)?;
-        if let Some((free, _)) = ends.dst.space(&dest) {
-            if free < self.p.bytes_total {
+        if let Some((free, _)) = ends.dst.space(&dest)
+            && free < self.p.bytes_total {
                 self.fatal = Some(t!("spazio insufficiente: servono {}, liberi {}", "not enough space: {} needed, {} free", super::human(self.p.bytes_total), super::human(free)));
                 return Ok(());
             }
-        }
         self.p.phase = if moving { "move" } else { "copy" }.into();
         self.p.method = "copy".into();
         let result = (|| {
@@ -284,7 +283,7 @@ impl Engine {
         let mut seen = 0u64;
         while let Some((path, meta)) = stack.pop() {
             seen += 1;
-            if seen % 64 == 0 {
+            if seen.is_multiple_of(64) {
                 self.checkpoint()?;
             }
             let Some(meta) = meta.or_else(|| ends.src.stat(&path).ok()) else { continue };
@@ -325,7 +324,7 @@ impl Engine {
             return self.r_dir(ends, src, meta, &target, existing, moving);
         }
         if !meta.file {
-            self.error_msg(src, t!("collegamento o file speciale: saltato", "link or special file: skipped").into());
+            self.error_msg(src, t!("collegamento o file speciale: saltato", "link or special file: skipped"));
             self.r_skip(meta);
             return Ok(());
         }
@@ -339,7 +338,7 @@ impl Engine {
                 Decision::Rename(other) => target = other,
                 Decision::Overwrite => {
                     if old.dir {
-                        self.error_msg(src, t!("al suo posto c'è una cartella con lo stesso nome", "a folder with the same name is in its place").into());
+                        self.error_msg(src, t!("al suo posto c'è una cartella con lo stesso nome", "a folder with the same name is in its place"));
                         self.r_skip(meta);
                         return Ok(());
                     }
@@ -350,11 +349,10 @@ impl Engine {
         match self.r_file(ends, src, meta, &target, replace) {
             Ok(()) => {
                 self.p.files_done += 1;
-                if moving {
-                    if let Err(e) = ends.src.remove(src, false) {
+                if moving
+                    && let Err(e) = ends.src.remove(src, false) {
                         self.error_msg(src, t!("copiato, ma l'originale non si cancella: {}", "copied, but the original cannot be deleted: {}", describe(&e)));
                     }
-                }
             }
             Err(e) if e.kind() == io::ErrorKind::Interrupted => return Err(Cancelled),
             Err(e) => {
@@ -553,7 +551,7 @@ impl Engine {
         // count first, so the bar means something; deepest last
         while let Some((path, meta)) = stack.pop() {
             total += 1;
-            if total % 64 == 0 {
+            if total.is_multiple_of(64) {
                 self.p.files_total = total;
                 self.checkpoint()?;
             }
@@ -572,11 +570,10 @@ impl Engine {
         while let Some((path, dir, _)) = todo.pop() {
             self.checkpoint()?;
             self.p.current = self.display(&path);
-            if let Err(e) = end.remove(&path, dir) {
-                if !(dir && e.raw_os_error() == Some(libc::ENOTEMPTY)) {
+            if let Err(e) = end.remove(&path, dir)
+                && !(dir && e.raw_os_error() == Some(libc::ENOTEMPTY)) {
                     self.error(&path, &e);
                 }
-            }
             self.p.files_done += 1;
         }
         Ok(())

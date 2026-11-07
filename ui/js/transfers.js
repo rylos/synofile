@@ -2,7 +2,7 @@
 // this page sends, one model for both. The drawer lists them; the dialog
 // shows one in detail, with its speed chart.
 
-import { api } from "./api.js";
+import { api, notifyUnauth } from "./api.js";
 import { prefs } from "./prefs.js";
 import { t, count, LANG } from "./i18n.js";
 import { esc, size, speed, duration, clock, int, baseName, parentOf, dateTime } from "./format.js";
@@ -13,6 +13,10 @@ const jobs = new Map(); // id -> job
 const local = new Map(); // uploads: id -> controller {pause, resume, cancel, answer}
 let since = 0;
 let pollTimer = 0;
+let polling = null; // the poll in flight
+let pollAgain = null; // a poll asked for while one was in flight
+let pollErrors = 0; // failed polls in a row, for the backoff
+let unauth = false; // the session is gone: no polling until the page is back in use
 let app = null;
 let firstPoll = true;
 const dialogs = new Map(); // id -> dialog view
@@ -40,8 +44,12 @@ const PHASES = {
   extract: [["extract", "Estrazione"], ["end", "Fine"]],
 };
 const LIMITS = [0, 5, 10, 25, 50, 100, 200, 500];
+// speed samples kept per job: past this the older ones are thinned out
+const MAX_SAMPLES = 600;
+// the most recent samples are never thinned: the speed shown reads them
+const KEEP_RECENT = 120;
 
-const finished = (j) => ["done", "failed", "cancelled"].includes(j.state);
+export const finished = (j) => ["done", "failed", "cancelled"].includes(j.state);
 // "done" where every item failed reads as a failure, with the first reason
 const allFailed = (j) => j.state === "done" && j.progress.errors > 0 && j.progress.errors >= j.progress.files_done;
 const shownState = (j) => (allFailed(j) ? "failed" : j.state);
@@ -55,8 +63,23 @@ export function init(theApp) {
   $("#xfer-drawer-close").innerHTML = svg("close");
   $("#xfer-drawer-close").onclick = () => toggleDrawer(false);
   $("#xfer-clear").onclick = clearFinished;
-  document.addEventListener("visibilitychange", () => schedule(200));
+  // a click outside the open drawer closes it
+  addEventListener("mousedown", (e) => {
+    const d = $("#xfer-drawer");
+    if (!d.hidden && !d.contains(e.target) && !$("#xfer-btn").contains(e.target) && !e.target.closest("dialog")) d.hidden = true;
+  }, true);
+  // back in view, or back in use after the session ran out: look again now
+  document.addEventListener("visibilitychange", () => !document.hidden && wake());
+  addEventListener("focus", wake);
+  addEventListener("synofile:auth", () => unauth && wake());
   poll();
+}
+
+/** Polls soon, also after the session ran out (DSM may have a new one). */
+function wake() {
+  unauth = false;
+  pollErrors = 0;
+  schedule(200);
 }
 
 // ---------- model ----------
@@ -131,17 +154,44 @@ export function stats(job) {
 function merge(update) {
   const old = jobs.get(update.id);
   if (old) {
-    update.samples = old.samples.concat(update.samples || []);
+    // a poll from an earlier point (since=0 after Retry, one that overlapped)
+    // sends samples again: only the ones after what is here count
+    const end = old.samples.length ? old.samples[old.samples.length - 1][0] : -1;
+    update.samples = old.samples.concat((update.samples || []).filter((x) => x[0] > end));
   }
+  update.samples = thin(update.samples || []);
   update._polledAt = Date.now();
   jobs.set(update.id, update);
   return update;
 }
 
-async function poll() {
+/**
+ * Keeps a job's samples under MAX_SAMPLES: every other one of the older part
+ * goes, so the start of a long transfer grows coarser and the recent part,
+ * which the speed shown is read from, stays as it is.
+ */
+function thin(s) {
+  if (s.length <= MAX_SAMPLES) return s;
+  const cut = s.length - KEEP_RECENT;
+  return s.slice(0, cut).filter((_, i) => i % 2 === 0).concat(s.slice(cut));
+}
+
+/**
+ * Asks the NAS what changed. One request at a time: a call while one is in
+ * flight gets a fresh one right after it (the caller may wait for a job it
+ * just started, which the request in flight may not know of yet).
+ */
+function poll() {
+  if (polling) return (pollAgain ||= polling.catch(() => {}).then(() => ((pollAgain = null), poll())));
+  polling = pollNow().finally(() => (polling = null));
+  return polling;
+}
+
+async function pollNow() {
   clearTimeout(pollTimer);
   try {
     const data = await api.jobs(since);
+    pollErrors = 0;
     since = data.now || since;
     const ids = new Set();
     for (const j of data.jobs) {
@@ -156,8 +206,15 @@ async function poll() {
     }
     if (firstPoll) openAsked();
     firstPoll = false;
-  } catch {
-    // the daemon may be restarting: keep the last state and retry
+  } catch (e) {
+    if (e.status === 401) {
+      // the session is over: polling would only fail (and api.js already said so)
+      unauth = true;
+      notifyUnauth();
+    } else {
+      // the daemon may be restarting: keep the last state and retry, less and less often
+      pollErrors++;
+    }
   }
   renderAll();
   schedule();
@@ -186,11 +243,18 @@ addEventListener("storage", (e) => {
   if (e.key === "synofile.openXfer" && e.newValue) openAsked();
 });
 
+/**
+ * When to poll next. Each poll keeps DSM's session alive, so with nothing
+ * running it goes once a minute, and not at all while the page is hidden.
+ */
 function schedule(ms) {
   clearTimeout(pollTimer);
+  if (unauth) return;
   const busy = [...jobs.values()].some((j) => active(j) && j.source !== "local");
   const watching = !$("#xfer-drawer").hidden || dialogs.size > 0;
-  const wait = ms ?? (busy ? (document.hidden ? 3000 : 700) : watching ? 2000 : 6000);
+  if (document.hidden && !busy && ms === undefined) return;
+  let wait = ms ?? (busy ? (document.hidden ? 3000 : 700) : watching ? 2000 : 60000);
+  if (pollErrors) wait = Math.max(wait, Math.min(60000, 1000 * 2 ** pollErrors));
   pollTimer = setTimeout(poll, wait);
 }
 
@@ -248,6 +312,7 @@ export function registerLocal(job, controller) {
 
 export function updateLocal(job) {
   job._polledAt = Date.now();
+  if (job.samples.length > MAX_SAMPLES) job.samples = thin(job.samples);
   if (finished(job) && !seenFinished.has(job.id)) {
     seenFinished.add(job.id);
     announce(job);
@@ -286,6 +351,23 @@ async function control(job, action, extra = {}) {
   kick();
 }
 
+/**
+ * Runs a job again (`extra`: the archive's password): the NAS gives it a
+ * new id, so the dialog opens on the newest active job of the same kind.
+ */
+async function retryAndOpen(old, extra = {}) {
+  try {
+    await api.control(old.id, "retry", extra);
+  } catch (e) {
+    return errorToast(e);
+  }
+  nudgeTray();
+  since = 0;
+  await poll();
+  const next = [...jobs.values()].filter((j) => j.op === old.op && j.source !== "local" && active(j)).sort((a, b) => b.created - a.created)[0];
+  if (next) openDialog(next.id);
+}
+
 function clearFinished() {
   for (const j of [...jobs.values()]) {
     if (!finished(j)) continue;
@@ -312,10 +394,15 @@ function renderButton() {
   const running = list.filter(active);
   const btn = $("#xfer-btn");
   btn.classList.toggle("active", running.length > 0);
-  btn.classList.toggle("attention", running.some((j) => j.state === "conflict" || j.state === "paused"));
+  const attention = running.some((j) => j.state === "conflict" || j.state === "paused");
+  btn.classList.toggle("attention", attention);
   const recentFail = list.some((j) => j.state === "failed" && !j._seenFail);
   btn.classList.toggle("failed", recentFail && !running.length);
-  $("#xfer-count").textContent = running.length || (recentFail ? "!" : "");
+  // one transfer: the ring says it already; the number counts from two,
+  // or marks the one waiting for an answer
+  const many = running.length > 1 || attention;
+  btn.classList.toggle("counted", many || (recentFail && !running.length));
+  $("#xfer-count").textContent = many ? running.length : recentFail && !running.length ? "!" : "";
   let total = 0;
   let done = 0;
   for (const j of running) {
@@ -334,13 +421,6 @@ function toggleDrawer(show) {
   if (!d.hidden) {
     for (const j of jobs.values()) if (j.state === "failed") j._seenFail = true;
     renderDrawer();
-    const close = (e) => {
-      if (!d.contains(e.target) && !$("#xfer-btn").contains(e.target) && !e.target.closest("dialog")) {
-        d.hidden = true;
-        removeEventListener("mousedown", close, true);
-      }
-    };
-    setTimeout(() => addEventListener("mousedown", close, true));
   }
   renderButton();
   schedule(100);
@@ -454,16 +534,9 @@ class JobDialog {
     $(".b-start", this.dlg).onclick = () => control(this.job, "start");
     $(".b-pause", this.dlg).onclick = () => control(this.job, this.job.state === "paused" ? "resume" : "pause");
     $(".b-retry", this.dlg).onclick = () => {
-      // the same job again: the NAS gives it a new id
-      const old = this.job;
+      // the same job again
       this.dlg.close();
-      api.control(old.id, "retry").then(() => {
-        since = 0;
-        poll().then(() => {
-          const next = [...jobs.values()].filter((j) => j.op === old.op && active(j)).sort((a, b) => b.created - a.created)[0];
-          if (next) openDialog(next.id);
-        });
-      }).catch(errorToast);
+      retryAndOpen(this.job);
     };
     $(".b-open", this.dlg).onclick = () => {
       this.dlg.close();
@@ -475,9 +548,14 @@ class JobDialog {
       localStorage.setItem("synofile.axis", this.axis);
       this.draw();
     };
+    // one drawing per frame, however fast the mouse moves
+    this.frame = 0;
     this.canvas.addEventListener("mousemove", (e) => {
       this.hoverX = e.offsetX;
-      this.draw();
+      this.frame ||= requestAnimationFrame(() => {
+        this.frame = 0;
+        this.draw();
+      });
     });
     this.canvas.addEventListener("mouseleave", () => {
       this.hoverX = null;
@@ -494,6 +572,7 @@ class JobDialog {
 
   destroy() {
     clearInterval(this.tick);
+    cancelAnimationFrame(this.frame);
     this.resize.disconnect();
   }
 
@@ -507,6 +586,7 @@ class JobDialog {
     const r = route(job);
     const state = shownState(job);
     $(".ttl", d).textContent = finished(job) ? (state === "done" ? t(op.done) : title(job)) : t(op.running);
+    $(".ttl", d).title = title(job);
     const chip = $(".chip", d);
     chip.className = "chip " + state;
     chip.textContent = t(STATE[state]);
@@ -613,18 +693,12 @@ class JobDialog {
             const password = $("input", form).value;
             if (!password) return;
             this.dlg.close();
-            api.control(job.id, "retry", { password }).then(() => {
-              since = 0;
-              poll().then(() => {
-                const next = [...jobs.values()].filter((j) => j.op === "extract" && active(j)).sort((a, b) => b.created - a.created)[0];
-                if (next) openDialog(next.id);
-              });
-            }).catch(errorToast);
+            retryAndOpen(job, { password });
           };
           setTimeout(() => $("input", form)?.focus());
         }
       } else {
-        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : `${t(STATE[job.state])}: ${job.msg}`;
+        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : !job.msg || job.msg === t(STATE[job.state]) ? t(STATE[job.state]) : `${t(STATE[job.state])}: ${job.msg}`;
         sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`;
       }
     } else sum.hidden = true;
@@ -637,7 +711,8 @@ class JobDialog {
     $(".b-close", d).hidden = !finished(job);
     $(".b-open", d).hidden = !finished(job) || !job.info.dest;
     $(".b-retry", d).hidden = !job.interrupted;
-    $(".xf-foot .left", d).style.visibility = finished(job) || job.op === "delete" ? "hidden" : "visible";
+    // no speed limit for uploads from this computer: the browser sends as fast as it can
+    $(".xf-foot .left", d).style.visibility = finished(job) || job.op === "delete" || job.source === "local" ? "hidden" : "visible";
     const sel = $(".limit", d);
     const mb = Math.round((job.limit || 0) / 1024 / 1024);
     if (document.activeElement !== sel) {
@@ -706,8 +781,16 @@ class JobDialog {
     const g = c.getContext("2d");
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
-    const css = getComputedStyle(document.documentElement);
-    const col = (v) => css.getPropertyValue(v).trim();
+    // the theme's colours, read once per dialog (a full style lookup each frame is not free)
+    this.colors ||= new Map();
+    const col = (v) => {
+      let c = this.colors.get(v);
+      if (c === undefined) {
+        c = getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+        this.colors.set(v, c);
+      }
+      return c;
+    };
     const st = this.st || stats(job);
     const work = (x) => (st.byBytes ? x[1] + x[3] : x[2]);
     const s = job.samples;
@@ -723,7 +806,9 @@ class JobDialog {
       const dt = (s[i][0] - s[k][0]) / 1000;
       const v = dt > 0 ? Math.max(0, (work(s[i]) - work(s[k])) / dt) : 0;
       const verifying = s[i][3] > s[i - 1][3];
-      const gap = s[i][0] - s[i - 1][0] > 2500;
+      // a pause leaves a hole in the samples; thinned ones are just farther apart, evenly
+      const dt1 = s[i][0] - s[i - 1][0];
+      const gap = dt1 > 2500 && (i < 2 || dt1 > 3 * (s[i - 1][0] - s[i - 2][0]));
       pts.push({ t: s[i][0], w: work(s[i]), v, verifying, gap });
     }
     const xmax = this.axis === "progress" ? Math.max(1, st.totalWork) : Math.max(30000, st.elapsed, s.length ? s[s.length - 1][0] : 0);

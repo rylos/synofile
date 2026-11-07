@@ -18,14 +18,28 @@ function dsmLang() {
     const q = new URLSearchParams(location.search).get("lang");
     if (q) return q;
   } catch {}
-  try {
-    const sds = window.parent !== window && window.parent.SYNO && window.parent.SYNO.SDS;
-    const lang = sds && sds.Session && sds.Session.lang;
-    // "def" is DSM's "same as the browser"
-    if (lang && lang !== "def") return lang;
-  } catch {
-    // another origin: no access to DSM
+  // DSM's window around this page: the one holding the frame, or the one
+  // that opened this window
+  for (const desk of [window.parent !== window && window.parent, window.opener?.parent]) {
+    try {
+      const sds = desk && desk.SYNO && desk.SYNO.SDS;
+      const lang = sds && sds.Session && sds.Session.lang;
+      if (!lang) continue;
+      // remembered for when the page is opened on its own, without DSM around it
+      try {
+        localStorage.setItem("synofile.dsmLang", lang);
+      } catch {}
+      // "def" is DSM's "same as the browser"
+      if (lang !== "def") return lang;
+      return navigator.language || "en";
+    } catch {
+      // another origin: no access to DSM
+    }
   }
+  try {
+    const kept = localStorage.getItem("synofile.dsmLang");
+    if (kept && kept !== "def") return kept;
+  } catch {}
   return navigator.language || "en";
 }
 
@@ -98,7 +112,9 @@ export function t(text, vars) {
   return out;
 }
 
+// made once per language: count() runs for every row of the status bar and info panel
 let rules = null;
+let rulesLocale = null;
 
 /**
  * "1 file" / "3 file", "1 cartella" / "3 cartelle". The plural may be a
@@ -107,7 +123,10 @@ let rules = null;
  * Italian uses one word for both, the plural key is `word|pl`.
  */
 export function count(n, one, many, fmt = (x) => x) {
-  if (!rules || rules.resolvedOptions().locale !== new Intl.PluralRules(LOCALE).resolvedOptions().locale) rules = new Intl.PluralRules(LOCALE);
+  if (rulesLocale !== LOCALE) {
+    rules = new Intl.PluralRules(LOCALE);
+    rulesLocale = LOCALE;
+  }
   const form = rules.select(n);
   if (form === "one" || (LANG === "it" && n === 1)) return `${fmt(n)} ${t(one)}`;
   const key = one === many ? `${many}|pl` : many;

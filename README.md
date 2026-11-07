@@ -62,7 +62,9 @@ Nine languages, following DSM.
   reordered; favourites, hidden files (Ctrl+H), view and sort remembered for
   each folder, where it opens, where new tabs open, single or double click,
   Vim keys. Any folder can get an icon and a colour of your choice (click the
-  icon in the info panel), for itself or for every folder of that name.
+  icon in the info panel), for itself or for every folder of that name, and
+  a shared folder's description and permissions (users and groups, and DSM's
+  advanced settings) can be changed from its right-click menu.
 - **USB drives.** An eject button beside a USB, SD or eSATA shared folder and
   the favourites inside it, the same as DSM's External Devices.
 - **In a window or a tab of its own.** A button opens SynoFile in a browser
@@ -124,9 +126,12 @@ on the NAS tells whether setup ran and the transfer service is up.
 - DSM's web server runs `ui/api.cgi` per request as the package's
   unprivileged user. The static Rust binary asks DSM's `authenticate.cgi` who
   is logged in, refuses anyone outside `administrators`, then **becomes that
-  user** (groups, gid, uid, no capability left, `no_new_privs`) before it
-  touches a file.
-- That takes `CAP_SETUID` and `CAP_SETGID`. DSM 7 refuses `capabilities` in
+  user** (groups, gid, uid, `no_new_privs`) before it touches a file. The
+  only capability the user keeps is `CAP_DAC_READ_SEARCH`: an administrator
+  can open and read any folder (a backup owned by another machine's uid, a
+  read-only snapshot), while every change still goes through the user's
+  own permissions.
+- That takes `CAP_SETUID`, `CAP_SETGID` and `CAP_DAC_READ_SEARCH`. DSM 7 refuses `capabilities` in
   third-party packages (error 319), so `synofile setup`, as root, writes the
   file capability and gives the binaries to root.
 - `synofile daemon` keeps the transfers, reached over a Unix socket only the

@@ -118,6 +118,11 @@ def main():
     args = parser.parse_args()
     if not BINARY.exists():
         sys.exit("build first: cargo build")
+    # the daemon starts jobs with the worker beside it, as in the package
+    worker = BINARY.with_name("synofile-worker")
+    if not worker.is_symlink():
+        worker.unlink(missing_ok=True)
+        worker.symlink_to(BINARY.name)
     VAR.mkdir(parents=True, exist_ok=True)
     Handler.shares = Path(args.root).resolve()
     daemon = subprocess.Popen([str(BINARY), "daemon"], env=base_env(Handler.shares))

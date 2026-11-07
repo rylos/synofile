@@ -27,21 +27,65 @@ pub struct Sftp {
     pub home: String,
 }
 
-/// Accepts the server's key when it is the one remembered, or when none
-/// is (the first connection: the API remembers it).
+/// Accepts the server's key when it is the one remembered. When none is
+/// yet, only where it can be remembered: in the package's own processes,
+/// which keep the connections (see `remote::may_pin`). Anywhere else an
+/// unknown key would be taken on trust again and again, never pinned.
 pub struct Check {
     expected: String,
+    learn: bool,
     seen: Arc<Mutex<String>>,
+}
+
+impl Check {
+    fn accepts(&self, seen: &str) -> bool {
+        if self.expected.is_empty() { self.learn } else { self.expected == seen }
+    }
 }
 
 impl russh::client::Handler for Check {
     type Error = russh::Error;
     async fn check_server_key(&mut self, key: &PublicKey) -> Result<bool, Self::Error> {
         let seen = key.fingerprint(HashAlg::Sha256).to_string();
-        let ok = self.expected.is_empty() || self.expected == seen;
+        let ok = self.accepts(&seen);
         *self.seen.lock().unwrap() = seen;
         Ok(ok)
     }
+}
+
+/// Why a server's key was refused.
+fn unknown_key(expected: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        if expected.is_empty() {
+            t!("la chiave del server non è ancora verificata: apri Modifica connessione e salva", "the server's key is not verified yet: open Edit connection and save")
+        } else {
+            t!("la chiave del server è cambiata dall'ultima connessione: se è giusto, spunta «dimentica» in Modifica connessione", "the server's key changed since the last connection: if that is right, tick “forget” in Edit connection")
+        },
+    )
+}
+
+/// The server's key as SFTP would see it, without logging in: for the
+/// first connection, to pin it (`remote::pin_host_key`).
+pub fn server_key(conn: &Conn, timeout: Duration) -> io::Result<String> {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let seen = Arc::new(Mutex::new(String::new()));
+    let check = Check { expected: String::new(), learn: true, seen: Arc::clone(&seen) };
+    let port = if conn.port == 0 { 22 } else { conn.port };
+    let host = conn.host.trim().to_string();
+    rt.block_on(async {
+        let config = Arc::new(russh::client::Config::default());
+        match tokio::time::timeout(timeout, russh::client::connect(config, (host.as_str(), port), check)).await {
+            Err(_) => Err(errno(libc::ETIMEDOUT)),
+            Ok(Err(e)) => Err(other(e)),
+            Ok(Ok(session)) => {
+                let _ = session.disconnect(russh::Disconnect::ByApplication, "", "").await;
+                Ok(())
+            }
+        }
+    })?;
+    let key = seen.lock().unwrap().clone();
+    if key.is_empty() { Err(other("no host key")) } else { Ok(key) }
 }
 
 fn other(e: impl std::fmt::Display) -> io::Error {
@@ -68,19 +112,15 @@ impl Sftp {
     pub fn connect(conn: &Conn) -> io::Result<Self> {
         let rt = Arc::new(tokio::runtime::Builder::new_current_thread().enable_all().build()?);
         let seen = Arc::new(Mutex::new(String::new()));
-        let check = Check { expected: conn.host_key.clone(), seen: Arc::clone(&seen) };
+        let learn = conn.host_key.is_empty() && super::may_pin();
+        let check = Check { expected: conn.host_key.clone(), learn, seen: Arc::clone(&seen) };
         let port = if conn.port == 0 { 22 } else { conn.port };
         let host = conn.host.trim().to_string();
         let result = rt.block_on(async {
             let config = Arc::new(russh::client::Config { inactivity_timeout: Some(Duration::from_secs(600)), ..Default::default() });
             let mut session = match tokio::time::timeout(TIMEOUT, russh::client::connect(config, (host.as_str(), port), check)).await {
                 Err(_) => return Err(errno(libc::ETIMEDOUT)),
-                Ok(Err(russh::Error::UnknownKey)) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::PermissionDenied,
-                        t!("la chiave del server è cambiata dall'ultima connessione: se è giusto, spunta «dimentica» in Modifica connessione", "the server's key changed since the last connection: if that is right, tick “forget” in Edit connection"),
-                    ));
-                }
+                Ok(Err(russh::Error::UnknownKey)) => return Err(unknown_key(&conn.host_key)),
                 Ok(Err(e)) => return Err(other(e)),
                 Ok(Ok(s)) => s,
             };
@@ -449,6 +489,17 @@ pub fn public_key(private: &str, comment: &str) -> io::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_keys_only_where_they_are_pinned() {
+        let check = |expected: &str, learn: bool| Check { expected: expected.into(), learn, seen: Arc::default() };
+        assert!(check("SHA256:abc", false).accepts("SHA256:abc"));
+        assert!(!check("SHA256:abc", true).accepts("SHA256:other"));
+        // none remembered: taken only by a process that saves it
+        assert!(check("", true).accepts("SHA256:abc"));
+        assert!(!check("", false).accepts("SHA256:abc"));
+        assert!(unknown_key("").to_string() != unknown_key("SHA256:abc").to_string());
+    }
 
     #[test]
     fn makes_keys() {

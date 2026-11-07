@@ -1,7 +1,7 @@
 // Small pieces of interface shared by everything: toasts, the context
 // menu, modal dialogs and the folder picker.
 
-import { esc } from "./format.js";
+import { esc, isDirLike } from "./format.js";
 import { svg, FOLDER_GLYPH, shareGlyph } from "./icons.js";
 import { t } from "./i18n.js";
 import { api } from "./api.js";
@@ -160,7 +160,11 @@ export function promptBox({ title, label, value = "", ok = t("OK"), select, icon
   });
 }
 
-/** Lets the user choose a folder on the NAS: resolves its path or null. */
+/**
+ * Lets the user choose a folder on the NAS: resolves its path or null. A
+ * click picks a folder of the list, a double click opens it; OK takes the
+ * one picked, else the folder shown.
+ */
 export function pickFolder({ title, start, ok }) {
   return new Promise((resolve) => {
     const dlg = dialog(`
@@ -170,42 +174,61 @@ export function pickFolder({ title, start, ok }) {
       </div>
       <div class="dlg-foot"><div class="left"><button class="btn small mk">${svg("folderPlus")} ${t("Nuova cartella")}</button></div><button class="btn cancel">${t("Annulla")}</button><button class="btn primary ok">${esc(ok)}</button></div>`, { cls: "picker-dlg" });
     let current = start && start !== "/" ? start : "/";
+    let picked = null;
     let result = null;
+    let seq = 0;
     const pathEl = dlg.querySelector(".picker-path");
     const list = dlg.querySelector(".picker-list");
     const okBtn = dlg.querySelector(".ok");
+    const showPath = () => {
+      const p = picked || current;
+      okBtn.disabled = p === "/";
+      pathEl.innerHTML = `${svg("drive")} ${esc(p === "/" ? t("Cartelle condivise") : p)}`;
+    };
     async function go(path) {
+      const mine = ++seq;
       current = path;
-      okBtn.disabled = path === "/";
+      picked = null;
       dlg.querySelector(".mk").disabled = path === "/";
-      pathEl.innerHTML = `${svg("drive")} ${esc(path === "/" ? t("Cartelle condivise") : path)}`;
+      showPath();
       list.innerHTML = `<div class="hint" style="padding:8px">${t("Caricamento…")}</div>`;
       try {
         let rows = [];
         if (path === "/") {
           const { shares } = await api.shares();
+          if (mine !== seq) return;
           rows = shares.filter((s) => s.writable).map((s) => ({ name: s.name, path: "/" + s.name, glyph: shareGlyph(s.name) }));
           // the remote connections after the shared folders
           const { conns } = await api.conns().catch(() => ({ conns: [] }));
+          if (mine !== seq) return;
           rows.push(...conns.map((c) => ({ name: c.name, path: "/:" + c.id, glyph: svg("server") })));
         } else {
           const { entries } = await api.list(path);
+          if (mine !== seq) return;
           rows = entries
-            .filter((e) => e.kind === "d" || e.link_dir)
+            .filter(isDirLike)
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
             .map((e) => ({ name: e.name, path: path + "/" + e.name, glyph: FOLDER_GLYPH }));
-          rows.unshift({ name: "..", path: path.split("/").slice(0, -1).join("/") || "/", glyph: "" });
+          rows.unshift({ name: "..", path: path.split("/").slice(0, -1).join("/") || "/", glyph: "", up: true });
         }
         list.innerHTML = "";
         for (const r of rows) {
           const b = h(`<button><i class="gi ez-dir">${r.glyph}</i><span>${esc(r.name)}</span></button>`);
           b.ondblclick = () => go(r.path);
-          b.onclick = () => go(r.path);
+          b.onclick = () => {
+            // ".." is a way up, not a folder to pick
+            if (r.up) return go(r.path);
+            const again = picked === r.path;
+            list.querySelectorAll("button.sel").forEach((x) => x.classList.remove("sel"));
+            picked = again ? null : r.path;
+            b.classList.toggle("sel", !again);
+            showPath();
+          };
           list.append(b);
         }
         if (!rows.length) list.innerHTML = `<div class="hint" style="padding:8px">${t("Nessuna sottocartella")}</div>`;
       } catch (e) {
-        list.innerHTML = `<div class="hint" style="padding:8px;color:var(--crit)">${esc(e.message)}</div>`;
+        if (mine === seq) list.innerHTML = `<div class="hint" style="padding:8px;color:var(--crit)">${esc(e.message)}</div>`;
       }
     }
     dlg.querySelector(".mk").onclick = async () => {
@@ -220,7 +243,7 @@ export function pickFolder({ title, start, ok }) {
     };
     dlg.querySelector(".cancel").onclick = () => dlg.close();
     okBtn.onclick = () => {
-      result = current;
+      result = picked || current;
       dlg.close();
     };
     dlg.addEventListener("close", () => resolve(result));
