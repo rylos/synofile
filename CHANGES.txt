@@ -1,3 +1,9 @@
+v0.8.15
+- Changed to use a setuid helper so users don't need to run SSH commands when installing ot ugrading the package.
+- Added a GitHub workflow to compile the helper binariy and run build.sh when: 
+  - A new release is published.
+  - The Workflow is run manually from the Actions menu.
+
 v0.8.14
 - The transfer window keeps its width with a long file name: the title ends in "…" (the whole name on hover) and the state stays in view.
 - A cancelled transfer says "Cancelled" once, instead of "Cancelled: cancelled".
