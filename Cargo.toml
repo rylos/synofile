@@ -1,6 +1,6 @@
 [package]
 name = "synofile"
-version = "0.8.16"
+version = "0.8.17"
 edition = "2024"
 license = "MIT"
 description = "Synology DSM package: a fast, dark file manager for the shared folders, with a detailed transfer dialog"
@@ -30,4 +30,5 @@ nom-exif = "3"
 lto = true
 codegen-units = 1
 strip = true
-opt-level = "s"
+# opt-level 3 (the release default): built for size, the SMB signatures and
+# encryption take most of the CPU of a copy on a small NAS

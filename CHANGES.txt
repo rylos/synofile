@@ -1,3 +1,7 @@
+v0.8.17
+- The speed chart of a transfer moves smoothly: one point per real measurement, four a second, and the line walks from one to the next instead of jumping. The curve is rounder, pauses are shaded on the time axis, and the scale glides when it changes.
+- The native binaries are built for speed instead of size, which matters most for SMB copies on small NASes. The package grows by about 1.4 MB.
+
 v0.8.16
 - The install helper of 0.8.15 crashed on older CPUs without AVX (for example the Celeron J3455 of a DS918+ or DS418play), so on those NASes `setup` was still needed. It is now built for any x86-64 CPU, and the build refuses a helper using newer instructions.
 

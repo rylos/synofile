@@ -20,7 +20,7 @@ use super::protocol::{Command, ConflictInfo, Event, Op, Policy, Progress, Spec, 
 use crate::identity::User;
 
 const MAX_PARALLEL: usize = 2;
-const SAMPLE_EVERY: Duration = Duration::from_millis(500);
+const SAMPLE_EVERY: Duration = Duration::from_millis(250);
 const MAX_SAMPLES: usize = 2400;
 const MAX_ERRORS: usize = 500;
 const KEEP_FINISHED: Duration = Duration::from_secs(24 * 3600);
