@@ -1,12 +1,15 @@
 //! The capabilities the package needs, and how they get there.
 //!
-//! Every file operation runs as the DSM user who asked for it, so the
-//! kernel applies that user's permissions and Synology ACLs to everything
-//! that changes a file. Becoming that user takes CAP_SETUID and CAP_SETGID.
-//! Only administrators sign in to SynoFile, and an administrator may look
-//! everywhere: the user keeps CAP_DAC_READ_SEARCH, to read any file and
-//! open any folder (a backup received from another machine, owned by a uid
-//! the NAS does not know; a read-only snapshot). Writing stays the user's.
+//! Every file operation runs as the DSM user who asked for it: what it
+//! creates is the user's, and nothing changes a file's owner. Becoming that
+//! user takes CAP_SETUID and CAP_SETGID. Only administrators sign in to
+//! SynoFile, and an administrator may do anything there, as in File Station:
+//! the user keeps CAP_DAC_READ_SEARCH (read any file, open any folder: a
+//! backup received from another machine, owned by a uid the NAS does not
+//! know), CAP_DAC_OVERRIDE (write, delete and rename there too: a USB disk
+//! formatted on a PC) and CAP_FOWNER (folders with the sticky bit, times and
+//! modes of files the user does not own). Read-only filesystems and
+//! snapshots stay read-only: the kernel refuses those to anyone.
 //!
 //! DSM 7 refuses the `capabilities` field of conf/privilege in third-party
 //! packages ("invalid package privilege content", error 319), so the
@@ -20,7 +23,9 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 
+const CAP_DAC_OVERRIDE: u32 = 1;
 const CAP_DAC_READ_SEARCH: u32 = 2;
+const CAP_FOWNER: u32 = 3;
 const CAP_SETGID: u32 = 6;
 const CAP_SETUID: u32 = 7;
 
@@ -31,12 +36,14 @@ fn mask() -> u64 {
     (1 << CAP_SETUID) | (1 << CAP_SETGID)
 }
 
-/// What the binary carries: switching user, and reading everywhere.
+/// What the binary carries: switching user, and the administrator's.
 fn file_mask() -> u64 {
-    mask() | READ
+    mask() | ADMIN
 }
 
-const READ: u64 = 1 << CAP_DAC_READ_SEARCH;
+/// What the user keeps: an administrator's way past file permissions.
+const ADMIN_CAPS: [u32; 3] = [CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH, CAP_FOWNER];
+const ADMIN: u64 = (1 << CAP_DAC_OVERRIDE) | (1 << CAP_DAC_READ_SEARCH) | (1 << CAP_FOWNER);
 
 fn status_field(name: &str) -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
@@ -51,14 +58,20 @@ pub fn effective() -> bool {
     status_field("CapEff:").is_some_and(|eff| eff & mask() == mask())
 }
 
-/// Whether this process holds no capability but reading, in any set: it
-/// can no longer become anyone else.
-pub fn only_reading() -> bool {
-    ["CapEff:", "CapPrm:", "CapInh:", "CapAmb:"].iter().all(|f| status_field(f).is_some_and(|v| v & !READ == 0))
+/// Whether this process holds no capability but the administrator's, in any
+/// set: it can no longer become anyone else.
+pub fn only_admin() -> bool {
+    ["CapEff:", "CapPrm:", "CapInh:", "CapAmb:"].iter().all(|f| status_field(f).is_some_and(|v| v & !ADMIN == 0))
+}
+
+/// Whether this process writes past file permissions now (CAP_DAC_OVERRIDE
+/// effective): `access()` cannot say, it drops capabilities for a non-root user.
+pub fn overriding() -> bool {
+    status_field("CapEff:").is_some_and(|eff| eff & (1 << CAP_DAC_OVERRIDE) != 0)
 }
 
 /// The security.capability xattr value: revision 2, effective, permitted
-/// set = our three capabilities, nothing inheritable.
+/// set = our five capabilities, nothing inheritable.
 pub fn xattr_value() -> [u8; 20] {
     let permitted = file_mask();
     let words = [
@@ -149,12 +162,13 @@ fn capset(bits: u32) -> io::Result<()> {
     Ok(())
 }
 
-/// After becoming the user: every capability goes but reading, which
-/// stays in every set and in the ambient one, so the programs the user's
-/// side runs (the worker, 7z, ffmpeg) read everywhere too. Without it in
-/// the permitted set (setup not run since an upgrade) nothing is left.
-/// Only system calls, no allocation: it runs between fork and exec.
-pub fn keep_reading() -> io::Result<()> {
+/// After becoming the user: every capability goes but the administrator's,
+/// which stay in every set and in the ambient one, so the programs the
+/// user's side runs (the worker, 7z, ffmpeg, synorecycle) have them too.
+/// What the permitted set lacks (an older binary, setup not run since an
+/// upgrade) is not there. Only system calls, no allocation: it runs between
+/// fork and exec.
+pub fn keep_admin() -> io::Result<()> {
     let header = Header { version: LINUX_CAPABILITY_VERSION_3, pid: 0 };
     let mut data = [Data { effective: 0, permitted: 0, inheritable: 0 }; 2];
     // SAFETY: the kernel writes two data structs for a v3 header
@@ -162,13 +176,14 @@ pub fn keep_reading() -> io::Result<()> {
     if rc < 0 {
         return Err(io::Error::last_os_error());
     }
-    let keep = data[0].permitted & READ as u32;
+    let keep = data[0].permitted & ADMIN as u32;
     capset(keep)?;
-    if keep != 0 {
+    for cap in ADMIN_CAPS {
+        if keep & (1 << cap) == 0 {
+            continue;
+        }
         // SAFETY: plain prctl with integer arguments
-        let rc = unsafe {
-            libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_RAISE as libc::c_ulong, CAP_DAC_READ_SEARCH as libc::c_ulong, 0, 0)
-        };
+        let rc = unsafe { libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_RAISE as libc::c_ulong, cap as libc::c_ulong, 0, 0) };
         if rc < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -199,8 +214,8 @@ mod tests {
 
     #[test]
     fn xattr_matches_setcap() {
-        // `setcap cap_dac_read_search,cap_setuid,cap_setgid+ep` writes exactly this
-        assert_eq!(xattr_value(), [0x01, 0, 0, 0x02, 0xc4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // `setcap cap_dac_override,cap_dac_read_search,cap_fowner,cap_setuid,cap_setgid+ep` writes exactly this
+        assert_eq!(xattr_value(), [0x01, 0, 0, 0x02, 0xce, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
     #[test]

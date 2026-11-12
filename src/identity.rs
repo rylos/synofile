@@ -62,7 +62,7 @@ pub fn names(file: &str, id: u32) -> Option<String> {
 }
 
 /// Becomes `user` for good: groups, gid, uid, then no capability left but
-/// reading everywhere (see caps.rs), and none to gain through exec. Safe
+/// an administrator's (see caps.rs), and none to gain through exec. Safe
 /// to call between fork and exec: only raw system calls, no allocation.
 pub fn become_user(user: &User) -> io::Result<()> {
     if dev() {
@@ -89,7 +89,7 @@ pub fn become_raw(uid: u32, gid: u32, groups: &[u32]) -> io::Result<()> {
             return Err(io::Error::last_os_error());
         }
     }
-    crate::caps::keep_reading()?;
+    crate::caps::keep_admin()?;
     // SAFETY: plain getters
     if unsafe { libc::getuid() != uid || libc::geteuid() != uid || libc::getegid() != gid } {
         return Err(io::Error::other("identity change did not take"));

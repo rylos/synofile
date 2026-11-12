@@ -7,7 +7,8 @@ into, and a transfer dialog that shows what a copy is really doing.
 
 It opens from DSM's main menu, uses the DSM login and is reserved to the
 `administrators` group. Every operation runs **as the DSM user who asked**,
-so the kernel applies that user's permissions and Synology ACLs, as SMB does.
+so what it creates is that user's, and like File Station an administrator
+may read, write and delete anywhere in the shared folders.
 Nine languages, following DSM.
 
 ![A shared folder in the list view: eza's icons and colours, folders first](docs/img/list.png)
@@ -127,11 +128,13 @@ is up.
   unprivileged user. The static Rust binary asks DSM's `authenticate.cgi` who
   is logged in, refuses anyone outside `administrators`, then **becomes that
   user** (groups, gid, uid, `no_new_privs`) before it touches a file. The
-  only capability the user keeps is `CAP_DAC_READ_SEARCH`: an administrator
-  can open and read any folder (a backup owned by another machine's uid, a
-  read-only snapshot), while every change still goes through the user's
-  own permissions.
-- That takes `CAP_SETUID`, `CAP_SETGID` and `CAP_DAC_READ_SEARCH`. DSM 7 refuses `capabilities` in
+  user keeps only an administrator's capabilities: `CAP_DAC_READ_SEARCH`,
+  `CAP_DAC_OVERRIDE` and `CAP_FOWNER`. So, as in File Station, an
+  administrator can open, change and delete what file permissions would
+  refuse (a backup owned by another machine's uid, a USB disk formatted on a
+  PC); new files still belong to the user, owners never change, and
+  read-only snapshots and mounts stay read-only.
+- That takes `CAP_SETUID`, `CAP_SETGID` and those three. DSM 7 refuses `capabilities` in
   third-party packages (error 319), so a small setuid-root helper
   (`spk/helper/synofile-helper.c`, by Dave Russell), declared in
   `conf/privilege` and run by `postinst`, writes the file capability. It runs

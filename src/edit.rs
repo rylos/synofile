@@ -54,13 +54,8 @@ pub fn open(out: &mut impl Write, path: &Path) -> Result<(), ApiError> {
         return Err(too_big());
     }
     let text = as_text(std::fs::read(path)?)?;
-    let writable = nix_access(path);
+    let writable = crate::fsops::access(path, libc::W_OK);
     reply(out, &json!({ "text": text, "stamp": stamp(&meta), "writable": writable }))
-}
-
-fn nix_access(path: &Path) -> bool {
-    let Ok(c) = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()) else { return false };
-    unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
 }
 
 /// Saves `text` over `path`. `stamp`: what the file was when opened; a

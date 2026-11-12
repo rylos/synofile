@@ -1,3 +1,12 @@
+v0.8.19
+- In the transfer window the overall bar and the current file's bar move smoothly, like the speed chart, instead of jumping at each update. A new file, or its verification, starts its bar from zero.
+- Administrators can now change and delete what file permissions would refuse, as in File Station: a folder on a USB disk formatted on a PC, a backup received from another machine. New files still belong to you, no owner changes, and read-only snapshots stay read-only.
+- A copy with verification reaches 100%: skipped files, files moved by renaming and failed ones no longer count as still to verify, and the time left no longer counts them either.
+- The transfer window: the speed is right again right after Resume; the steps no longer go back and forth during a verification, and a move with verification shows its Verify step; a conflict whose answer did not get through asks again instead of losing its buttons; Retry opens the job it started; a job where everything failed no longer reads "done" in the list and the notification; the warning sign of a failed job stays away once seen; the speed limit goes back if it could not be changed; Pause is gone while a conflict waits.
+- Items per second (deletions) are shown with the right scale and decimals; the speed reads "—" when nothing runs.
+- Accessibility: the window is named after its title, the progress is a progress bar for screen readers, the focus goes to Close when the job ends and to the first answer of a conflict; the list's cards open with the keyboard; less motion when the system asks for it.
+- The chart takes the new colours when the theme changes, and long transfers keep their pauses in the chart.
+
 v0.8.18
 - Verification after copying is no longer a setting that applies to every copy: it is a command for the transfer at hand. "Copy with verification to…" (Shift+F5), "Move with verification to…" (Shift+F6), "Paste with verification" (Ctrl+Shift+V) and the two "… here with verification" entries of the Alt-drop menu read every file back and compare it (xxHash3); a move with verification deletes the originals only after the check. Plain copy and move never verify, and a verified job says so when it ends (a move inside one volume is only a rename and has nothing to read back).
 

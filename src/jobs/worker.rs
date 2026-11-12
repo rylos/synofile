@@ -483,7 +483,9 @@ impl Engine {
                     self.p.method = "rename".into();
                     self.p.instant += 1;
                     self.p.files_done += 1;
-                    self.advance(if meta.is_file() { meta.len() } else { 0 });
+                    let n = if meta.is_file() { meta.len() } else { 0 };
+                    self.advance(n);
+                    self.unverified(n);
                     return Ok(());
                 }
                 Err(e) if e.raw_os_error() == Some(libc::EXDEV) => {}
@@ -495,6 +497,7 @@ impl Engine {
             }
         }
         let t = meta.file_type();
+        let (done_before, verified_before) = (self.p.bytes_done, self.p.verify_bytes);
         let result = if t.is_file() {
             self.file(src, &meta, &target)
         } else if t.is_symlink() {
@@ -519,6 +522,11 @@ impl Engine {
             Err(e) => {
                 self.error(src, &e);
                 self.p.files_done += 1;
+                if t.is_file() {
+                    // the rest of a failed file counts as handled, so the time left stays true
+                    self.p.bytes_done = self.p.bytes_done.max(done_before + meta.len());
+                    self.unverified(meta.len().saturating_sub(self.p.verify_bytes - verified_before));
+                }
             }
         }
         Ok(())
@@ -530,6 +538,14 @@ impl Engine {
         if meta.is_file() {
             // skipped bytes count as handled, so the bar and the time left stay true
             self.p.bytes_done += meta.len();
+            self.unverified(meta.len());
+        }
+    }
+
+    /// Bytes counted as done that the verification will not read back.
+    fn unverified(&mut self, n: u64) {
+        if self.spec.verify {
+            self.p.verify_skip += n;
         }
     }
 
@@ -619,6 +635,7 @@ impl Engine {
         self.p.files_done += files;
         self.p.instant += files;
         self.p.bytes_done += bytes;
+        self.unverified(bytes);
     }
 
     fn skip_tree(&mut self, path: &Path) {
@@ -626,6 +643,7 @@ impl Engine {
         self.p.files_done += files;
         self.p.skipped += files;
         self.p.bytes_done += bytes;
+        self.unverified(bytes);
     }
 
     fn decide(&mut self, src: &Path, meta: &Metadata, target: &Path, old: &Metadata) -> Step<Decision> {

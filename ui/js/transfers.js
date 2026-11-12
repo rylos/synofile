@@ -22,6 +22,8 @@ let firstPoll = true;
 const dialogs = new Map(); // id -> dialog view
 const seenFinished = new Set();
 const seenConflict = new Set();
+// failed jobs already shown in the drawer (a poll replaces the job objects)
+const seenFail = new Set();
 
 const OP = {
   copy: { icon: "copy", running: "Copia in corso", done: "Copia completata", verified: "Copia completata e verificata", noun: "Copia|op" },
@@ -37,7 +39,7 @@ const STATE = {
 };
 const PHASES = {
   copy: [["scan", "Analisi"], ["copy", "Copia"], ["verify", "Verifica"], ["end", "Fine"]],
-  move: [["scan", "Analisi"], ["move", "Spostamento"], ["end", "Fine"]],
+  move: [["scan", "Analisi"], ["move", "Spostamento"], ["verify", "Verifica"], ["end", "Fine"]],
   delete: [["scan", "Conteggio"], ["delete", "Eliminazione"], ["end", "Fine"]],
   upload: [["copy", "Trasmissione"], ["end", "Fine"]],
   compress: [["scan", "Analisi"], ["compress", "Compressione"], ["end", "Fine"]],
@@ -45,7 +47,7 @@ const PHASES = {
 };
 const LIMITS = [0, 5, 10, 25, 50, 100, 200, 500];
 // speed samples kept per job: past this the older ones are thinned out
-const MAX_SAMPLES = 1200;
+const MAX_SAMPLES = 2400;
 // the most recent samples are never thinned: the speed shown reads them
 const KEEP_RECENT = 240;
 
@@ -121,7 +123,7 @@ export function stats(job) {
   const verify = job.verify && job.op !== "delete";
   const byBytes = p.bytes_total > 0 && job.op !== "delete";
   const totalWork = byBytes ? p.bytes_total * (verify ? 2 : 1) : p.files_total;
-  const doneWork = byBytes ? p.bytes_done + (verify ? p.verify_bytes : 0) : p.files_done;
+  const doneWork = byBytes ? p.bytes_done + (verify ? p.verify_bytes + (p.verify_skip || 0) : 0) : p.files_done;
   let pct = totalWork > 0 ? Math.min(1, doneWork / totalWork) : job.state === "done" ? 1 : 0;
   if (job.state === "done") pct = 1;
   const s = job.samples;
@@ -132,7 +134,8 @@ export function stats(job) {
     if (s.length < 2) return 0;
     const last = s[s.length - 1];
     let k = s.length - 2;
-    while (k > 0 && last[0] - s[k][0] < ms) k--;
+    // not across a pause: the time it lasted moved nothing
+    while (k > 0 && last[0] - s[k][0] < ms && s[k][0] - s[k - 1][0] < 2500) k--;
     const dt = (last[0] - s[k][0]) / 1000;
     return dt > 0 ? Math.max(0, (work(last) - work(s[k])) / dt) : 0;
   };
@@ -168,14 +171,21 @@ function merge(update) {
 }
 
 /**
- * Keeps a job's samples under MAX_SAMPLES: every other one of the older part
- * goes, so the start of a long transfer grows coarser and the recent part,
- * which the speed shown is read from, stays as it is.
+ * Keeps a job's samples under MAX_SAMPLES (the daemon's own limit): every other one of the
+ * older part goes, so the start of a long transfer grows coarser and the recent part, which the
+ * speed shown is read from, stays as it is. The two ends of a pause stay, or it would become a
+ * slope: a sample whose gap on one side is much longer than on the other.
  */
 function thin(s) {
   if (s.length <= MAX_SAMPLES) return s;
   const cut = s.length - KEEP_RECENT;
-  return s.slice(0, cut).filter((_, i) => i % 2 === 0).concat(s.slice(cut));
+  const edge = (i) => {
+    if (i === 0 || i + 1 >= s.length) return true;
+    const a = s[i][0] - s[i - 1][0];
+    const b = s[i + 1][0] - s[i][0];
+    return Math.max(a, b) > 2000 && Math.max(a, b) > 3 * Math.min(a, b);
+  };
+  return s.slice(0, cut).filter((_, i) => i % 2 === 0 || edge(i)).concat(s.slice(cut));
 }
 
 /**
@@ -225,10 +235,6 @@ async function pollNow() {
   schedule();
 }
 
-/**
- * The icon in DSM's taskbar (tray.js) leaves the transfer to show here, in
- * the browser's storage: read at start, and when it changes while open.
- */
 /** Tells the icon in DSM's taskbar (another page, same origin) to look now. */
 function nudgeTray() {
   try {
@@ -236,6 +242,10 @@ function nudgeTray() {
   } catch {}
 }
 
+/**
+ * The icon in DSM's taskbar (tray.js) leaves the transfer to show here, in
+ * the browser's storage: read at start, and when it changes while open.
+ */
 function openAsked() {
   let asked = null;
   try {
@@ -321,7 +331,7 @@ function announce(job) {
     toast(`${title(job)}: ${job.msg}`, { kind: "error", action: t("Dettagli"), onAction: () => openDialog(job.id), timeout: 9000 });
   }
   if (prefs.notify && document.hidden && "Notification" in window && Notification.permission === "granted") {
-    new Notification("SynoFile", { body: `${title(job)} · ${t(STATE[job.state])}`, icon: "images/icon_64.png" });
+    new Notification("SynoFile", { body: `${title(job)} · ${t(STATE[shownState(job)])}`, icon: "images/icon_64.png" });
   }
 }
 
@@ -365,43 +375,46 @@ export async function start(request) {
   }
 }
 
+/** Sends a command to a job; false when it did not get there (the error is shown). */
 async function control(job, action, extra = {}) {
   if (job.source === "local") {
     local.get(job.id)?.[action]?.(extra);
     renderAll();
-    return;
+    return true;
   }
+  let ok = true;
   try {
-    await api.control(job.id, action, extra);
+    const res = await api.control(job.id, action, extra);
+    if (res?.error) toast(res.error, { kind: "error" });
+    ok = !res?.error && res?.ok !== false;
   } catch (e) {
     errorToast(e);
+    ok = false;
   }
   nudgeTray();
   kick();
+  return ok;
 }
 
-/**
- * Runs a job again (`extra`: the archive's password): the NAS gives it a
- * new id, so the dialog opens on the newest active job of the same kind.
- */
+/** Runs a job again (`extra`: the archive's password) and opens it: the NAS gives it a new id. */
 async function retryAndOpen(old, extra = {}) {
+  let res;
   try {
-    await api.control(old.id, "retry", extra);
+    res = await api.control(old.id, "retry", extra);
   } catch (e) {
     return errorToast(e);
   }
+  if (res?.error) return toast(res.error, { kind: "error" });
   nudgeTray();
   since = 0;
   await poll();
-  const next = [...jobs.values()].filter((j) => j.op === old.op && j.source !== "local" && active(j)).sort((a, b) => b.created - a.created)[0];
-  if (next) openDialog(next.id);
+  if (res?.id != null) openDialog(res.id);
 }
 
 function clearFinished() {
   for (const j of [...jobs.values()]) {
     if (!finished(j)) continue;
-    if (j.source === "local") jobs.delete(j.id);
-    else api.control(j.id, "dismiss").catch(() => {});
+    if (j.source !== "local") api.control(j.id, "dismiss").catch(() => {});
     jobs.delete(j.id);
   }
   renderAll();
@@ -414,7 +427,9 @@ function renderAll() {
   if (!$("#xfer-drawer").hidden) renderDrawer();
   for (const [id, view] of dialogs) {
     const job = jobs.get(id);
+    // a job the NAS forgot (dismissed elsewhere, daemon restarted): its dialog goes too
     if (job) view.update(job);
+    else view.dlg.close();
   }
 }
 
@@ -425,7 +440,7 @@ function renderButton() {
   btn.classList.toggle("active", running.length > 0);
   const attention = running.some((j) => j.state === "conflict" || j.state === "paused");
   btn.classList.toggle("attention", attention);
-  const recentFail = list.some((j) => j.state === "failed" && !j._seenFail);
+  const recentFail = list.some((j) => j.state === "failed" && !seenFail.has(j.id));
   btn.classList.toggle("failed", recentFail && !running.length);
   // one transfer: the ring says it already; the number counts from two,
   // or marks the one waiting for an answer
@@ -448,7 +463,7 @@ function toggleDrawer(show) {
   const d = $("#xfer-drawer");
   d.hidden = show === undefined ? !d.hidden : !show;
   if (!d.hidden) {
-    for (const j of jobs.values()) if (j.state === "failed") j._seenFail = true;
+    for (const j of jobs.values()) if (j.state === "failed") seenFail.add(j.id);
     renderDrawer();
   }
   renderButton();
@@ -473,16 +488,21 @@ function renderDrawer() {
     const op = OP[job.op] || OP.copy;
     const meta = active(job)
       ? job.state === "running"
-        ? `<span>${st.byBytes ? `${size(job.progress.bytes_done)} / ${size(job.progress.bytes_total)}` : `${int(job.progress.files_done)} / ${int(job.progress.files_total)}`}</span><span>${st.byBytes ? speed(st.now) : ""}${st.eta != null ? " · " + duration(st.eta) : ""}</span>`
+        ? `<span>${st.byBytes ? `${size(job.progress.bytes_done)} / ${size(job.progress.bytes_total)}` : `${int(job.progress.files_done)} / ${int(job.progress.files_total)}`}</span><span>${[st.byBytes ? speed(st.now) : "", st.eta != null ? duration(st.eta) : ""].filter(Boolean).join(" · ")}</span>`
         : `<span>${t(STATE[job.state])}</span><span>${pctText(st.pct, finished(job))}%</span>`
       : `<span>${job.finished ? clock(job.finished) : ""} · ${duration(job.active_ms)}</span><span>${job.progress.errors ? count(job.progress.errors, "errore", "errori", int) : esc(job.msg || "")}</span>`;
-    const card = h(`<div class="jcard">
+    const card = h(`<div class="jcard" tabindex="0" role="button">
       <div class="jcard-top"><div class="op">${svg(op.icon)}</div>
         <div class="tt"><b>${esc(title(job))}</b><small>${esc(r.from)} → ${esc(r.to || "")}</small></div>
-        <span class="chip ${job.state}">${t(STATE[job.state])}</span></div>
+        <span class="chip ${shownState(job)}">${t(STATE[shownState(job)])}</span></div>
       <div class="pbar thin mini ${barClass(job)}" style="--p:${(st.pct * 100).toFixed(2)}%"><div class="fill"></div></div>
       <div class="jcard-meta">${meta}</div></div>`);
     card.onclick = () => openDialog(job.id);
+    card.onkeydown = (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      openDialog(job.id);
+    };
     el.append(card);
   }
 }
@@ -517,11 +537,15 @@ export function openDialog(id) {
 
 class JobDialog {
   constructor(job) {
-    this.axis = localStorage.getItem("synofile.axis") || "progress";
+    this.axis = "progress";
+    try {
+      this.axis = localStorage.getItem("synofile.axis") || "progress";
+    } catch {}
+    const ttlId = `xf-ttl-${job.id}`;
     const op = OP[job.op] || OP.copy;
-    this.dlg = h(`<dialog class="dlg xfer" tabindex="-1">
+    this.dlg = h(`<dialog class="dlg xfer" tabindex="-1" aria-labelledby="${ttlId}">
       <div class="xf-head"><div class="op">${svg(op.icon)}</div>
-        <div class="tt"><h2><span class="ttl"></span><span class="chip"></span></h2>
+        <div class="tt"><h2><span class="ttl" id="${ttlId}"></span><span class="chip"></span></h2>
           <div class="route"><span class="from"></span>${svg("forward")}<span class="to"></span></div></div>
         <button class="icon-btn b-min" title="${t("Riduci (continua in background)")}">${svg("minimize")}</button>
       </div>
@@ -531,19 +555,19 @@ class JobDialog {
           <div class="big"><span class="pct">0</span><small>%</small></div>
           <div class="side"><div class="bytes"></div><div class="files"></div></div>
         </div>
-        <div class="pbar big main"><div class="fill"></div><div class="verify"></div></div>
-        <div class="xf-substate"><span class="sub-l"></span><span class="sub-r"></span></div>
-        <div class="xf-chart"><canvas></canvas>
-          <div class="legend"><span><i style="background:var(--accent)"></i>${t("velocità")}</span><span><i style="background:var(--muted)"></i>${t("media")}</span><span class="axis-toggle" style="pointer-events:auto;cursor:pointer;text-decoration:underline dotted"></span></div>
+        <div class="pbar big main glide" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-labelledby="${ttlId}"><div class="fill"></div><div class="verify"></div></div>
+        <div class="xf-substate" role="status"><span class="sub-l"></span><span class="sub-r"></span></div>
+        <div class="xf-chart"><canvas role="img" aria-label="${t("Velocità")}"></canvas>
+          <div class="legend"><span><i style="background:var(--accent)"></i>${t("velocità")}</span><span><i style="background:var(--muted)"></i>${t("media")}</span><button type="button" class="axis-toggle"></button></div>
         </div>
         <div class="xf-stats"></div>
         <div class="xf-current"></div>
         <div class="xf-conflict" hidden></div>
         <details class="xf-errors" hidden><summary></summary><ul></ul></details>
-        <div class="xf-summary" hidden></div>
+        <div class="xf-summary" role="status" hidden></div>
       </div>
       <div class="xf-foot">
-        <div class="left">${svg("zap")}<span>${t("Limite")}</span><select class="limit">${LIMITS.map((l) => `<option value="${l}">${l ? speed(l * 1024 * 1024) : t("nessuno")}</option>`).join("")}</select></div>
+        <div class="left">${svg("zap")}<span>${t("Limite")}</span><select class="limit" aria-label="${t("Limite")}">${LIMITS.map((l) => `<option value="${l}">${l ? speed(l * 1024 * 1024) : t("nessuno")}</option>`).join("")}</select></div>
         <button class="btn b-start" hidden>${t("Avvia ora")}</button>
         <button class="btn b-pause"></button>
         <button class="btn b-cancel">${svg("stop")} ${t("Annulla")}</button>
@@ -571,10 +595,15 @@ class JobDialog {
       this.dlg.close();
       app.openPath(this.job.info.dest);
     };
-    $(".limit", this.dlg).onchange = (e) => control(this.job, "limit", { bps: +e.target.value * 1024 * 1024 });
+    $(".limit", this.dlg).onchange = async (e) => {
+      // not changed on the NAS: back to the limit in force
+      if (!(await control(this.job, "limit", { bps: +e.target.value * 1024 * 1024 }))) e.target.value = String(Math.round((this.job.limit || 0) / 1024 / 1024));
+    };
     $(".axis-toggle", this.dlg).onclick = () => {
       this.axis = this.axis === "progress" ? "time" : "progress";
-      localStorage.setItem("synofile.axis", this.axis);
+      try {
+        localStorage.setItem("synofile.axis", this.axis);
+      } catch {}
       this.draw();
     };
     // one drawing per frame, however fast the mouse moves
@@ -583,6 +612,7 @@ class JobDialog {
     this.anim = 0;
     this.drawn = 0;
     this.still = matchMedia("(prefers-reduced-motion: reduce)");
+    this.dark = matchMedia("(prefers-color-scheme: dark)");
     this.nextFrame = (now) => {
       this.anim = 0;
       if (now - this.drawn < 30) {
@@ -591,6 +621,18 @@ class JobDialog {
       }
       this.drawn = now;
       this.draw();
+    };
+    // the bars: each poll's value is walked to, not jumped to (see glide)
+    this.glides = new Map();
+    this.barAnim = 0;
+    this.barFrame = (now) => {
+      this.barAnim = 0;
+      let moving = false;
+      for (const g of this.glides.values()) {
+        g.apply(glidePos(g, now));
+        moving ||= now < g.at + g.dur;
+      }
+      if (moving) this.barAnim = requestAnimationFrame(this.barFrame);
     };
     this.canvas.addEventListener("mousemove", (e) => {
       this.hoverX = e.offsetX;
@@ -608,14 +650,15 @@ class JobDialog {
     this.tick = setInterval(() => this.job && active(this.job) && this.update(this.job, true), 1000);
     this.dlg.showModal();
     this.update(job);
-    // no button should look pressed when the dialog opens
-    this.dlg.focus();
+    // no button should look pressed when the dialog opens, unless a conflict waits for one
+    if (!$(".xf-conflict", this.dlg).contains(document.activeElement)) this.dlg.focus();
   }
 
   destroy() {
     clearInterval(this.tick);
     cancelAnimationFrame(this.frame);
     cancelAnimationFrame(this.anim);
+    cancelAnimationFrame(this.barAnim);
     this.resize.disconnect();
   }
 
@@ -656,8 +699,71 @@ class JobDialog {
     return at();
   }
 
+  /**
+   * Moves a bar to `value` over a little more than the time since its previous value, so that it
+   * keeps going at the pace of the transfer instead of jumping at each poll. Going back is at
+   * once; `fresh` (a new file, or its verify pass) starts the bar from 0.
+   */
+  glide(key, value, apply, fresh = false) {
+    const now = performance.now();
+    let g = this.glides.get(key);
+    if (!g || fresh) {
+      g = { from: fresh ? 0 : value, to: value, at: now, dur: fresh && !this.still.matches ? 300 : 0, last: now };
+      this.glides.set(key, g);
+    } else if (value !== g.to) {
+      const pos = glidePos(g, now);
+      g.dur = value < pos || this.still.matches ? 0 : Math.min(1500, 1.3 * (now - g.last));
+      Object.assign(g, { from: pos, to: value, at: now, last: now });
+    }
+    g.apply = apply;
+    apply(glidePos(g, now));
+    if (g.dur && !this.barAnim) this.barAnim = requestAnimationFrame(this.barFrame);
+  }
+
+  /** The job's bar and the current file's, with every poll (the numbers next to them wait). */
+  glideBars(job, st) {
+    const p = job.progress;
+    const split = st.verify && st.byBytes;
+    const main = $(".pbar.main", this.dlg);
+    const ver = $(".verify", main);
+    this.glide("copy", split ? p.bytes_done / st.totalWork : st.pct, (v) => {
+      main.style.setProperty("--p", (Math.min(1, v) * 100).toFixed(2) + "%");
+      ver.style.left = split ? (v * 100).toFixed(2) + "%" : "0";
+    });
+    this.glide("verify", split ? (p.verify_bytes + (p.verify_skip || 0)) / st.totalWork : 0, (v) => (ver.style.width = (v * 100).toFixed(2) + "%"));
+
+    // the item in flight: built once per file (and once for its verify pass), as soon as it starts
+    const cur = $(".xf-current", this.dlg);
+    if (!p.current || !active(job)) {
+      cur.hidden = true;
+      this.fileKey = null;
+      return;
+    }
+    cur.hidden = false;
+    const fresh = this.fileKey !== fileKey(p);
+    if (fresh) {
+      this.fileKey = fileKey(p);
+      const name = baseName(p.current) || p.current;
+      cur.innerHTML = `<div class="row1">${svg(p.phase === "verify" ? "shield" : "file")}<span class="nm">${esc(name)}</span><span class="meth">${esc(p.phase === "verify" ? t("verifica") : methodLabels()[p.method] || "")}</span></div>
+        <div class="path">${esc(p.current)}</div>
+        ${p.current_size ? `<div class="pbar thin glide ${barClass(job)}"><div class="fill"></div></div><div class="row3"><span class="done">${size(p.current_done)} ${t("di")} ${size(p.current_size)}</span><span class="share">${pctText(fileShare(p), false)}%</span></div>` : ""}`;
+    }
+    const bar = $(".pbar", cur);
+    // one file's share only grows: a hair below the last value is a counter read early, much
+    // below it the file started over (an upload resending a part)
+    const raw = fileShare(p);
+    const last = this.glides.get("file")?.to ?? 0;
+    const again = !fresh && raw < last - 0.02;
+    const share = fresh || again ? raw : Math.max(raw, last);
+    if (bar) this.glide("file", share, (v) => bar.style.setProperty("--p", (v * 100).toFixed(2) + "%"), fresh || again);
+  }
+
   update(job, tickOnly = false) {
     this.job = job;
+    // the chart and the bars take every poll
+    const st = stats(job);
+    this.st = st;
+    this.glideBars(job, st);
     // the chart takes every poll, the numbers change at a pace that can be read
     const shown = job.state;
     const wall = performance.now();
@@ -668,8 +774,6 @@ class JobDialog {
     this.shownKey = shown;
     this.shownAt = wall;
     const p = job.progress;
-    const st = stats(job);
-    this.st = st;
     const d = this.dlg;
     const op = OP[job.op] || OP.copy;
     const r = route(job);
@@ -687,17 +791,21 @@ class JobDialog {
     const phases = PHASES[job.op] || PHASES.copy;
     const visiblePhases = phases.filter(([k]) => k !== "verify" || st.verify);
     let now = p.scanning ? "scan" : p.phase || "scan";
+    // files are checked one by one: until the last one is copied, the step is the copy's
+    if (now === "verify" && p.bytes_done < p.bytes_total) now = job.op === "move" ? "move" : "copy";
     if (job.state === "done") now = "end";
     if (job.state === "queued") now = "";
-    const nowIndex = visiblePhases.findIndex(([k]) => k === now);
+    let nowIndex = visiblePhases.findIndex(([k]) => k === now);
+    // a phase this list does not have (an extraction before its first event): the first step
+    if (nowIndex < 0 && now && active(job)) nowIndex = 0;
     const broken = job.state === "failed" || job.state === "cancelled";
-    $(".xf-steps", d).innerHTML = visiblePhases
+    setHTML($(".xf-steps", d), visiblePhases
       .map(([k, label], i) => {
         const cls = i < nowIndex || job.state === "done" ? "past" : i === nowIndex ? (broken ? "stop" : "now") : "";
         const mark = cls === "past" ? "✓" : cls === "stop" ? "✕" : i + 1;
         return (i ? `<span class="line ${i <= nowIndex ? "past" : ""}"></span>` : "") + `<span class="st ${cls}"><i>${mark}</i>${t(label)}</span>`;
       })
-      .join("");
+      .join(""));
 
     // the big numbers
     $(".pct", d).textContent = pctText(st.pct, finished(job));
@@ -712,48 +820,40 @@ class JobDialog {
         ? t("{a} di {b} file", { a: int(p.files_done), b: int(p.files_total) }) + (p.dirs ? " · " + count(p.dirs, "cartella", "cartelle", int) : "")
         : count(p.files_total, "elemento", "elementi", int);
     const bar = $(".pbar.main", d);
-    bar.className = "pbar big main " + barClass(job);
-    const copyShare = st.verify && st.byBytes ? p.bytes_done / st.totalWork : st.pct;
-    bar.style.setProperty("--p", (Math.min(1, copyShare) * 100).toFixed(2) + "%");
-    $(".verify", bar).style.width = st.verify && st.byBytes ? ((p.verify_bytes / st.totalWork) * 100).toFixed(2) + "%" : "0";
-    $(".verify", bar).style.left = st.verify && st.byBytes ? ((p.bytes_done / st.totalWork) * 100).toFixed(2) + "%" : "0";
+    bar.className = "pbar big main glide " + barClass(job);
+    bar.setAttribute("aria-valuenow", String(Math.round(st.pct * 100)));
 
     const subL = job.state === "queued" ? t("In attesa che finisca un altro trasferimento") : job.state === "paused" ? t("In pausa") : job.state === "conflict" ? t("In attesa di una tua scelta") : p.scanning ? t("Conteggio di file e cartelle…") : "";
     $(".sub-l", d).textContent = subL;
     const notes = [];
-    if (st.verify && st.byBytes) notes.push(t("verificati {a} di {b}", { a: size(p.verify_bytes), b: size(p.bytes_total) }));
+    if (st.verify && st.byBytes) notes.push(t("verificati {a} di {b}", { a: size(p.verify_bytes), b: size(p.bytes_total - (p.verify_skip || 0)) }));
     if (p.instant) notes.push(t("{n} senza copiare dati (reflink o rinomina)", { n: int(p.instant) }));
     if (p.skipped) notes.push(t("{n} saltati", { n: int(p.skipped) }));
     $(".sub-r", d).textContent = notes.join(" · ");
 
     // stats
     const end = st.eta != null ? Date.now() + st.eta : null;
-    const methods = {
-      clone: t("Reflink btrfs"), copy: t("Copia dati"), rename: t("Rinomina"), recycle: t("Cestino DSM"), delete: t("Eliminazione"),
-      deflate: t("Zip (deflate)"), store: t("Zip senza compressione"), "7z": "7-Zip", unrar: "unrar",
-    };
+    const methods = methodLabels();
     const cells = [
-      [t("Velocità"), st.byBytes ? speed(st.now) : t("{n}/s", { n: int(Math.round(st.filesRate)) }), true],
+      [t("Velocità"), job.state !== "running" ? "—" : st.byBytes ? speed(st.now) : t("{n}/s", { n: decimal(st.now) }), true],
       [t("Media"), st.byBytes ? speed(st.avg) : "—"],
       [t("Picco"), st.byBytes ? speed(st.peak) : "—"],
-      [t("File al secondo"), st.filesRate ? st.filesRate.toFixed(st.filesRate < 10 ? 1 : 0).replace(".", ",") : "—"],
+      [t("File al secondo"), st.filesRate ? decimal(st.filesRate) : "—"],
       [t("Trascorso"), duration(st.elapsed)],
       [t("Rimanente"), finished(job) ? "—" : st.eta != null ? "~ " + duration(st.eta) : p.scanning ? t("calcolo…") : "—", true],
       [t("Fine prevista"), end ? clock(end) : finished(job) && job.finished ? clock(job.finished) : "—"],
       [t("Metodo"), methods[p.method] || "—"],
     ];
-    $(".xf-stats", d).innerHTML = cells.map(([k, v, hl]) => `<div class="stat ${hl ? "hl" : ""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
+    setHTML($(".xf-stats", d), cells.map(([k, v, hl]) => `<div class="stat ${hl ? "hl" : ""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join(""));
 
-    // the item in flight
+    // the item in flight is built by glideBars, with every poll; its numbers change here
     const cur = $(".xf-current", d);
-    if (p.current && active(job)) {
-      cur.hidden = false;
-      const name = baseName(p.current) || p.current;
-      const cp = p.current_size ? Math.min(1, p.current_done / p.current_size) : 0;
-      cur.innerHTML = `<div class="row1">${svg(p.phase === "verify" ? "shield" : "file")}<span class="nm">${esc(name)}</span><span class="meth">${esc(p.phase === "verify" ? t("verifica") : methods[p.method] || "")}</span></div>
-        <div class="path">${esc(p.current)}</div>
-        ${p.current_size ? `<div class="pbar thin ${barClass(job)}" style="--p:${(cp * 100).toFixed(1)}%"><div class="fill"></div></div><div class="row3"><span>${size(p.current_done)} ${t("di")} ${size(p.current_size)}</span><span>${pctText(cp, false)}%</span></div>` : ""}`;
-    } else cur.hidden = true;
+    const fileBar = $(".pbar", cur);
+    if (!cur.hidden && fileBar) {
+      fileBar.className = "pbar thin glide " + barClass(job);
+      $(".done", cur).textContent = `${size(p.current_done)} ${t("di")} ${size(p.current_size)}`;
+      $(".share", cur).textContent = `${pctText(fileShare(p), false)}%`;
+    }
 
     if (!tickOnly) {
       this.renderConflict(job);
@@ -774,6 +874,7 @@ class JobDialog {
       if (job.msg === "need_password") {
         sum.className = "xf-summary failed";
         if (!$(".pw", sum)) {
+          sum._html = null;
           sum.innerHTML = `${svg("shield")}<div style="flex:1"><b>${t("L'archivio è protetto da password")}</b>
             <form class="pw" style="display:flex;gap:8px;margin-top:8px"><input type="password" class="input" style="flex:1" placeholder="${t("Password")}" autocomplete="off"><button class="btn primary">${t("Estrai")}</button></form></div>`;
           const form = $(".pw", sum);
@@ -788,13 +889,15 @@ class JobDialog {
         }
       } else {
         const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? doneLabel(job, op) : !job.msg || job.msg === t(STATE[job.state]) ? t(STATE[job.state]) : `${t(STATE[job.state])}: ${job.msg}`;
-        sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`;
+        setHTML(sum, `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`);
       }
     } else sum.hidden = true;
 
-    // buttons
-    $(".b-pause", d).hidden = finished(job) || job.state === "queued" || job.op === "delete" && job.source !== "local";
-    $(".b-pause", d).innerHTML = job.state === "paused" ? `${svg("play")} ${t("Riprendi")}` : `${svg("pause")} ${t("Pausa")}`;
+    // buttons (the browser drops the focus of a button as it hides it: noted first)
+    const focused = document.activeElement;
+    // in a conflict the job waits for an answer, and the NAS pauses only a running job
+    $(".b-pause", d).hidden = finished(job) || job.state === "queued" || job.state === "conflict" || (job.op === "delete" && job.source !== "local");
+    setHTML($(".b-pause", d), job.state === "paused" ? `${svg("play")} ${t("Riprendi")}` : `${svg("pause")} ${t("Pausa")}`);
     $(".b-cancel", d).hidden = finished(job);
     $(".b-start", d).hidden = job.state !== "queued" || job.source === "local";
     $(".b-close", d).hidden = !finished(job);
@@ -808,6 +911,8 @@ class JobDialog {
       if (![...sel.options].some((o) => +o.value === mb)) sel.append(h(`<option value="${mb}">${speed(mb * 1024 * 1024)}</option>`));
       sel.value = String(mb);
     }
+    // a button that went away with the focus on it (Cancel, at the end) leaves it to Close
+    if (focused !== d && d.contains(focused) && !focused.offsetParent) ($(".b-close:not([hidden])", d) || d).focus();
     $(".axis-toggle", d).textContent = this.axis === "progress" ? t("asse: avanzamento") : t("asse: tempo");
     this.chartBox.hidden = job.op === "delete" && !st.byBytes && job.samples.length < 3;
     this.draw();
@@ -839,10 +944,15 @@ class JobDialog {
         <label class="check" style="margin-left:auto"><input type="checkbox" class="all"> ${t("Applica a tutti")}</label>
       </div>
       <div class="hint" style="margin-top:6px">${t("«Mantieni entrambi» salva il nuovo come {n}", { n: `<b>${esc(c.rename_to)}</b>` })}</div>`;
-    box.querySelectorAll("[data-a]").forEach((b) => (b.onclick = () => {
-      control(job, "answer", { policy: b.dataset.a, all: $(".all", box).checked, conflict: c.id });
+    box.querySelectorAll("[data-a]").forEach((b) => (b.onclick = async () => {
       box.hidden = true;
+      // not delivered: the question stays, and is drawn again
+      if (!(await control(job, "answer", { policy: b.dataset.a, all: $(".all", box).checked, conflict: c.id }))) {
+        this.conflictId = null;
+        box.hidden = false;
+      }
     }));
+    $(".btn.primary", box).focus();
   }
 
   renderErrors(job) {
@@ -851,6 +961,9 @@ class JobDialog {
     box.hidden = !errs.length;
     if (!errs.length) return;
     $("summary", box).textContent = count(job.progress.errors || errs.length, "errore", "errori", int);
+    // rebuilt only when it grew: a selection in it stays
+    if (this.errorsShown === errs.length) return;
+    this.errorsShown = errs.length;
     $("ul", box).innerHTML = errs.map((e) => `<li><span title="${esc(e.path)}">${esc(e.path)}</span><span>${esc(e.msg)}</span></li>`).join("");
   }
 
@@ -870,8 +983,12 @@ class JobDialog {
     const g = c.getContext("2d");
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
-    // the theme's colours, read once per dialog (a full style lookup each frame is not free)
-    this.colors ||= new Map();
+    // the theme's colours, read once per theme (a full style lookup each frame is not free)
+    const theme = `${document.documentElement.dataset.theme || ""}${this.dark.matches}`;
+    if (this.colorsFor !== theme) {
+      this.colors = new Map();
+      this.colorsFor = theme;
+    }
     const col = (v) => {
       let c = this.colors.get(v);
       if (c === undefined) {
@@ -923,9 +1040,10 @@ class JobDialog {
     // at once, shrinks only once everything fits in half of it), so it does not breathe
     const peakV = plot.reduce((a, p) => Math.max(a, p.v), 0);
     const want = Math.max(peakV * 1.1, st.avg * 1.3, 1);
-    if (!this.yTop || want > this.yTop.top || want < this.yTop.top * 0.5 || this.yAxis !== this.axis) {
-      this.yTop = roundTop(want);
-      this.yAxis = this.axis;
+    const scaleFor = `${this.axis}${st.byBytes}`;
+    if (!this.yTop || want > this.yTop.top || want < this.yTop.top * 0.5 || this.yAxis !== scaleFor) {
+      this.yTop = roundTop(want, st.byBytes);
+      this.yAxis = scaleFor;
     }
     const ymax = this.shownTop(this.yTop.top);
     const tick = this.yTop.step;
@@ -954,7 +1072,7 @@ class JobDialog {
       g.stroke();
       if (k) {
         g.fillStyle = col("--faint");
-        g.fillText(st.byBytes ? tickSpeed(k * tick) : t("{n}/s", { n: int(k * tick) }), pad.l + w + 6, y);
+        g.fillText(st.byBytes ? tickSpeed(k * tick) : t("{n}/s", { n: decimal(k * tick) }), pad.l + w + 6, y);
       }
     }
     g.setLineDash([]);
@@ -1077,13 +1195,51 @@ class JobDialog {
       g.fill();
       if (!this.tip) this.tip = this.chartBox.appendChild(h(`<div class="tip"></div>`));
       const pct = st.totalWork ? Math.round((best.w / st.totalWork) * 100) : 0;
-      this.tip.textContent = `${fmtTime(best.t)} · ${st.byBytes ? speed(best.v) : t("{n}/s", { n: int(best.v) })} · ${pct}%`;
-      this.tip.style.left = Math.min(W - this.tip.offsetWidth - 4, Math.max(4, x - this.tip.offsetWidth / 2)) + "px";
-      this.tip.style.top = "4px";
+      const text = `${fmtTime(best.t)} · ${st.byBytes ? speed(best.v) : t("{n}/s", { n: decimal(best.v) })} · ${pct}%`;
       this.tip.hidden = false;
+      // measured when its text changes, not at every frame
+      if (this.tip.textContent !== text) {
+        this.tip.textContent = text;
+        this.tipW = this.tip.offsetWidth;
+      }
+      this.tip.style.left = Math.min(W - this.tipW - 4, Math.max(4, x - this.tipW / 2)) + "px";
+      this.tip.style.top = "4px";
     } else if (this.tip) this.tip.hidden = true;
     if ((headT < this.head.target || this.yMoving) && !this.anim) this.anim = requestAnimationFrame(this.nextFrame);
   }
+}
+
+/** Writes `html` into `el` only when it differs from what was written there last. */
+function setHTML(el, html) {
+  if (el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+
+/** A rate in the interface's language: two decimals under 1, one under 10, none above. */
+function decimal(v) {
+  return v.toLocaleString(LOCALE, { maximumFractionDigits: v < 1 ? 2 : v < 10 ? 1 : 0 });
+}
+
+function methodLabels() {
+  return {
+    clone: t("Reflink btrfs"), copy: t("Copia dati"), rename: t("Rinomina"), recycle: t("Cestino DSM"), delete: t("Eliminazione"),
+    deflate: t("Zip (deflate)"), store: t("Zip senza compressione"), "7z": "7-Zip", unrar: "unrar",
+  };
+}
+
+/** Where a glide is at `now` (JobDialog.glide). A frame's time can be a little before the glide began. */
+function glidePos(g, now) {
+  return g.dur ? g.from + (g.to - g.from) * Math.min(1, Math.max(0, (now - g.at) / g.dur)) : g.to;
+}
+
+/** The file in flight: a new one, or its verify pass, gets its own bar. */
+function fileKey(p) {
+  return `${p.current}\n${p.phase}\n${p.method}\n${p.current_size ? 1 : 0}`;
+}
+
+function fileShare(p) {
+  return p.current_size ? Math.min(1, p.current_done / p.current_size) : 0;
 }
 
 function fmtTime(ms) {
@@ -1191,8 +1347,9 @@ function monotoneTangents(xy) {
 }
 
 /** A round scale over `v`: 3–5 ticks of 1, 2, 2.5 or 5 × 10ⁿ in the unit the labels use. */
-function roundTop(v) {
-  const unit = speedUnit(v / 3);
+function roundTop(v, bytes = true) {
+  // bytes in 1024s (or 1000s), items per second in plain numbers
+  const unit = bytes ? speedUnit(v / 3) : 1;
   const step = niceStep(v / unit / 4) * unit;
   return { top: step * Math.ceil(v / step - 1e-9), step };
 }

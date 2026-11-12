@@ -112,10 +112,38 @@ fn bin_full(bin: &Path) -> bool {
     fs::read_dir(bin).is_ok_and(|d| d.flatten().any(|i| !is_system_name(&i.file_name().to_string_lossy())))
 }
 
+/// Whether the user may `mode` on `path`: the kernel's answer for the user's
+/// permissions, or, with an administrator's CAP_DAC_OVERRIDE (which `access()`
+/// leaves out for anyone but root), anything that is not read-only for everyone.
 pub fn access(path: &Path, mode: i32) -> bool {
     let Ok(c) = CString::new(path.as_os_str().as_bytes()) else { return false };
     // SAFETY: valid C string
-    unsafe { libc::access(c.as_ptr(), mode) == 0 }
+    if unsafe { libc::access(c.as_ptr(), mode) } == 0 {
+        return true;
+    }
+    path.exists() && crate::caps::overriding() && !(mode & libc::W_OK != 0 && read_only_place(path))
+}
+
+/// A read-only mount, or a place inside a read-only btrfs snapshot: refused
+/// to root too. The snapshot is the nearest subvolume top above, same device.
+fn read_only_place(path: &Path) -> bool {
+    let Ok(c) = CString::new(path.as_os_str().as_bytes()) else { return true };
+    // SAFETY: zeroed out-parameter, valid C string
+    let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statvfs(c.as_ptr(), &mut st) } == 0 && st.f_flag & libc::ST_RDONLY != 0 {
+        return true;
+    }
+    let Ok(start) = fs::metadata(path) else { return true };
+    for dir in path.ancestors() {
+        let Ok(meta) = fs::metadata(dir) else { break };
+        if meta.dev() != start.dev() {
+            break;
+        }
+        if meta.ino() == 256 {
+            return readonly_subvolume(dir, &meta);
+        }
+    }
+    false
 }
 
 /// The Synology thumbnail of a file, largest first up to `size`.

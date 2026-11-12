@@ -78,7 +78,7 @@ fn setup() -> ExitCode {
     };
     match caps::install(&binary) {
         Ok(()) => {
-            println!("{}: cap_setuid, cap_setgid and cap_dac_read_search set", binary.display());
+            println!("{}: cap_setuid, cap_setgid, cap_dac_override, cap_dac_read_search and cap_fowner set", binary.display());
             println!("restart the package so the transfer service picks them up");
             ExitCode::SUCCESS
         }

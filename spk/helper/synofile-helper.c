@@ -24,7 +24,8 @@
  *      process that kept an old write handle to the original cannot change
  *      them afterwards.
  *   4. The copy of bin/synofile gets root:<group> 0750 and the file
- *      capabilities (cap_dac_read_search, cap_setuid, cap_setgid +ep: the
+ *      capabilities (cap_dac_override, cap_dac_read_search, cap_fowner,
+ *      cap_setuid, cap_setgid +ep: the
  *      same 20 bytes as xattr_value() in caps.rs). The copy of
  *      bin/synofile-worker gets root:<group> 0755 and no capabilities.
  *      Each copy is renamed over the original; renaming over a running
@@ -67,9 +68,9 @@
 
 #define TMP_NAME ".synofile-helper.tmp"
 
-/* cap_dac_read_search,cap_setuid,cap_setgid +ep, revision 2 (caps.rs) */
+/* cap_dac_override,cap_dac_read_search,cap_fowner,cap_setuid,cap_setgid +ep, revision 2 (caps.rs) */
 static const unsigned char CAPS[20] = {
-    0x01, 0, 0, 0x02, 0xc4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    0x01, 0, 0, 0x02, 0xce, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
 static int fail(const char *what)
@@ -373,7 +374,7 @@ int main(int argc, char *argv[])
         install_copy(bfd, "synofile", gid, 0750, 1) < 0)
         return 1;
 
-    printf("synofile-helper: cap_setuid, cap_setgid and cap_dac_read_search set on %s/bin/synofile\n",
+    printf("synofile-helper: cap_setuid, cap_setgid, cap_dac_override, cap_dac_read_search and cap_fowner set on %s/bin/synofile\n",
            resolved);
     return 0;
 }

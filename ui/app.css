@@ -581,13 +581,22 @@ img[data-heic]:not([src]) { display: none; }
   position: absolute; inset: 0 auto 0 0; width: 0; border-radius: inherit;
   background: repeating-linear-gradient(45deg, var(--ok) 0 6px, #2fa96a 6px 12px); opacity: .95; transition: width .45s;
 }
+/* moved frame by frame by the transfer dialog (JobDialog.glide) */
+.pbar.glide > .fill, .pbar.glide > .verify { transition: none; }
 .pbar.paused > .fill { background: var(--warn); box-shadow: none; }
-.pbar.paused > .fill::after, .pbar.idle > .fill::after { animation: none; background: none; }
+/* the sheen says something is moving: not on a bar that stopped */
+.pbar.paused > .fill::after, .pbar.idle > .fill::after, .pbar.done > .fill::after, .pbar.failed > .fill::after { animation: none; background: none; }
 .pbar.done > .fill { background: var(--ok); box-shadow: 0 0 10px rgba(60, 196, 124, .35); }
 .pbar.failed > .fill { background: var(--crit); }
 .pbar.indeterminate > .fill { width: 30% !important; animation: indet 1.3s ease-in-out infinite; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pbar > .fill::after { animation: none; background: none; }
+  .pbar.indeterminate > .fill { animation: none; transform: translateX(117%); }
+  .pbar > .fill, .pbar > .verify { transition: none; }
+}
 @keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
-@keyframes indet { from { left: -30%; } to { left: 100%; } }
+/* transform, not left: no layout at each frame */
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
 
 /* ---------- transfers: the detailed dialog ---------- */
 dialog.xfer { max-width: min(96vw, 520px); }
@@ -633,6 +642,7 @@ dialog.xfer { max-width: min(96vw, 520px); }
   background: var(--surface-3); border: 1px solid var(--border-strong); white-space: nowrap; font-variant-numeric: tabular-nums; z-index: 2;
 }
 .xf-chart .legend { position: absolute; top: 3px; left: 8px; display: flex; gap: 10px; font-size: 10px; color: var(--faint); pointer-events: none; }
+.xf-chart .axis-toggle { pointer-events: auto; cursor: pointer; text-decoration: underline dotted; background: none; border: 0; padding: 0; font: inherit; color: inherit; }
 .xf-chart .legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 
 .xf-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
