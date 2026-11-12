@@ -1,3 +1,6 @@
+v0.8.18
+- Verification after copying is no longer a setting that applies to every copy: it is a command for the transfer at hand. "Copy with verification to…" (Shift+F5), "Move with verification to…" (Shift+F6), "Paste with verification" (Ctrl+Shift+V) and the two "… here with verification" entries of the Alt-drop menu read every file back and compare it (xxHash3); a move with verification deletes the originals only after the check. Plain copy and move never verify, and a verified job says so when it ends (a move inside one volume is only a rename and has nothing to read back).
+
 v0.8.17
 - The speed chart of a transfer moves smoothly: one point per real measurement, four a second, and the line walks from one to the next instead of jumping. The curve is rounder, pauses are shaded on the time axis, and the scale glides when it changes.
 - The native binaries are built for speed instead of size, which matters most for SMB copies on small NASes. The package grows by about 1.4 MB.

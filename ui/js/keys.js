@@ -48,6 +48,7 @@ export const keyMethods = {
       if (ctrl && e.shiftKey && k.toLowerCase() === "c") return run(() => this.copyPaths(pane.targets(), isRemote(pane.path) ? "smb" : "nas"));
       if (ctrl && k.toLowerCase() === "c") return run(() => this.setClipboard("copy", pane));
       if (ctrl && k.toLowerCase() === "x") return run(() => this.setClipboard("cut", pane));
+      if (ctrl && e.shiftKey && k.toLowerCase() === "v") return run(() => this.paste(pane, pane.path, true));
       if (ctrl && k.toLowerCase() === "v") return run(() => this.paste(pane));
       if (ctrl && k.toLowerCase() === "d") return run(() => this.toggleFavorite(pane.path));
       if (ctrl && k.toLowerCase() === "u") return run(() => this.pickUpload("files", pane));
@@ -57,6 +58,8 @@ export const keyMethods = {
         const cur = pane.visible[pane.cursor];
         if (cur && isDirLike(cur)) this.newTab(cur.path, false);
       });
+      if (k === "F5" && e.shiftKey) return run(() => (this.isSplit() ? this.toOtherPane("copy", true) : this.copyTo(pane, "copy", true)));
+      if (k === "F6" && e.shiftKey) return run(() => (this.isSplit() ? this.toOtherPane("move", true) : this.copyTo(pane, "move", true)));
       if (k === "F5" && this.isSplit()) return run(() => this.toOtherPane("copy"));
       if (k === "F5") return run(() => pane.reload());
       if (k === "F6") return run(() => (this.isSplit() ? this.toOtherPane("move") : this.copyTo(pane, "move")));

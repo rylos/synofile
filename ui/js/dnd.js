@@ -74,6 +74,8 @@ export const dndMethods = {
       { title: baseName(dest) },
       { label: t("Copia qui"), icon: "copy", action: () => this.transfer("copy", paths, dest) },
       { label: t("Sposta qui"), icon: "move", action: () => this.transfer("move", paths, dest) },
+      { label: t("Copia qui con verifica"), icon: "shield", action: () => this.transfer("copy", paths, dest, true) },
+      { label: t("Sposta qui con verifica"), icon: "shield", action: () => this.transfer("move", paths, dest, true) },
       "-",
       { label: t("Annulla"), icon: "close" },
     ]);

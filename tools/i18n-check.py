@@ -78,9 +78,9 @@ def ui_strings():
         # settings rows: row("label", "hint", ...)
         for m in re.finditer(r"\brow\(\s*" + STR + r",\s*" + STR, text):
             keys |= {unq(m[1]), unq(m[2])}
-        # labels in tables: ["key", "Label"], [0, "Label"], label: "...", running/done/noun: "..."
+        # labels in tables: ["key", "Label"], [0, "Label"], label: "...", running/done/verified/noun: "..."
         keys |= {unq(m) for m in re.findall(r"\[\s*(?:\"[\w-]+\"|\d+)\s*,\s*" + STR + r"\s*\]", text)}
-        keys |= {unq(m) for m in re.findall(r"\b(?:label|running|done|noun):\s*" + STR, text)}
+        keys |= {unq(m) for m in re.findall(r"\b(?:label|running|done|verified|noun):\s*" + STR, text)}
         # STATE and KINDS: lowercase keys with an Italian label
         for block in re.findall(r"const (?:STATE|KINDS) = \{(.*?)\};", text, re.S):
             keys |= {unq(m) for m in re.findall(r"\w+:\s*" + STR, block)}

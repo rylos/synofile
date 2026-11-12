@@ -24,8 +24,8 @@ const seenFinished = new Set();
 const seenConflict = new Set();
 
 const OP = {
-  copy: { icon: "copy", running: "Copia in corso", done: "Copia completata", noun: "Copia|op" },
-  move: { icon: "move", running: "Spostamento in corso", done: "Spostamento completato", noun: "Spostamento" },
+  copy: { icon: "copy", running: "Copia in corso", done: "Copia completata", verified: "Copia completata e verificata", noun: "Copia|op" },
+  move: { icon: "move", running: "Spostamento in corso", done: "Spostamento completato", verified: "Spostamento completato e verificato", noun: "Spostamento" },
   delete: { icon: "trash", running: "Eliminazione in corso", done: "Eliminazione completata", noun: "Eliminazione" },
   upload: { icon: "upload", running: "Caricamento in corso", done: "Caricamento completato", noun: "Caricamento" },
   compress: { icon: "archive", running: "Compressione in corso", done: "Archivio creato", noun: "Compressione" },
@@ -297,6 +297,12 @@ function onUpdate(job) {
   }
 }
 
+/** "Copy complete", or "… and verified" for a job that read files back without an error
+ * (a move that was only a rename read nothing back). */
+function doneLabel(job, op) {
+  return t(job.verify && op.verified && !job.progress.errors && job.progress.verify_bytes > 0 ? op.verified : op.done);
+}
+
 function announce(job) {
   const op = OP[job.op] || OP.copy;
   app?.refreshAfter(job);
@@ -304,7 +310,7 @@ function announce(job) {
     toast(`${title(job)}: ${firstError(job) || t(STATE.failed)}`, { kind: "error", action: t("Dettagli"), onAction: () => openDialog(job.id), timeout: 9000 });
   } else if (job.state === "done") {
     const errs = job.progress.errors;
-    toast(`${t(op.done)}${errs ? " · " + count(errs, "errore", "errori", int) : ""}`, {
+    toast(`${doneLabel(job, op)}${errs ? " · " + count(errs, "errore", "errori", int) : ""}`, {
       kind: errs ? "error" : "ok",
       action: job.info.dest ? t("Apri") : t("Dettagli"),
       onAction: () => (job.info.dest ? app.openPath(job.info.dest) : openDialog(job.id)),
@@ -347,7 +353,7 @@ export function updateLocal(job) {
 
 export async function start(request) {
   try {
-    const { id } = await api.newJob({ conflict: prefs.conflict, verify: prefs.verify, limit: prefs.limit * 1024 * 1024, ...request });
+    const { id } = await api.newJob({ conflict: prefs.conflict, verify: false, limit: prefs.limit * 1024 * 1024, ...request });
     nudgeTray();
     since = Math.max(0, since - 1);
     await poll();
@@ -668,7 +674,7 @@ class JobDialog {
     const op = OP[job.op] || OP.copy;
     const r = route(job);
     const state = shownState(job);
-    $(".ttl", d).textContent = finished(job) ? (state === "done" ? t(op.done) : title(job)) : t(op.running);
+    $(".ttl", d).textContent = finished(job) ? (state === "done" ? doneLabel(job, op) : title(job)) : t(op.running);
     $(".ttl", d).title = title(job);
     const chip = $(".chip", d);
     chip.className = "chip " + state;
@@ -781,7 +787,7 @@ class JobDialog {
           setTimeout(() => $("input", form)?.focus());
         }
       } else {
-        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? t(op.done) : !job.msg || job.msg === t(STATE[job.state]) ? t(STATE[job.state]) : `${t(STATE[job.state])}: ${job.msg}`;
+        const head = allFailed(job) ? `${t(STATE.failed)}: ${firstError(job)}` : job.state === "done" ? doneLabel(job, op) : !job.msg || job.msg === t(STATE[job.state]) ? t(STATE[job.state]) : `${t(STATE[job.state])}: ${job.msg}`;
         sum.innerHTML = `${svg(ok ? "check" : "alert")}<div><b>${esc(head)}</b>${esc(parts.join(" · "))}</div>`;
       }
     } else sum.hidden = true;

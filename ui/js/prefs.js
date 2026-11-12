@@ -26,7 +26,6 @@ export const DEFAULTS = {
   view: "list",
   sort: { key: "name", dir: 1 },
   conflict: "ask",
-  verify: false,
   limit: 0,
   openDialog: true,
   notify: true,

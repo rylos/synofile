@@ -138,16 +138,17 @@ export const actionMethods = {
     pane.renderStatus();
   },
 
-  paste(pane = this.pane, dest = pane.path) {
+  paste(pane = this.pane, dest = pane.path, verify = false) {
     const cb = this.clipboard;
     if (!cb || dest === "/") return;
     if (cb.op === "cut" && cb.from === dest) return toast(t("Gli elementi sono già in questa cartella"));
-    this.transfer(cb.op === "cut" ? "move" : "copy", cb.paths, dest);
+    this.transfer(cb.op === "cut" ? "move" : "copy", cb.paths, dest, verify);
     if (cb.op === "cut") this.clipboard = null;
     this.allPanes().forEach((p) => p.paint());
   },
 
-  transfer(op, paths, dest) {
+  /** `verify`: each file is read back and compared (xxHash3); a move deletes the originals only after that. */
+  transfer(op, paths, dest, verify = false) {
     if (!paths.length || !dest || dest === "/") return;
     if (archiveOf(dest)) return readOnlyToast();
     const from = archiveOf(paths[0]);
@@ -158,26 +159,26 @@ export const actionMethods = {
     }
     if (paths.some((p) => dest === p || dest.startsWith(p + "/"))) return toast(t("Una cartella non può finire dentro sé stessa"), { kind: "error" });
     if (op === "move" && paths.every((p) => parentOf(p) === dest)) return;
-    transfers.start({ op, sources: paths, dest });
+    transfers.start({ op, sources: paths, dest, verify });
   },
 
-  async copyTo(pane, op) {
+  async copyTo(pane, op, verify = false) {
     const list = pane.targets().filter((e) => !e.share);
     if (!list.length) return;
     const other = this.other();
     const dest = await pickFolder({
-      title: t(op === "move" ? "Sposta {n} in…" : "Copia {n} in…", { n: count(list.length, "elemento", "elementi", int) }),
+      title: t(op === "move" ? (verify ? "Sposta con verifica {n} in…" : "Sposta {n} in…") : verify ? "Copia con verifica {n} in…" : "Copia {n} in…", { n: count(list.length, "elemento", "elementi", int) }),
       start: other ? other.path : pane.path,
       ok: t(op === "move" ? "Sposta qui" : "Copia qui"),
     });
-    if (dest) this.transfer(op, list.map((e) => e.path), dest);
+    if (dest) this.transfer(op, list.map((e) => e.path), dest, verify);
   },
 
-  toOtherPane(op) {
+  toOtherPane(op, verify = false) {
     const other = this.other();
     if (!other) return toast(t("Apri il doppio pannello con F3"));
     const list = this.pane.targets().filter((e) => !e.share);
-    if (list.length) this.transfer(op, list.map((e) => e.path), other.path);
+    if (list.length) this.transfer(op, list.map((e) => e.path), other.path, verify);
   },
 
   async remove(pane, permanent = false) {

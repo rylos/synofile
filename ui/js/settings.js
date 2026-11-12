@@ -17,7 +17,7 @@ const SECTIONS = [
 export const KEYS = [
   ["Ctrl+T", "Nuova scheda"], ["Ctrl+W", "Chiudi scheda"], ["Ctrl+Tab / Ctrl+PgGiù", "Scheda successiva"],
   ["Ctrl+Shift+Tab / Ctrl+PgSu", "Scheda precedente"], ["Alt+1…9", "Vai alla scheda"], ["Ctrl+Shift+T", "Riapri scheda chiusa"],
-  ["F3", "Doppio pannello"], ["Tab", "Altro pannello (con il doppio pannello)"], ["F5 / F6", "Copia / sposta nell'altro pannello"],
+  ["F3", "Doppio pannello"], ["Tab", "Altro pannello (con il doppio pannello)"], ["F5 / F6", "Copia / sposta nell'altro pannello"], ["Shift+F5 / Shift+F6", "Copia / sposta con verifica"], ["Ctrl+Shift+V", "Incolla con verifica"],
   ["Invio", "Apri"], ["Backspace / Alt+↑", "Cartella superiore"], ["Alt+← / Alt+→", "Indietro / avanti"],
   ["Spazio", "Anteprima rapida"], ["Ctrl+I", "Pannello informazioni"], ["Ctrl+H", "Mostra o nascondi i file nascosti"],
   ["Ctrl+L", "Scrivi un percorso"], ["/", "Filtro fuzzy della cartella"], ["Ctrl+F", "Cerca nelle sottocartelle"],
@@ -86,7 +86,6 @@ function body(section) {
     case "transfers":
       return (
         row("Se un elemento esiste già", "La scelta di partenza per copie, spostamenti e caricamenti", sel("conflict", [["ask", "Chiedi"], ["rename", "Mantieni entrambi"], ["skip", "Salta"], ["overwrite", "Sovrascrivi"], ["newer", "Sovrascrivi se più recente"]])) +
-        row("Verifica dopo la copia", "Rilegge ogni file copiato e lo confronta (xxHash3): più lento, a prova di errore", sw("verify")) +
         row("Limite di velocità", "Si cambia anche durante il trasferimento", sel("limit", [[0, "Nessuno"], [10, "10 MiB/s"], [25, "25 MiB/s"], [50, "50 MiB/s"], [100, "100 MiB/s"], [200, "200 MiB/s"]])) +
         row("Apri il dialogo all'avvio", "Altrimenti il trasferimento parte in background", sw("openDialog")) +
         row("Notifica del browser alla fine", "Quando la pagina non è in primo piano", sw("notify")) +
