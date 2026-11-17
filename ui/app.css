@@ -134,6 +134,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); }
 .seg button:hover:not(.on) { background: var(--surface-2); color: var(--text); }
+.seg button:disabled { opacity: .35; pointer-events: none; }
 
 /* ---------- tab bar ---------- */
 .tabbar {
@@ -275,7 +276,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .filter-box .mode.on { color: var(--accent); border-color: var(--accent); }
 
 /* list */
-.view { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; outline: none; }
+.view { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; outline: none; overflow: hidden; }
 .list-head {
   flex: none; display: grid; align-items: center;
   /* the rows' own box: 4px margin, 1px border, 12px padding; the scrollbar is added on the right */
@@ -430,6 +431,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .checksum .sum-verdict.bad { color: var(--crit); }
 .checksum .sum-prog { display: flex; align-items: center; gap: 8px; }
 .checksum .sum-prog .pbar { flex: 1; }
+.sum-dlg .checksum { margin-top: 0; padding-top: 0; border-top: 0; min-width: min(80vw, 420px); }
 .facts a:hover { text-decoration: underline; }
 .info .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 
@@ -502,7 +504,7 @@ dialog.dlg.wide { max-width: min(94vw, 760px); }
 .dupes-dlg .dup-pick-l { color: var(--faint); }
 .dupes-dlg .dup-sum { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .dupes-dlg .dup-list { max-height: 48vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 4px 10px 8px; }
-.dupes-dlg .dup-gh { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin: 8px 0 2px; }
+.dupes-dlg .dup-gh { font-size: 11.5px; font-weight: 600; color: var(--faint); margin: 8px 0 2px; }
 .dupes-dlg .dup-item { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12.5px; cursor: pointer; }
 .dupes-dlg .dup-item input { accent-color: var(--crit); flex: none; }
 .dupes-dlg .dup-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }

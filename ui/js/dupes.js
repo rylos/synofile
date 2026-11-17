@@ -2,7 +2,7 @@
 // picked go to DSM's Recycle Bin, and one of each group always stays.
 
 import { api } from "./api.js";
-import { t, count } from "./i18n.js";
+import { t, tn, count } from "./i18n.js";
 import { esc, int, size, dateTime, joinPath, parentOf, baseName } from "./format.js";
 import { svg } from "./icons.js";
 import { dialog, toast, errorToast, confirmBox } from "./ui.js";
@@ -47,7 +47,7 @@ export function findDuplicates(app, root) {
   const full = (rel) => joinPath(root, rel);
   const selBytes = () => groups.reduce((a, g) => a + g.size * g.items.filter((i) => picked.has(i.path)).length, 0);
   const updateFoot = () => {
-    q(".dup-sel").textContent = byName ? t("Confrontati solo nome e dimensione: per eliminare, cerca per contenuto") : picked.size ? t("{n} selezionati · {s}", { n: int(picked.size), s: size(selBytes()) }) : "";
+    q(".dup-sel").textContent = byName ? t("Confrontati solo nome e dimensione: per eliminare, cerca per contenuto") : picked.size ? `${count(picked.size, "selezionato", "selezionati", int)} · ${size(selBytes())}` : "";
     q(".d-del").disabled = byName || !picked.size;
   };
   const render = () => {
@@ -102,8 +102,8 @@ export function findDuplicates(app, root) {
     const ok = await confirmBox({
       title: bin ? t("Spostare nel Cestino?") : t("Eliminare definitivamente?"),
       message: bin
-        ? t("{n} finiranno nel Cestino di DSM della cartella condivisa, da dove si possono recuperare.", { n })
-        : `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
+        ? tn(list.length, "{n} finirà nel Cestino di DSM della cartella condivisa, da dove si può recuperare.", "{n} finiranno nel Cestino di DSM della cartella condivisa, da dove si possono recuperare.", { n })
+        : `<b style="color:var(--crit)">${tn(list.length, "{n} verrà eliminato per sempre: non si può recuperare.", "{n} verranno eliminati per sempre: non si possono recuperare.", { n })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
       items: list.map((p) => esc(p)),
       ok: bin ? t("Sposta nel Cestino") : t("Elimina"),
       danger: !bin,

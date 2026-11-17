@@ -1,3 +1,11 @@
+v0.9.1
+- The flat view has its own button beside list, grid and columns (three stacked layers), instead of a menu entry; Ctrl+Shift+F still toggles it.
+- "Checksum…" in a file's right-click menu, for when the info panel is hidden (on a phone).
+- Sentences about one item are in the singular ("1 item will be deleted for good: it…"), in every language, also in the older confirmations.
+- Batch rename: Title Case leaves the extension alone (Report.pdf, not Report.Pdf).
+- A click on a checksum shows one notice, not two; the size in the duplicate groups keeps its case (KiB).
+- In a narrow pane the column headers no longer run under the info panel, and the flat view and the search give the name and folder columns less room first.
+
 v0.9.0
 - Select by pattern: + selects, - deselects the names matching wildcards (*.mkv; *.srt, ?, [abc]) or a regular expression, files only if you like, with the count of matches as you type. With two panes, Ctrl+Shift+D selects the differences: what the other folder lacks, or has with another size or date.
 - Undo (Ctrl+Z, and the first entry of the ⋯ menu): the last renames, new folders, moves and copies, newest first. A move goes back where it came from and a copy goes to the Recycle Bin, only for the names the destination did not have before; a new folder goes only while still empty.

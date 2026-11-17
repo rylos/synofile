@@ -4,7 +4,7 @@
 
 import { api } from "./api.js";
 import { prefs } from "./prefs.js";
-import { t, count } from "./i18n.js";
+import { t, tn, count } from "./i18n.js";
 import { esc, int, baseName, parentOf, joinPath, isDirLike } from "./format.js";
 import { svg, glyph, previewKind, archiveStem, isDsmFolder } from "./icons.js";
 import { isBrowsable, archiveOf, readOnlyToast } from "./archive.js";
@@ -205,8 +205,8 @@ export const actionMethods = {
       const ok = await confirmBox({
         title: recycle ? t("Spostare nel Cestino?") : t("Eliminare definitivamente?"),
         message: recycle
-          ? t("{n} finiranno nel Cestino di DSM della cartella condivisa, da dove si possono recuperare.", { n: count(list.length, "elemento", "elementi", int) })
-          : `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(list.length, "elemento", "elementi", int) })}</b>${!pane.recycle && !inBin ? "<br>" + t("Il Cestino di questa cartella condivisa è disattivato.") : ""}`,
+          ? tn(list.length, "{n} finirà nel Cestino di DSM della cartella condivisa, da dove si può recuperare.", "{n} finiranno nel Cestino di DSM della cartella condivisa, da dove si possono recuperare.", { n: count(list.length, "elemento", "elementi", int) })
+          : `<b style="color:var(--crit)">${tn(list.length, "{n} verrà eliminato per sempre: non si può recuperare.", "{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(list.length, "elemento", "elementi", int) })}</b>${!pane.recycle && !inBin ? "<br>" + t("Il Cestino di questa cartella condivisa è disattivato.") : ""}`,
         items: names,
         ok: recycle ? t("Sposta nel Cestino") : t("Elimina"),
         danger: !recycle,
@@ -228,7 +228,7 @@ export const actionMethods = {
     if (!entries.length) return toast(t("Il Cestino è già vuoto"));
     const ok = await confirmBox({
       title: t("Svuotare il Cestino?"),
-      message: `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(entries.length, "elemento", "elementi", int) })}</b>`,
+      message: `<b style="color:var(--crit)">${tn(entries.length, "{n} verrà eliminato per sempre: non si può recuperare.", "{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(entries.length, "elemento", "elementi", int) })}</b>`,
       ok: t("Svuota il Cestino"),
       danger: true,
       icon: "trash",

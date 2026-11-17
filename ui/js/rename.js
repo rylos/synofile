@@ -3,7 +3,7 @@
 // new name shown before anything changes.
 
 import { api } from "./api.js";
-import { t, count } from "./i18n.js";
+import { t, tn, count } from "./i18n.js";
 import { esc, int, baseName, parentOf, joinPath, isDirLike } from "./format.js";
 import { svg } from "./icons.js";
 import { dialog, toast, errorToast } from "./ui.js";
@@ -55,6 +55,9 @@ export function newNames(list, o) {
     let ext = isDirLike(e) ? "" : fill(o.ext, e, i, o);
     let name = ext ? `${stem}.${ext}` : stem;
     if (re) name = name.replace(re, o.repl);
+    // initials for the name, not for the extension (Report.Pdf)
+    const dot = name.lastIndexOf(".");
+    if (o.kase === "title" && !isDirLike(e) && dot > 0) return (changeCase(name.slice(0, dot), "title") + name.slice(dot)).trim();
     return changeCase(name, o.kase).trim();
   });
 }
@@ -224,7 +227,7 @@ export function batchRename(app, pane, list) {
     if (done.length) recordRename(done, t("Rinomina {n}", { n: count(done.length, "elemento", "elementi", int) }));
     app.refreshFolders([...new Set(pairs.map(([p]) => parentOf(p)))]);
     if (pane.search) pane.reload();
-    if (errors.length) errorToast(new Error(t("{n} non rinominati: {e}", { n: int(errors.length), e: errors.slice(0, 3).join("; ") + (errors.length > 3 ? "…" : "") })));
+    if (errors.length) errorToast(new Error(tn(errors.length, "{n} non rinominato: {e}", "{n} non rinominati: {e}", { n: int(errors.length), e: errors.slice(0, 3).join("; ") + (errors.length > 3 ? "…" : "") })));
     else toast(count(done.length, "elemento rinominato", "elementi rinominati", int));
   };
 }

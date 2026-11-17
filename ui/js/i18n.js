@@ -122,6 +122,15 @@ let rulesLocale = null;
  * Intl.PluralRules names them): Polish says 2 pliki but 5 plików. When
  * Italian uses one word for both, the plural key is `word|pl`.
  */
+/** A whole sentence about n things: its singular or plural form, as the language counts n. */
+export function tn(n, one, many, vars = {}) {
+  if (rulesLocale !== LOCALE) {
+    rules = new Intl.PluralRules(LOCALE);
+    rulesLocale = LOCALE;
+  }
+  return t(rules.select(n) === "one" || (LANG === "it" && n === 1) ? one : many, vars);
+}
+
 export function count(n, one, many, fmt = (x) => x) {
   if (rulesLocale !== LOCALE) {
     rules = new Intl.PluralRules(LOCALE);

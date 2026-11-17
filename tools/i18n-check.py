@@ -75,6 +75,9 @@ def ui_strings():
         for m in re.finditer(r"\b(?:count|plural)\([^,()]+(?:\([^()]*\))?,\s*" + STR + r",\s*" + STR, text):
             one, many = unq(m[1]), unq(m[2])
             keys |= {one, many if many != one else many + "|pl"}
+        # tn(n, "singular sentence", "plural sentence", ...)
+        for m in re.finditer(r"\btn\([^,()]+(?:\([^()]*\))?,\s*" + STR + r",\s*" + STR, text):
+            keys |= {unq(m[1]), unq(m[2])}
         # settings rows: row("label", "hint", ...)
         for m in re.finditer(r"\brow\(\s*" + STR + r",\s*" + STR, text):
             keys |= {unq(m[1]), unq(m[2])}

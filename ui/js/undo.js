@@ -2,7 +2,7 @@
 // first. What a deletion threw away is in DSM's Recycle Bin instead.
 
 import { api } from "./api.js";
-import { t, count } from "./i18n.js";
+import { t, tn, count } from "./i18n.js";
 import { int, baseName, parentOf, joinPath } from "./format.js";
 import { toast, errorToast, confirmBox } from "./ui.js";
 import * as transfers from "./transfers.js";
@@ -85,8 +85,8 @@ export function recordTransfer(id, op, sources, dest, fresh) {
       const ok = await confirmBox({
         title: t("Annullare la copia?"),
         message: bin
-          ? t("{n} copiati in «{d}» finiranno nel Cestino di DSM.", { n, d: baseName(dest) || dest })
-          : `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
+          ? tn(copies.length, "{n} copiato in «{d}» finirà nel Cestino di DSM.", "{n} copiati in «{d}» finiranno nel Cestino di DSM.", { n, d: baseName(dest) || dest })
+          : `<b style="color:var(--crit)">${tn(copies.length, "{n} verrà eliminato per sempre: non si può recuperare.", "{n} verranno eliminati per sempre: non si possono recuperare.", { n })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
         items: copies.map(baseName),
         ok: bin ? t("Sposta nel Cestino") : t("Elimina"),
         danger: !bin,

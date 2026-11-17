@@ -7,7 +7,7 @@ import { t, count, LOCALE } from "./i18n.js";
 import { esc, size, sizeParts, ezaDate, relative, dateTime, duration, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph, isDsmFolder } from "./icons.js";
 import { pickIcon } from "./iconpick.js";
-import { h, $, errorToast, toast, copyText } from "./ui.js";
+import { h, $, errorToast, toast, copyText, dialog } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
 import { rememberArchive } from "./archive.js";
@@ -32,6 +32,12 @@ const INFO_DELAY = 120;
 const SUM_ALGOS = "sha256 SHA-256|sha1 SHA-1|md5 MD5|xxh128 XXH128".split("|").map((x) => x.split(" "));
 // the algorithm last chosen, for the next file
 let sumAlgo = "sha256";
+
+function checksumHTML() {
+  return `<div class="checksum"><div class="sum-row"><span class="sum-k">${t("Checksum")}</span>
+    <select class="input sum-algo" aria-label="${t("Algoritmo")}">${SUM_ALGOS.map(([v, l]) => `<option value="${v}"${v === sumAlgo ? " selected" : ""}>${l}</option>`).join("")}</select>
+    <button class="btn small sum-go">${t("Calcola")}</button></div><div class="sum-out"></div></div>`;
+}
 
 // camera RAW files: not shown as pictures, but their EXIF is worth reading
 const RAW_EXT = /\.(cr2|cr3|nef|nrw|arw|srf|sr2|dng|raf|orf|rw2|pef|srw|iiq|3fr|x3f)$/i;
@@ -130,6 +136,7 @@ export class Pane {
           <button data-v="list" title="${t("Elenco")} (Ctrl+1)">${svg("list")}</button>
           <button data-v="grid" title="${t("Griglia")} (Ctrl+2)">${svg("grid")}</button>
           <button data-v="columns" title="${t("Colonne")} (Ctrl+3)">${svg("columns")}</button>
+          <button data-v="flat" title="${t("Vista piatta: tutti i file delle sottocartelle")} (Ctrl+Shift+F)">${svg("layers")}</button>
         </div>
         <button class="icon-btn b-hidden" title="${t("File nascosti")} (Ctrl+H)">${svg("eye")}</button>
         <button class="icon-btn b-split" title="${t("Doppio pannello")} (F3)">${svg("split")}</button>
@@ -169,7 +176,11 @@ export class Pane {
     $(".b-info", this.el).onclick = () => this.app.toggleInfo();
     $(".b-new", this.el).onclick = (e) => this.app.newMenu(this, e.currentTarget);
     $(".b-more", this.el).onclick = (e) => this.app.moreMenu(this, e.currentTarget);
-    this.el.querySelectorAll(".views button").forEach((b) => (b.onclick = () => this.setView(b.dataset.v)));
+    this.el.querySelectorAll(".views button").forEach((b) => (b.onclick = () => {
+      if (b.dataset.v === "flat") return this.setFlat(!this.flat);
+      if (this.flat) this.setFlat(false);
+      this.setView(b.dataset.v);
+    }));
     $(".filter-box .mode", this.el).onclick = (e) => {
       e.preventDefault();
       this.setSearchMode(!this.searchMode);
@@ -388,6 +399,7 @@ export class Pane {
   }
 
   setView(view) {
+    if (view === "columns" && this.flat) this.setFlat(false);
     this.view = view;
     $(".empty-state", this.el)?.remove();
     this.app.rememberView(view, this);
@@ -416,6 +428,11 @@ export class Pane {
     }
     if (on === this.flat) return;
     this.flat = on;
+    // the columns view has no room for the folder of each file
+    if (on && this.view === "columns") {
+      this.view = "list";
+      this.app.rememberView("list", this);
+    }
     this.searchMode = false;
     $(".filter-box .mode", this.el).classList.remove("on");
     this.filterInput.placeholder = t("Filtra");
@@ -648,7 +665,9 @@ export class Pane {
     $(".b-back", this.el).disabled = !this.back.length;
     $(".b-fwd", this.el).disabled = !this.fwd.length;
     $(".b-up", this.el).disabled = this.path === "/";
-    this.el.querySelectorAll(".views button").forEach((b) => b.classList.toggle("on", b.dataset.v === this.view));
+    // the flat view lights its own button, over the view it lists in
+    this.el.querySelectorAll(".views button").forEach((b) => b.classList.toggle("on", this.flat ? b.dataset.v === "flat" : b.dataset.v === this.view));
+    $('.views [data-v="flat"]', this.el).disabled = this.path === "/" || !!this.archive || isRemote(this.path);
     const hb = $(".b-hidden", this.el);
     hb.classList.toggle("on", prefs.showHidden);
     hb.innerHTML = svg(prefs.showHidden ? "eye" : "eyeOff");
@@ -706,8 +725,9 @@ export class Pane {
 
   columns() {
     if (this.view === "columns") return [{ key: "name", label: "Nome", width: "minmax(0, 1fr)" }];
-    const cols = [{ key: "name", label: "Nome", width: "minmax(160px, 1fr)" }];
-    if (this.search) cols.push({ key: "dir", label: "Cartella", width: "minmax(100px, .6fr)", cls: "" });
+    // with the folder column the name gives up some room first
+    const cols = [{ key: "name", label: "Nome", width: this.search ? "minmax(120px, 1fr)" : "minmax(160px, 1fr)" }];
+    if (this.search) cols.push({ key: "dir", label: "Cartella", width: "minmax(70px, .6fr)", cls: "" });
     for (const [key, c] of Object.entries(COLS)) if (prefs.columns[key]) cols.push({ key, ...c });
     return cols;
   }
@@ -990,16 +1010,14 @@ export class Pane {
         ${this.app.editable(this, e) ? `<button class="btn small info-edit">${svg("rename")} ${t("Modifica")}</button>` : ""}
         <button class="btn small cp">${svg("link")} ${t("Copia percorso")}</button>
       </div>
-      ${e.kind === "f" && !isRemote(e.path) && !this.archive ? `<div class="checksum"><div class="sum-row"><span class="sum-k">${t("Checksum")}</span>
-        <select class="input sum-algo" aria-label="${t("Algoritmo")}">${SUM_ALGOS.map(([v, l]) => `<option value="${v}"${v === sumAlgo ? " selected" : ""}>${l}</option>`).join("")}</select>
-        <button class="btn small sum-go">${t("Calcola")}</button></div><div class="sum-out"></div></div>` : ""}`;
+      ${this.checksumable(e) ? checksumHTML() : ""}`;
     $(".calc", this.infoEl)?.addEventListener("click", () => this.app.computeSizes(this, [e]));
     if (pickable) $(".preview-box", this.infoEl).onclick = (ev) => pickIcon(ev.currentTarget, e.path);
     $(".dl", this.infoEl)?.addEventListener("click", () => this.app.download([e]));
     $(".info-preview", this.infoEl)?.addEventListener("click", () => this.app.quickLook(this));
     $(".info-edit", this.infoEl)?.addEventListener("click", () => this.app.edit(this, e));
     $(".cp", this.infoEl).onclick = () => this.app.copyPaths([e], "nas");
-    if ($(".checksum", this.infoEl)) this.bindChecksum(e);
+    if ($(".checksum", this.infoEl)) this.bindChecksum(e, $(".checksum", this.infoEl));
     fillHeic(this.infoEl, () => e, 1024);
     if (e.share) {
       $(".owner", this.infoEl).textContent = e.share.comment || "—";
@@ -1033,8 +1051,22 @@ export class Pane {
    * takes a while, with a bar), kept for the file as long as it does not
    * change, copied with a click, compared with a pasted one.
    */
-  bindChecksum(e) {
-    const box = $(".checksum", this.infoEl);
+  /** A file of the NAS, not inside an archive: its checksum can be computed. */
+  checksumable(e) {
+    return e.kind === "f" && !isRemote(e.path) && !this.archive;
+  }
+
+  /** The checksum of `e` in a dialog of its own (the info panel is hidden on a phone). */
+  checksumDialog(e) {
+    const dlg = dialog(`<div class="dlg-head"><div class="dlg-icon">${svg("shield")}</div><h2>${esc(e.name)}</h2></div>
+      <div class="dlg-body">${checksumHTML()}</div>
+      <div class="dlg-foot"><button class="btn primary">${t("Chiudi")}</button></div>`, { cls: "sum-dlg" });
+    $(".dlg-foot .btn", dlg).onclick = () => dlg.close();
+    dlg.addEventListener("close", () => this.sumRun?.path === e.path && this.sumRun.controller.abort());
+    this.bindChecksum(e, $(".checksum", dlg));
+  }
+
+  bindChecksum(e, box) {
     const algoSel = $(".sum-algo", box);
     const go = $(".sum-go", box);
     const out = $(".sum-out", box);
@@ -1042,7 +1074,7 @@ export class Pane {
     const show = (hash) => {
       out.innerHTML = `<button class="sum-hash" title="${t("Copia")}">${esc(hash)}</button>
         <input class="input sum-cmp" placeholder="${t("Incolla un checksum da confrontare")}" spellcheck="false" autocomplete="off"><div class="sum-verdict" role="status"></div>`;
-      $(".sum-hash", out).onclick = () => copyText(hash).then(() => toast(t("Checksum copiato")));
+      $(".sum-hash", out).onclick = () => copyText(hash);
       const cmp = $(".sum-cmp", out);
       cmp.oninput = () => {
         const v = cmp.value.trim().toLowerCase().split(/\s/)[0];

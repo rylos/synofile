@@ -4,7 +4,7 @@
 // removals, into DSM's Recycle Bin).
 
 import { api } from "./api.js";
-import { t, count } from "./i18n.js";
+import { t, tn, count } from "./i18n.js";
 import { esc, int, size, dateTime, joinPath } from "./format.js";
 import { svg } from "./icons.js";
 import { dialog, errorToast, confirmBox, toast } from "./ui.js";
@@ -170,8 +170,8 @@ export function syncFolders(app, paneA, paneB) {
       const ok = await confirmBox({
         title: bRecycle ? t("Spostare nel Cestino?") : t("Eliminare definitivamente?"),
         message: bRecycle
-          ? t("{n} che a sinistra non ci sono finiranno nel Cestino di DSM della cartella di destra.", { n: count(del.length, "elemento", "elementi", int) })
-          : `<b style="color:var(--crit)">${t("{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(del.length, "elemento", "elementi", int) })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
+          ? tn(del.length, "{n} che a sinistra non c'è finirà nel Cestino di DSM della cartella di destra.", "{n} che a sinistra non ci sono finiranno nel Cestino di DSM della cartella di destra.", { n: count(del.length, "elemento", "elementi", int) })
+          : `<b style="color:var(--crit)">${tn(del.length, "{n} verrà eliminato per sempre: non si può recuperare.", "{n} verranno eliminati per sempre: non si possono recuperare.", { n: count(del.length, "elemento", "elementi", int) })}</b><br>${t("Il Cestino di questa cartella condivisa è disattivato.")}`,
         items: del.map(esc),
         ok: bRecycle ? t("Sposta nel Cestino") : t("Elimina"),
         danger: !bRecycle,
