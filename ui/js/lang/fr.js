@@ -682,4 +682,10 @@ export default {
   "I due pannelli mostrano la stessa cartella": "Les deux volets affichent le même dossier",
   "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "On synchronise deux dossiers du NAS : ouvrez un dossier dans chaque volet (ni la racine, ni une archive, ni un serveur distant)",
   "Una cartella sta dentro l'altra: scegline due separate": "Un dossier est dans l'autre : choisissez-en deux distincts",
+  "copia a destra": "copier à droite",
+  "copia a sinistra": "copier à gauche",
+  "nel Cestino": "dans la Corbeille",
+  "Cartelle espandibili": "Dossiers dépliables",
+  "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Deux éléments s'appellent « {n} » : dans un même dossier, l'un prendrait la place de l'autre",
+  "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "Dans la vue détaillée, une flèche ouvre le dossier sur place (→ ouvre, ← ferme)",
 };

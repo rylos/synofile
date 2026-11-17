@@ -447,4 +447,10 @@ export default {
   "I due pannelli mostrano la stessa cartella": "Both panes show the same folder",
   "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Two NAS folders are synchronized: open a folder in each pane (not the top, an archive or a remote server)",
   "Una cartella sta dentro l'altra: scegline due separate": "One folder is inside the other: choose two separate ones",
+  "copia a destra": "copy to the right",
+  "copia a sinistra": "copy to the left",
+  "nel Cestino": "to the Recycle Bin",
+  "Cartelle espandibili": "Expandable folders",
+  "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Two items are named “{n}”: in one folder one would take the other's place",
+  "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "In the details view an arrow opens the folder in place (→ opens, ← closes)",
 };

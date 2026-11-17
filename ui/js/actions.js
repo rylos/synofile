@@ -18,6 +18,20 @@ import { serverAddress, isRemote } from "./conns.js";
 import { recordRename, recordNewFolder, recordTransfer } from "./undo.js";
 import { batchRename } from "./rename.js";
 
+/** Items from different folders (opened in place) with one name would land on each other. */
+function sameNames(paths) {
+  const seen = new Map();
+  for (const p of paths) {
+    const n = baseName(p);
+    if (seen.has(n)) {
+      toast(t("Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro", { n: baseName(p) }), { kind: "error" });
+      return true;
+    }
+    seen.set(n, p);
+  }
+  return false;
+}
+
 export const actionMethods = {
   /** A text file the editor opens: not in an archive, 8 MB at most. */
   editable(pane, entry) {
@@ -65,7 +79,7 @@ export const actionMethods = {
   compress(pane) {
     if (pane.archive) return readOnlyToast();
     const list = pane.targets().filter((e) => !e.share);
-    if (!list.length || pane.path === "/") return;
+    if (!list.length || pane.path === "/" || sameNames(list.map((e) => e.path))) return;
     const base = list.length === 1 ? (isDirLike(list[0]) ? list[0].name : archiveStem(list[0].name)) : baseName(pane.path) || t("Archivio");
     const dlg = dialog(`<form method="dialog">
       <div class="dlg-head"><div class="dlg-icon">${svg("archive")}</div><h2>${t("Comprimi in .zip")}</h2></div>
@@ -143,7 +157,7 @@ export const actionMethods = {
   paste(pane = this.pane, dest = pane.path, verify = false) {
     const cb = this.clipboard;
     if (!cb || dest === "/") return;
-    if (cb.op === "cut" && cb.from === dest) return toast(t("Gli elementi sono già in questa cartella"));
+    if (cb.op === "cut" && cb.paths.every((p) => parentOf(p) === dest)) return toast(t("Gli elementi sono già in questa cartella"));
     this.transfer(cb.op === "cut" ? "move" : "copy", cb.paths, dest, verify);
     if (cb.op === "cut") this.clipboard = null;
     this.allPanes().forEach((p) => p.paint());
@@ -161,6 +175,7 @@ export const actionMethods = {
     }
     if (paths.some((p) => dest === p || dest.startsWith(p + "/"))) return toast(t("Una cartella non può finire dentro sé stessa"), { kind: "error" });
     if (op === "move" && paths.every((p) => parentOf(p) === dest)) return;
+    if (sameNames(paths)) return;
     // for Ctrl+Z: only the names the destination did not have are undone
     // (a folder merged into one already there would take its old contents back too)
     let fresh = null;
@@ -237,6 +252,11 @@ export const actionMethods = {
   },
 
   /** Several items: the batch rename dialog. */
+  /** Renamed items keep their place in every pane: opened folders, selection. */
+  renamedPaths(done) {
+    for (const p of this.allPanes()) p.renamedPaths(done);
+  },
+
   renameMany(pane, list) {
     if (pane.archive) return readOnlyToast();
     list = list.filter((e) => !e.readonly && !isDsmFolder(e));
@@ -262,10 +282,11 @@ export const actionMethods = {
     try {
       await api.rename(e.path, name);
       recordRename([[e.path, name]]);
+      this.renamedPaths([[e.path, name]]);
       if (isDirLike(e)) moveFolderIcons(e.path, joinPath(parentOf(e.path), name));
       await pane.reload();
       pane.selectPath(joinPath(parentOf(e.path), name));
-      this.refreshFolders([pane.path]);
+      this.refreshFolders([parentOf(e.path)]);
     } catch (err) {
       errorToast(err);
     }

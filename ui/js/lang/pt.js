@@ -682,4 +682,10 @@ export default {
   "I due pannelli mostrano la stessa cartella": "Os dois painéis mostram a mesma pasta",
   "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Sincronizam-se duas pastas do NAS: abra uma pasta em cada painel (não a raiz, um arquivo ou um servidor remoto)",
   "Una cartella sta dentro l'altra: scegline due separate": "Uma pasta está dentro da outra: escolha duas separadas",
+  "copia a destra": "copiar para a direita",
+  "copia a sinistra": "copiar para a esquerda",
+  "nel Cestino": "para a Reciclagem",
+  "Cartelle espandibili": "Pastas expansíveis",
+  "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Dois itens chamam-se «{n}»: na mesma pasta um ocuparia o lugar do outro",
+  "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "Na vista de detalhes uma seta abre a pasta no lugar (→ abre, ← fecha)",
 };

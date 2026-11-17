@@ -3456,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "synofile"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "aes-gcm 0.10.3",
  "crc32fast",

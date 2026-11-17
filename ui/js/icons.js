@@ -143,6 +143,10 @@ const P = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+  // synchronization: which way a difference goes
+  arrowRight: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+  arrowLeft: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
+  swap: '<path d="M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4"/>',
   // the flat view: layers of folders laid down as one
   layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',

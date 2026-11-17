@@ -170,6 +170,10 @@ pub struct Progress {
     /// by renaming, or of a file that failed): the work left is the rest
     #[serde(default)]
     pub verify_skip: u64,
+    /// bytes counted as done without moving data (skipped, moved by
+    /// renaming, cloned): the bar takes them, the speed does not
+    #[serde(default)]
+    pub bytes_free: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

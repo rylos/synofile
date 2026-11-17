@@ -34,7 +34,9 @@ export function recordRename(pairs, label) {
     label: label || t("Rinomina «{a}» in «{b}»", { a: baseName(pairs[0][0]), b: pairs[0][1] }),
     run: async () => {
       // all back at once: swaps and shifts of names undo as they were done
-      const { errors } = await renameMany(done);
+      // the other way round: a folder takes its name back before what is inside it
+      const { errors } = await renameMany(done, { shallowFirst: true });
+      app.renamedPaths(done);
       app.refreshFolders([...new Set(done.map(([p]) => parentOf(p)))]);
       if (errors.length) throw new Error(errors.join("; "));
     },

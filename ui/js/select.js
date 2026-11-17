@@ -1,7 +1,7 @@
 // Selecting by a pattern, and the differences between the two panes.
 
 import { t, count } from "./i18n.js";
-import { int, isDirLike, esc } from "./format.js";
+import { int, isDirLike, esc, parentOf } from "./format.js";
 import { svg } from "./icons.js";
 import { dialog, toast } from "./ui.js";
 
@@ -112,7 +112,9 @@ export function selectByPattern(pane, mode = "add") {
  * only when missing. Returns how many were selected on each side.
  */
 export function selectDifferences(a, b) {
-  const index = (pane) => new Map(pane.visible.map((e) => [e.name.toLowerCase(), e]));
+  // the items of the folder shown, not those of folders opened inside it
+  const top = (pane) => pane.visible.filter((e) => parentOf(e.path) === pane.path);
+  const index = (pane) => new Map(top(pane).map((e) => [e.name.toLowerCase(), e]));
   const ia = index(a);
   const ib = index(b);
   const differs = (e, other) => {
@@ -122,7 +124,7 @@ export function selectDifferences(a, b) {
     return e.size !== other.size || Math.abs(e.mtime - other.mtime) > 2;
   };
   const pick = (pane, mine, theirs) => {
-    pane.sel = new Set(pane.visible.filter((e) => differs(e, theirs.get(e.name.toLowerCase()))).map((e) => e.path));
+    pane.sel = new Set(top(pane).filter((e) => differs(e, theirs.get(e.name.toLowerCase()))).map((e) => e.path));
     pane.render();
     pane.app.selectionChanged(pane);
     return pane.sel.size;

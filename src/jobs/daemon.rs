@@ -105,7 +105,8 @@ pub struct JobView {
     pub limit: u64,
     pub policy: Policy,
     /// [ms since start, bytes done, files done, bytes verified]
-    pub samples: Vec<[u64; 4]>,
+    /// [ms since start, bytes done, files done, bytes verified, bytes done without moving data]
+    pub samples: Vec<[u64; 5]>,
     /// stopped by a restart of the package: it can be run again
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub interrupted: bool,
@@ -160,11 +161,11 @@ impl Job {
         }
         self.last_sample = Some(Instant::now());
         let p = &self.view.progress;
-        self.view.samples.push([start.elapsed().as_millis() as u64, p.bytes_done, p.files_done, p.verify_bytes]);
+        self.view.samples.push([start.elapsed().as_millis() as u64, p.bytes_done, p.files_done, p.verify_bytes, p.bytes_free]);
         if self.view.samples.len() > MAX_SAMPLES {
             // halve the resolution of the older half, keep the recent one sharp
             let half = self.view.samples.len() / 2;
-            let old: Vec<[u64; 4]> = self.view.samples[..half].iter().step_by(2).copied().collect();
+            let old: Vec<[u64; 5]> = self.view.samples[..half].iter().step_by(2).copied().collect();
             self.view.samples.splice(..half, old);
         }
     }

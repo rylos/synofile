@@ -22,7 +22,7 @@ import { healthMethods } from "./health.js";
 
 // what each preference redraws when it changes (prefsChanged)
 const QUIET_PREFS = new Set(["tabs", "folderViews", "sort", "view", "sidebar", "singleClick", "vimKeys", "confirmDelete", "conflict", "limit", "openDialog", "notify", "dsmTray", "startIn", "newTabIn", "startFolder", "perFolder"]);
-const RESORT_PREFS = new Set(["showHidden", "foldersFirst", "hiddenLast"]);
+const RESORT_PREFS = new Set(["showHidden", "foldersFirst", "hiddenLast", "expandFolders"]);
 const REPAINT_PREFS = new Set(["columns", "binarySizes", "relativeDates", "todayHighlight", "llColumns", "icons", "colors", "size", "density", "folderIcons", "info"]);
 const SIDEBAR_PREFS = new Set(["favorites", "showFavorites", "volumeNames", "volumeOrder", "folderIcons"]);
 
@@ -185,7 +185,8 @@ class App {
   refreshFolders(paths) {
     this.treeForget(paths);
     const set = new Set(paths);
-    for (const p of this.allPanes()) if (set.has(p.path)) p.reload();
+    // a folder opened in place in the details view counts as shown
+    for (const p of this.allPanes()) if (set.has(p.path) || [...p.tree.keys()].some((k) => set.has(k))) p.reload();
   }
 
   refreshAfter(job) {

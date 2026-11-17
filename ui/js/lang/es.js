@@ -682,4 +682,10 @@ export default {
   "I due pannelli mostrano la stessa cartella": "Los dos paneles muestran la misma carpeta",
   "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Se sincronizan dos carpetas del NAS: abre una carpeta en cada panel (no la raíz, un archivo comprimido o un servidor remoto)",
   "Una cartella sta dentro l'altra: scegline due separate": "Una carpeta está dentro de la otra: elige dos separadas",
+  "copia a destra": "copiar a la derecha",
+  "copia a sinistra": "copiar a la izquierda",
+  "nel Cestino": "a la Papelera",
+  "Cartelle espandibili": "Carpetas desplegables",
+  "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Dos elementos se llaman «{n}»: en la misma carpeta uno ocuparía el lugar del otro",
+  "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "En la vista de detalles una flecha abre la carpeta en su sitio (→ abre, ← cierra)",
 };

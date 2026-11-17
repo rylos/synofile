@@ -61,6 +61,7 @@ function body(section) {
     case "list":
       return (
         row("Cartelle prima", "Come eza --group-directories-first", sw("foldersFirst")) +
+        row("Cartelle espandibili", "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)", sw("expandFolders")) +
         row("Mostra i file nascosti", "Quelli che iniziano con un punto (Ctrl+H)", sw("showHidden")) +
         row("File nascosti in fondo", "Quando sono visibili, dopo gli altri", sw("hiddenLast")) +
         row("Mostra i preferiti", "La sezione Preferiti della barra laterale; restano salvati anche se nascosti", sw("showFavorites")) +

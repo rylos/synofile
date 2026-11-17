@@ -48,7 +48,8 @@ Nine languages, following DSM.
 - **Find things fast.** A ranked fuzzy filter of the folder as you type (`/`),
   and a search through subfolders by words or a glob (`*.mkv`, Ctrl+F).
 - **Tools of a power file manager**: rename many items
-  at once with a preview (F2); a flat view of every file under a folder
+  at once with a preview (F2); folders that open in place in the details
+  view (→ / ←); a flat view of every file under a folder
   (Ctrl+Shift+F); select by pattern (`+` / `-`) or the differences between
   the two panes; undo (Ctrl+Z) of renames, new folders, moves and copies;
   a folder tree in the sidebar; checksums (SHA-256, SHA-1, MD5, XXH128) in

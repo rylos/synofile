@@ -15,6 +15,17 @@ let last = { name: "[N]", ext: "[E]", find: "", repl: "", regex: false, matchCas
 
 const pad = (n, d) => String(n).padStart(d, "0");
 
+/** `name` with the part that differs from `other` marked (what goes, or what comes). */
+function marked(name, other, tag) {
+  if (name === other) return esc(name);
+  let a = 0;
+  while (a < name.length && a < other.length && name[a] === other[a]) a++;
+  let z = 0;
+  while (z < name.length - a && z < other.length - a && name[name.length - 1 - z] === other[other.length - 1 - z]) z++;
+  const mid = name.slice(a, name.length - z);
+  return esc(name.slice(0, a)) + (mid ? `<${tag}>${esc(mid)}</${tag}>` : `<${tag} class="gap"></${tag}>`) + esc(name.slice(name.length - z));
+}
+
 function splitName(e) {
   const i = e.name.lastIndexOf(".");
   if (isDirLike(e) || i <= 0) return [e.name, ""];
@@ -67,7 +78,9 @@ export function newNames(list, o) {
  * swaps included; on a remote server one by one. Resolves the pairs done
  * and the errors.
  */
-export async function renameMany(pairs) {
+/** `shallowFirst`: the folders nearer the top go first, as an undo needs; otherwise the
+ * deepest go first, so a folder renamed with things inside it does not move them away. */
+export async function renameMany(pairs, { shallowFirst = false } = {}) {
   const done = [];
   const errors = [];
   const byDir = new Map();
@@ -76,7 +89,9 @@ export async function renameMany(pairs) {
     if (!byDir.has(dir)) byDir.set(dir, []);
     byDir.get(dir).push([path, name]);
   }
-  for (const [dir, list] of byDir) {
+  const depth = (p) => p.split("/").length;
+  const dirs = [...byDir].sort(([a], [b]) => (shallowFirst ? depth(a) - depth(b) : depth(b) - depth(a)));
+  for (const [dir, list] of dirs) {
     if (isRemote(dir)) {
       for (const [path, name] of list) {
         try {
@@ -179,6 +194,8 @@ export function batchRename(app, pane, list) {
     }
     // what each new name would clash with: another new name, or a name staying in the folder
     const olds = new Set(list.map((e) => e.path));
+    const spread = new Set(list.map((e) => parentOf(e.path))).size > 1;
+    const relDir = (e) => parentOf(e.path).slice(pane.path === "/" ? 1 : pane.path.length + 1) || ".";
     const staying = new Set(pane.visible.filter((e) => !olds.has(e.path)).map((e) => `${parentOf(e.path)}/${e.name}`));
     const tally = new Map();
     names.forEach((n, i) => {
@@ -199,7 +216,9 @@ export function batchRename(app, pane, list) {
       return { e, name: n, problem, same: n === e.name };
     });
     const shown = plan.slice(0, 500);
-    listEl.innerHTML = shown.map((p) => `<div class="ren-item ${p.problem ? "bad" : p.same ? "same" : ""}" title="${esc(p.problem)}"><span>${esc(p.e.name)}</span><span>→</span><span>${esc(p.name)}${p.problem ? ` <em>${esc(p.problem)}</em>` : ""}</span></div>`).join("")
+    // items of several folders (opened in place): each says which folder it is in
+    const where = (e) => (spread ? `<span class="ren-dir">${esc(relDir(e))}/</span>` : "");
+    listEl.innerHTML = shown.map((p) => `<div class="ren-item ${p.problem ? "bad" : p.same ? "same" : ""}"><span title="${esc(p.e.path)}">${where(p.e)}${marked(p.e.name, p.name, "del")}</span><span>→</span><span title="${esc(p.problem || p.name)}">${marked(p.name, p.e.name, "ins")}${p.problem ? ` <em>${esc(p.problem)}</em>` : ""}</span></div>`).join("")
       + (plan.length > shown.length ? `<div class="ren-item same"><span>… ${esc(t("e altri {n}", { n: int(plan.length - shown.length) }))}</span></div>` : "");
     const bad = plan.filter((p) => p.problem).length;
     const changing = plan.filter((p) => !p.same && !p.problem).length;
@@ -225,6 +244,7 @@ export function batchRename(app, pane, list) {
     const { done, errors } = await renameMany(pairs);
     dlg.close();
     if (done.length) recordRename(done, t("Rinomina {n}", { n: count(done.length, "elemento", "elementi", int) }));
+    app.renamedPaths(done);
     app.refreshFolders([...new Set(pairs.map(([p]) => parentOf(p)))]);
     if (pane.search) pane.reload();
     if (errors.length) errorToast(new Error(tn(errors.length, "{n} non rinominato: {e}", "{n} non rinominati: {e}", { n: int(errors.length), e: errors.slice(0, 3).join("; ") + (errors.length > 3 ? "…" : "") })));

@@ -130,8 +130,9 @@ export function stats(job) {
   if (job.state === "done") pct = 1;
   const s = job.samples;
   const elapsed = job.active_ms + (job.state === "running" && job._polledAt ? Date.now() - job._polledAt : 0);
-  // throughput: bytes moved plus bytes verified
-  const work = (x) => (byBytes ? x[1] + x[3] : x[2]);
+  // throughput: bytes moved plus bytes verified; what was done without moving data
+  // (skipped, renamed, cloned) fills the bar, not the speed
+  const work = (x) => (byBytes ? x[1] - (x[4] || 0) + x[3] : x[2]);
   const windowSpeed = (ms) => {
     if (s.length < 2) return 0;
     const last = s[s.length - 1];
@@ -143,7 +144,7 @@ export function stats(job) {
   };
   const now = job.state === "running" ? windowSpeed(2500) : 0;
   const smooth = windowSpeed(10000);
-  const avg = elapsed > 500 ? (doneWork / elapsed) * 1000 : 0;
+  const avg = elapsed > 500 ? ((doneWork - (byBytes ? p.bytes_free || 0 : 0)) / elapsed) * 1000 : 0;
   let peak = 0;
   // over about a second, however close together the samples are
   for (let i = 1, j = 0; i < s.length; i++) {
@@ -1019,7 +1020,9 @@ class JobDialog {
       return c;
     };
     const st = this.st || stats(job);
-    const work = (x) => (st.byBytes ? x[1] + x[3] : x[2]);
+    // the speed from the data moved; the progress axis from all the work done
+    const work = (x) => (st.byBytes ? x[1] - (x[4] || 0) + x[3] : x[2]);
+    const done = (x) => (st.byBytes ? x[1] + x[3] : x[2]);
     const s = job.samples;
     const pad = { l: 8, r: 64, t: 22, b: 10 };
     const w = W - pad.l - pad.r;
@@ -1037,7 +1040,7 @@ class JobDialog {
     const curveKey = `${s.length}/${tEnd}/${win}/${st.byBytes}`;
     if (this.curveKey !== curveKey) {
       this.curveKey = curveKey;
-      this.curve = speedCurve(s, work, win);
+      this.curve = speedCurve(s, work, win, done);
     }
     const pts = this.curve;
     const headT = pts.length ? this.headTime(job, pts) : 0;
@@ -1046,7 +1049,23 @@ class JobDialog {
     // one point per ~2 px: on the progress axis a slow stretch packs many points together (the
     // time axis has evenly spaced points, and its scale moves: merging there would shimmer)
     const plot = [];
+    // on the progress axis, the stretches done without moving data (files skipped, renamed,
+    // cloned) have no speed of their own: shaded instead, and the line goes across them
+    const freeSpans = [];
+    for (let i = 1; progressAxis && i < pts.length; i++) {
+      const [a, b] = [pts[i - 1], pts[i]];
+      const free = b.f - a.f;
+      if (free > 0 && free >= (b.w - a.w) * 0.5) {
+        const last = freeSpans[freeSpans.length - 1];
+        if (last && last[1] >= a.w) last[1] = b.w;
+        else freeSpans.push([a.w, b.w]);
+      }
+    }
+    // a job that began by skipping starts its line where the data began to move
+    const lead = freeSpans.length && pts.length && freeSpans[0][0] <= pts[0].w ? freeSpans[0][1] : -1;
+    const inFree = (p) => p.w < lead || freeSpans.some(([a, b]) => p.w > a && p.w < b);
     for (const p of pts) {
+      if (progressAxis && inFree(p)) continue;
       const x = xOf(p);
       const last = plot[plot.length - 1];
       if (progressAxis && last && x - last.x < 2) {
@@ -1108,6 +1127,13 @@ class JobDialog {
       g.fillStyle = col("--accent-soft");
       g.globalAlpha = 0.45;
       g.fillRect(pad.l, pad.t, active(job) ? Math.max(0, headX - pad.l) : (st.doneWork / xmax) * w, hh);
+      // the stretches done without moving data, hatched
+      g.globalAlpha = 0.18;
+      g.fillStyle = col("--faint");
+      for (const [a, b] of freeSpans) {
+        const [x0, x1] = [xOf({ w: a }), xOf({ w: b })];
+        for (let x = x0; x < x1; x += 6) g.fillRect(x, pad.t, Math.min(2, x1 - x), hh);
+      }
       g.globalAlpha = 1;
     } else {
       g.fillStyle = col("--faint");
@@ -1298,26 +1324,32 @@ function samplePeriod(s) {
  * instead of starting with the spike of a first short interval. A sample less than 100 ms after
  * the one before it adds no point, and a new sample leaves the earlier points as they were.
  */
-function speedCurve(s, work, win) {
+/** `work`: what the speed counts; `done`: where on the progress axis (all the work, free bytes too). */
+function speedCurve(s, work, win, done = work) {
   if (s.length < 2) return [];
   const holes = pauses(s);
   const t0 = s[0][0];
   const tEnd = s[s.length - 1][0];
-  let k = 0;
-  const at = (tm) => {
-    if (tm <= t0) return work(s[0]);
-    if (tm >= tEnd) return work(s[s.length - 1]);
-    while (k > 0 && s[k][0] > tm) k--;
-    while (k < s.length - 2 && s[k + 1][0] < tm) k++;
-    let [a, b] = [s[k][0], s[k + 1][0]];
-    const hole = holes.find(([x]) => x === a);
-    if (hole) {
-      if (tm <= hole[1]) return work(s[k]);
-      a = hole[1];
-    }
-    const f = b > a ? (tm - a) / (b - a) : 1;
-    return work(s[k]) + (work(s[k + 1]) - work(s[k])) * f;
+  const interp = (work) => {
+    let k = 0;
+    return (tm) => {
+      if (tm <= t0) return work(s[0]);
+      if (tm >= tEnd) return work(s[s.length - 1]);
+      while (k > 0 && s[k][0] > tm) k--;
+      while (k < s.length - 2 && s[k + 1][0] < tm) k++;
+      let [a, b] = [s[k][0], s[k + 1][0]];
+      const hole = holes.find(([x]) => x === a);
+      if (hole) {
+        if (tm <= hole[1]) return work(s[k]);
+        a = hole[1];
+      }
+      const f = b > a ? (tm - a) / (b - a) : 1;
+      return work(s[k]) + (work(s[k + 1]) - work(s[k])) * f;
+    };
   };
+  const at = interp(work);
+  const pos = interp(done);
+  const freeAt = interp((x) => x[4] || 0);
   let v = 1;
   const ver = (tm) => {
     // verifying: the verify counter grew around this point (tm only grows)
@@ -1339,7 +1371,7 @@ function speedCurve(s, work, win) {
     if (i && times[i] === times[i - 1]) continue;
     const tm = times[i];
     const v = Math.max(0, (at(tm) - at(tm - win)) / (win / 1000));
-    out.push({ t: tm, w: at(tm), v, verifying: ver(tm) });
+    out.push({ t: tm, w: pos(tm), f: freeAt(tm), v, verifying: ver(tm) });
   }
   return out;
 }

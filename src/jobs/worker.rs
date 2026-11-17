@@ -236,6 +236,13 @@ impl Engine {
         self.window.1 += n;
     }
 
+    /// Bytes done without moving data: in the bar, not in the speed (nor in the limit's account).
+    fn free(&mut self, n: u64) {
+        self.p.bytes_done += n;
+        self.p.bytes_free += n;
+        self.p.current_done += n;
+    }
+
     fn run(&mut self) -> Step<()> {
         if self.spec.sources.iter().chain(&self.spec.dest).any(|p| crate::remote::is_remote(p)) {
             return self.remote_run();
@@ -599,7 +606,7 @@ impl Engine {
                     self.p.instant += 1;
                     self.p.files_done += 1;
                     let n = if meta.is_file() { meta.len() } else { 0 };
-                    self.advance(n);
+                    self.free(n);
                     self.unverified(n);
                     return Ok(());
                 }
@@ -639,7 +646,9 @@ impl Engine {
                 self.p.files_done += 1;
                 if t.is_file() {
                     // the rest of a failed file counts as handled, so the time left stays true
-                    self.p.bytes_done = self.p.bytes_done.max(done_before + meta.len());
+                    let end = self.p.bytes_done.max(done_before + meta.len());
+                    self.p.bytes_free += end - self.p.bytes_done;
+                    self.p.bytes_done = end;
                     self.unverified(meta.len().saturating_sub(self.p.verify_bytes - verified_before));
                 }
             }
@@ -653,6 +662,7 @@ impl Engine {
         if meta.is_file() {
             // skipped bytes count as handled, so the bar and the time left stay true
             self.p.bytes_done += meta.len();
+            self.p.bytes_free += meta.len();
             self.unverified(meta.len());
         }
     }
@@ -750,6 +760,7 @@ impl Engine {
         self.p.files_done += files;
         self.p.instant += files;
         self.p.bytes_done += bytes;
+        self.p.bytes_free += bytes;
         self.unverified(bytes);
     }
 
@@ -758,6 +769,7 @@ impl Engine {
         self.p.files_done += files;
         self.p.skipped += files;
         self.p.bytes_done += bytes;
+        self.p.bytes_free += bytes;
         self.unverified(bytes);
     }
 
@@ -849,7 +861,7 @@ impl Engine {
                 self.clone_works = Some(true);
                 self.p.method = "clone".into();
                 self.p.instant += 1;
-                self.advance(size);
+                self.free(size);
                 return Ok(());
             }
             let e = io::Error::last_os_error();

@@ -682,4 +682,10 @@ export default {
   "I due pannelli mostrano la stessa cartella": "Beide panelen tonen dezelfde map",
   "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Er worden twee mappen van de NAS gesynchroniseerd: open in elk paneel een map (niet de top, een archief of een externe server)",
   "Una cartella sta dentro l'altra: scegline due separate": "De ene map zit in de andere: kies twee aparte",
+  "copia a destra": "naar rechts kopiëren",
+  "copia a sinistra": "naar links kopiëren",
+  "nel Cestino": "naar de Prullenbak",
+  "Cartelle espandibili": "Uitklapbare mappen",
+  "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Twee items heten ‘{n}’: in één map zou het ene de plaats van het andere innemen",
+  "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "In de detailweergave opent een pijl de map ter plekke (→ opent, ← sluit)",
 };

@@ -40,7 +40,7 @@ export function syncFolders(app, paneA, paneB) {
   const dlg = dialog(`
     <div class="dlg-head"><div class="dlg-icon">${svg("refresh")}</div><h2>${t("Sincronizza le cartelle")}</h2></div>
     <div class="dlg-body sync">
-      <div class="sync-ends"><span class="s-a"></span><button type="button" class="icon-btn s-swap" title="${t("Scambia")}" aria-label="${t("Scambia")}">${svg("refresh")}</button><span class="s-b"></span></div>
+      <div class="sync-ends"><span class="s-a"></span><button type="button" class="icon-btn s-swap" title="${t("Scambia")}" aria-label="${t("Scambia")}">${svg("swap")}</button><span class="s-b"></span></div>
       <div class="sync-opts">
         <div class="seg s-mode" role="radiogroup">
           <button type="button" data-m="update" title="${t("Copia a destra quello che a sinistra è nuovo o più recente")}">${t("Aggiorna →")}</button>
@@ -86,7 +86,7 @@ export function syncFolders(app, paneA, paneB) {
     q(".sync-sel").textContent = "";
   };
 
-  const ARROW = { a2b: "→", b2a: "←", del: "✕", "": "·" };
+  const ARROW = { a2b: svg("arrowRight"), b2a: svg("arrowLeft"), del: svg("trash"), "": "·" };
   const WHAT = {
     a: t("solo a sinistra"), b: t("solo a destra"), newer_a: t("più recente a sinistra"), newer_b: t("più recente a destra"),
     size: t("stessa data, dimensione diversa"), kind: t("file da una parte, cartella dall'altra"),
@@ -108,8 +108,8 @@ export function syncFolders(app, paneA, paneB) {
     const shown = plan.slice(0, 2000);
     q(".sync-list").innerHTML = shown.map((p, i) => `<label class="sync-item act-${p.act || "none"}" title="${esc(WHAT[p.d.what])}">
         <input type="checkbox" data-i="${i}"${p.on ? " checked" : ""}${p.act ? "" : " disabled"}>
-        <span class="sync-arrow">${ARROW[p.act]}</span>
-        <span class="sync-path">${esc(p.d.path)}${p.d.dir ? "/" : ""}</span>
+        <span class="sync-arrow" title="${esc(p.act === "a2b" ? t("copia a destra") : p.act === "b2a" ? t("copia a sinistra") : p.act === "del" ? t("nel Cestino") : WHAT[p.d.what])}">${ARROW[p.act]}</span>
+        <span class="sync-path" title="${esc(p.d.path)}">${esc(p.d.path)}${p.d.dir ? "/" : ""}</span>
         <span class="sync-side">${esc(side(p.d.a, p.d.dir))}</span><span class="sync-side">${esc(side(p.d.b, p.d.dir))}</span></label>`).join("")
       + (plan.length > shown.length ? `<div class="hint">${esc(t("e altri {n}", { n: int(plan.length - shown.length) }))}</div>` : "");
     updateFoot();

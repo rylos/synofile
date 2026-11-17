@@ -116,6 +116,10 @@ export const keyMethods = {
           pane.moveCursor(0);
         });
       }
+      // details view: right opens the folder in place, left closes it
+      if (pane.view === "list" && !e.shiftKey && !ctrl && !e.altKey && (k === "ArrowRight" || k === "ArrowLeft")) {
+        if (pane.treeKey(k === "ArrowRight")) return run(() => {});
+      }
       const opts = { extend: e.shiftKey, toggle: ctrl };
       if (k in nav) return run(() => pane.moveCursor(pane.cursor + nav[k], opts));
       if (k === "Home") return run(() => pane.moveCursor(0, opts));
