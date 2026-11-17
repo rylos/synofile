@@ -443,4 +443,8 @@ export default {
   "{n} che a sinistra non c'è finirà nel Cestino di DSM della cartella di destra.": "{n} the left does not have will go to DSM's Recycle Bin of the right folder.",
   "{n} non rinominato: {e}": "{n} not renamed: {e}",
   "Checksum…": "Checksum…",
+  "Apri il doppio pannello (F3) con le due cartelle da sincronizzare": "Open the dual pane (F3) with the two folders to synchronize",
+  "I due pannelli mostrano la stessa cartella": "Both panes show the same folder",
+  "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Two NAS folders are synchronized: open a folder in each pane (not the top, an archive or a remote server)",
+  "Una cartella sta dentro l'altra: scegline due separate": "One folder is inside the other: choose two separate ones",
 };

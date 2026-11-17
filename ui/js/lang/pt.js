@@ -678,4 +678,8 @@ export default {
   "{n} che a sinistra non c'è finirà nel Cestino di DSM della cartella di destra.": "{n} que não existe à esquerda vai para a Reciclagem do DSM da pasta da direita.",
   "{n} non rinominato: {e}": "{n} sem nome mudado: {e}",
   "Checksum…": "Soma de verificação…",
+  "Apri il doppio pannello (F3) con le due cartelle da sincronizzare": "Abra o painel duplo (F3) com as duas pastas a sincronizar",
+  "I due pannelli mostrano la stessa cartella": "Os dois painéis mostram a mesma pasta",
+  "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Sincronizam-se duas pastas do NAS: abra uma pasta em cada painel (não a raiz, um arquivo ou um servidor remoto)",
+  "Una cartella sta dentro l'altra: scegline due separate": "Uma pasta está dentro da outra: escolha duas separadas",
 };

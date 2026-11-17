@@ -678,4 +678,8 @@ export default {
   "{n} che a sinistra non c'è finirà nel Cestino di DSM della cartella di destra.": "{n}, którego nie ma po lewej, trafi do Kosza DSM folderu po prawej.",
   "{n} non rinominato: {e}": "{n} bez zmiany nazwy: {e}",
   "Checksum…": "Suma kontrolna…",
+  "Apri il doppio pannello (F3) con le due cartelle da sincronizzare": "Otwórz podwójny panel (F3) z dwoma folderami do synchronizacji",
+  "I due pannelli mostrano la stessa cartella": "Oba panele pokazują ten sam folder",
+  "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Synchronizuje się dwa foldery NAS: otwórz folder w każdym panelu (nie katalog główny, archiwum ani serwer zdalny)",
+  "Una cartella sta dentro l'altra: scegline due separate": "Jeden folder jest w drugim: wybierz dwa osobne",
 };

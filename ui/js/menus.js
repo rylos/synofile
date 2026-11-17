@@ -7,7 +7,7 @@ import { t, count } from "./i18n.js";
 import { int, parentOf, baseName, isDirLike } from "./format.js";
 import { isArchive, archiveStem, isDsmFolder } from "./icons.js";
 import { isBrowsable } from "./archive.js";
-import { openMenu, copyText } from "./ui.js";
+import { openMenu, copyText, toast } from "./ui.js";
 import { openSettings } from "./settings.js";
 import { isRemote } from "./conns.js";
 import { selectByPattern, selectDifferences } from "./select.js";
@@ -36,7 +36,7 @@ export const menuMethods = {
         { label: prefs.showHidden ? t("Nascondi i file nascosti") : t("Mostra i file nascosti"), icon: prefs.showHidden ? "eyeOff" : "eye", key: "Ctrl+H", action: () => this.toggleHidden() },
         { label: t("Calcola dimensione delle cartelle"), icon: "drive", action: () => this.computeSizes(pane, pane.visible) },
         pane.path !== "/" && !pane.archive && !remote && { label: t("Trova duplicati…"), icon: "copy", action: () => findDuplicates(this, pane.path) },
-        this.canSync() && { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => syncFolders(this, ...this.current.panes) },
+        this.isSplit() && { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => this.startSync() },
       pane.path !== "/" && !pane.archive && !remote && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(pane.path) },
         "-",
         !atRoot && { label: t("Copia percorso della cartella"), icon: "link", action: () => copyText(this.displayPath(pane.path)) },
@@ -117,13 +117,27 @@ export const menuMethods = {
     ]);
   },
 
-  /** Both panes on folders of the NAS, neither inside the other. */
-  canSync() {
+  /** Why the two panes cannot be synchronized now, or null when they can. */
+  syncProblem() {
     const other = this.other();
-    if (!other) return false;
+    if (!other) return t("Apri il doppio pannello (F3) con le due cartelle da sincronizzare");
     const ok = (p) => p.path !== "/" && !p.archive && !isRemote(p.path);
+    if (!ok(this.pane) || !ok(other)) return t("Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)");
     const [a, b] = [this.pane.path, other.path];
-    return ok(this.pane) && ok(other) && a !== b && !a.startsWith(b + "/") && !b.startsWith(a + "/");
+    if (a === b) return t("I due pannelli mostrano la stessa cartella");
+    if (a.startsWith(b + "/") || b.startsWith(a + "/")) return t("Una cartella sta dentro l'altra: scegline due separate");
+    return null;
+  },
+
+  canSync() {
+    return !this.syncProblem();
+  },
+
+  /** The synchronization dialog, or why it cannot open. */
+  startSync() {
+    const problem = this.syncProblem();
+    if (problem) return toast(problem);
+    syncFolders(this, ...this.current.panes);
   },
 
   moreMenu(pane, anchor) {
@@ -138,7 +152,7 @@ export const menuMethods = {
       { label: t("Seleziona per modello…"), icon: "filter", key: "+", action: () => selectByPattern(pane, "add") },
       { label: t("Deseleziona per modello…"), key: "−", action: () => selectByPattern(pane, "remove") },
       this.isSplit() && { label: t("Seleziona le differenze"), icon: "split", key: "Ctrl+Shift+D", action: () => selectDifferences(...this.current.panes) },
-      this.canSync() && { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => syncFolders(this, ...this.current.panes) },
+      { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => this.startSync() },
       this.clipboard && { label: t("Incolla"), icon: "paste", key: "Ctrl+V", action: () => this.paste(pane) },
       this.clipboard && { label: t("Incolla con verifica"), icon: "shield", key: "Ctrl+Shift+V", action: () => this.paste(pane, pane.path, true) },
       "-",

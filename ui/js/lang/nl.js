@@ -678,4 +678,8 @@ export default {
   "{n} che a sinistra non c'è finirà nel Cestino di DSM della cartella di destra.": "{n} dat links ontbreekt gaat naar de Prullenbak van DSM van de rechtermap.",
   "{n} non rinominato: {e}": "{n} niet hernoemd: {e}",
   "Checksum…": "Controlesom…",
+  "Apri il doppio pannello (F3) con le due cartelle da sincronizzare": "Open het dubbele paneel (F3) met de twee mappen om te synchroniseren",
+  "I due pannelli mostrano la stessa cartella": "Beide panelen tonen dezelfde map",
+  "Si sincronizzano due cartelle del NAS: apri una cartella in ogni pannello (non la radice, un archivio o un server remoto)": "Er worden twee mappen van de NAS gesynchroniseerd: open in elk paneel een map (niet de top, een archief of een externe server)",
+  "Una cartella sta dentro l'altra: scegline due separate": "De ene map zit in de andere: kies twee aparte",
 };
