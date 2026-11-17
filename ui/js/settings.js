@@ -70,6 +70,7 @@ function body(section) {
         row("Evidenzia le date di oggi", "Nella colonna Modificato", sw("todayHighlight")) +
         row("Dimensioni binarie", "KiB, MiB, GiB (1024) invece di KB, MB, GB (1000)", sw("binarySizes")) +
         row("Date relative", "«3 h fa» invece di «29 ott 21:45»", sw("relativeDates")) +
+        row("Date sempre complete", "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi", sw("fullDates")) +
         row("Colonna Permessi", "", sw("columns.mode")) +
         row("Colonna Dimensione", "", sw("columns.size")) +
         row("Colonna Modificato", "", sw("columns.mtime")) +

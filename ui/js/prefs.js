@@ -18,6 +18,7 @@ export const DEFAULTS = {
   showHidden: false,
   binarySizes: true,
   relativeDates: false,
+  fullDates: false,
   columns: { mode: true, size: true, mtime: true, kind: false },
   singleClick: false,
   vimKeys: false,

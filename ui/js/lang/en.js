@@ -453,4 +453,6 @@ export default {
   "Cartelle espandibili": "Expandable folders",
   "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Two items are named “{n}”: in one folder one would take the other's place",
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "In the details view an arrow opens the folder in place (→ opens, ← closes)",
+  "Date sempre complete": "Always full dates",
+  "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Day, month, year and time for every file (“7 Apr 2026 10:00”), instead of the time for the last six months and the year for older ones",
 };

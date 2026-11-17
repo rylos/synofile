@@ -881,7 +881,7 @@ export class Pane {
     // with the folder column the name gives up some room first
     const cols = [{ key: "name", label: "Nome", width: this.search ? "minmax(120px, 1fr)" : "minmax(160px, 1fr)" }];
     if (this.search) cols.push({ key: "dir", label: "Cartella", width: "minmax(70px, .6fr)", cls: "" });
-    for (const [key, c] of Object.entries(COLS)) if (prefs.columns[key]) cols.push({ key, ...c });
+    for (const [key, c] of Object.entries(COLS)) if (prefs.columns[key]) cols.push({ key, ...c, ...(key === "mtime" && prefs.fullDates ? { width: "164px" } : {}) });
     return cols;
   }
 
@@ -976,7 +976,7 @@ export class Pane {
         return `<div class="cell ${c.cls}">${this.sizeHTML(e.size)}</div>`;
       }
       case "mtime":
-        return `<div class="cell ${c.cls}${prefs.todayHighlight && isToday(e.mtime) ? " today" : ""}" title="${esc(dateTime(e.mtime))}">${esc(prefs.relativeDates ? relative(e.mtime) : ezaDate(e.mtime))}</div>`;
+        return `<div class="cell ${c.cls}${prefs.todayHighlight && isToday(e.mtime) ? " today" : ""}" title="${esc(dateTime(e.mtime))}">${esc(prefs.relativeDates ? relative(e.mtime, prefs.fullDates) : ezaDate(e.mtime, prefs.fullDates))}</div>`;
       case "kind":
         return `<div class="cell" style="color:var(--muted)">${esc(kindLabel(e))}</div>`;
     }

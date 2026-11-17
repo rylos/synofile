@@ -53,33 +53,39 @@ export function speed(bps) {
 }
 
 
-const month = (i) => intl().months[i];
+// all of one width, so the dates line up in their column (as eza pads them)
+const month = (i) => {
+  const m = intl().months;
+  return m[i].padEnd(Math.max(...m.map((x) => x.length)));
+};
 const pad = (n) => String(n).padStart(2, "0");
 
 /** eza's date column: "29 ott 21:45" this year, "29 ott  2025" before. */
-export function ezaDate(sec) {
+export function ezaDate(sec, full = false) {
   if (!sec) return "-";
   const d = new Date(sec * 1000);
+  const day = String(d.getDate()).padStart(2, " ");
+  // always the year and the time, for whoever wants the whole date at a glance
+  if (full) return `${day} ${month(d.getMonth())} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const now = new Date();
   const recent = Math.abs(now - d) < 180 * 86400 * 1000;
-  const day = String(d.getDate()).padStart(2, " ");
   return recent ? `${day} ${month(d.getMonth())} ${pad(d.getHours())}:${pad(d.getMinutes())}` : `${day} ${month(d.getMonth())}  ${d.getFullYear()}`;
 }
 
 export function dateTime(sec) {
   if (!sec) return "-";
   const d = new Date(sec * 1000);
-  return `${d.getDate()} ${month(d.getMonth())} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getDate()} ${intl().months[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-export function relative(sec) {
+export function relative(sec, full = false) {
   if (!sec) return "-";
   const diff = Date.now() / 1000 - sec;
   if (diff < 60) return t("adesso");
   if (diff < 3600) return t("{n} min fa", { n: Math.floor(diff / 60) });
   if (diff < 86400) return t("{n} h fa", { n: Math.floor(diff / 3600) });
   if (diff < 86400 * 7) return t("{n} g fa", { n: Math.floor(diff / 86400) });
-  return ezaDate(sec).trim();
+  return ezaDate(sec, full).trim();
 }
 
 export function clock(ms) {

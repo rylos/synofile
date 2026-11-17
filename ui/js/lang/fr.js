@@ -688,4 +688,6 @@ export default {
   "Cartelle espandibili": "Dossiers dépliables",
   "Due elementi si chiamano «{n}»: nella stessa cartella uno prenderebbe il posto dell'altro": "Deux éléments s'appellent « {n} » : dans un même dossier, l'un prendrait la place de l'autre",
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "Dans la vue détaillée, une flèche ouvre le dossier sur place (→ ouvre, ← ferme)",
+  "Date sempre complete": "Dates toujours complètes",
+  "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Jour, mois, année et heure pour chaque fichier (« 7 avr. 2026 10:00 »), au lieu de l'heure pour les six derniers mois et de l'année pour les plus anciens",
 };

@@ -361,6 +361,8 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .sz .n-t, .sz .u-t { color: var(--t-purple); }
 .sz .dash { color: var(--t-gray); font-weight: 700; }
 .dt { color: var(--t-blue); }
+/* eza's padding: " 3 nov 23:58" under "16 dic  2025", the spaces kept */
+.cell.dt { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
 .no-ll .pm *, .no-ll .sz *, .no-ll .dt { color: inherit !important; font-weight: inherit !important; text-decoration: none !important; }
 .no-ll .dt, .no-ll .cell.r { color: var(--muted); }
 

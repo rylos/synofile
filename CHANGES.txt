@@ -1,3 +1,7 @@
+v0.9.4
+- NEW — Always full dates (Settings › List): day, month, year and time for every file ("7 Apr 2026 10:00"), instead of the time for the last six months and the year for older ones; the Modified column widens to fit.
+- The dates of the Modified column line up again: the spaces that align them were lost on the page, and month names now take one width in every language.
+
 v0.9.3
 - NEW IN 0.9.3:
 - NEW — Expandable folders (details view; on by default, Settings › List › Expandable folders): an arrow beside each folder opens it in place, one level further in, as deep as you like; → opens the folder under the cursor and ← closes it or goes to the folder it is in. The filter looks inside the opened folders too. Selections across branches are handled with care: a folder and something inside it, both selected, are copied, moved or deleted once (with the folder); closing a branch deselects what was inside it; two items of the same name from different branches are refused for a copy, a move or an archive instead of one replacing the other. A folder and the items inside it can be renamed together (the deepest first, and Ctrl+Z undoes them in the right order); the opened folders stay open after a rename.
