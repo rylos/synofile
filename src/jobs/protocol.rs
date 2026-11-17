@@ -17,6 +17,9 @@ pub enum Op {
     Extract,
     /// after a restart: the temporary files of an interrupted job go
     Cleanup,
+    /// folder synchronization: `members`, paths under the one source,
+    /// copied into `dest` at the same paths, replacing what is there
+    Sync,
 }
 
 /// What to do when the destination already has an item of that name.
@@ -67,9 +70,14 @@ pub struct Spec {
     /// extract: the archive's password
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-    /// extract: only these items (paths inside the archive), each into dest
+    /// extract: only these items (paths inside the archive), each into dest;
+    /// sync: the paths under the source to copy
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
+    /// sync: for each of `members`, both sides as the comparison saw them;
+    /// an item that changed since is skipped, never copied over
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expect: Vec<Expect>,
     /// the remote connections the paths name (`/:<id>/…`), secrets included
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remotes: Vec<crate::remote::Conn>,
@@ -88,6 +96,22 @@ impl Spec {
         }
         spec
     }
+}
+
+/// Size and date of an item as a comparison saw it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Seen {
+    pub size: u64,
+    pub mtime: i64,
+}
+
+/// A synchronized item's two sides when compared: None where it was missing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Expect {
+    #[serde(default)]
+    pub src: Option<Seen>,
+    #[serde(default)]
+    pub dst: Option<Seen>,
 }
 
 /// The message of a job that failed for want of the archive's password.
@@ -207,6 +231,7 @@ mod tests {
             into_folder: false,
             password: Some("archive-secret".into()),
             members: Vec::new(),
+            expect: Vec::new(),
             remotes: vec![conn],
         };
         let clean = spec.without_secrets();

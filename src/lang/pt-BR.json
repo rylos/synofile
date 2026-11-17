@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "a lixeira do DSM não pode aceitá-lo (acessado por um link simbólico fora da pasta compartilhada?): não foi excluído",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "a chave do servidor ainda não foi verificada: abra Editar conexão e salve",
  "la chiave delle connessioni è danneggiata": "a chave das conexões está danificada",
- "pulizia dei file temporanei in corso: riprova tra poco": "a limpeza dos arquivos temporários está em andamento: tente novamente em instantes"
+ "pulizia dei file temporanei in corso: riprova tra poco": "a limpeza dos arquivos temporários está em andamento: tente novamente em instantes",
+ "il checksum si calcola solo sui file": "a soma de verificação só é calculada em arquivos",
+ "il checksum non si calcola dentro un archivio": "a soma de verificação não é calculada dentro de um arquivo compactado",
+ "due elementi avrebbero lo stesso nome": "dois itens ficariam com o mesmo nome",
+ "qui non si può rinominare": "aqui não é possível renomear",
+ "i duplicati si cercano in una cartella": "os duplicados são procurados em uma pasta",
+ "i duplicati non si cercano dentro un archivio": "não se procuram duplicados dentro de um arquivo compactado",
+ "dentro un archivio non si sincronizza": "não se sincroniza dentro de um arquivo compactado",
+ "la sincronizzazione è tra cartelle del NAS": "a sincronização é entre pastas do NAS",
+ "si confrontano due cartelle": "são comparadas duas pastas",
+ "sincronizzazione non valida": "sincronização inválida",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "uma pasta não se sincroniza com outra que contém ou que a contém",
+ "troppi elementi in una volta (al massimo 10000)": "itens demais de uma vez (10000 no máximo)",
+ "cambiato dopo il confronto: saltato": "alterado depois da comparação: ignorado",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "a Lixeira do DSM não pode recebê-lo, então ele não é substituído",
+ "non va nel Cestino, quindi non viene sostituito: {}": "não pode ir para a Lixeira, então não é substituído: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "o destino não está mais disponível: disco desconectado ou rede caiu?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "a origem não está mais disponível: disco desconectado ou rede caiu?"
 }

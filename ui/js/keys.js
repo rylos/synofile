@@ -5,6 +5,8 @@ import { isDirLike } from "./format.js";
 import * as transfers from "./transfers.js";
 import { openSettings } from "./settings.js";
 import { isRemote } from "./conns.js";
+import { selectByPattern, selectDifferences } from "./select.js";
+import { undo } from "./undo.js";
 
 export const keyMethods = {
   bindKeys() {
@@ -29,6 +31,7 @@ export const keyMethods = {
       if (e.altKey && /^[1-9]$/.test(k)) return run(() => this.switchTab(this.tabs[Math.min(+k, this.tabs.length) - 1]));
       if (ctrl && k === ",") return run(() => openSettings());
       if (ctrl && k.toLowerCase() === "j") return run(() => transfers.showDrawer());
+      if (ctrl && e.shiftKey && k.toLowerCase() === "f") return run(() => pane.setFlat(!pane.flat));
       if (ctrl && k.toLowerCase() === "f") return run(() => {
         pane.setSearchMode(true);
         pane.filterInput.focus();
@@ -40,11 +43,17 @@ export const keyMethods = {
       if (typing) return;
 
       if (ctrl && k.toLowerCase() === "i" && e.shiftKey) return run(() => pane.invertSelection());
+      if (ctrl && e.shiftKey && k.toLowerCase() === "d" && this.isSplit()) return run(() => selectDifferences(...this.current.panes));
+      // + and -: not in the middle of a name being typed
+      const typingName = Date.now() - pane.typeahead.at < 900;
+      if (!ctrl && !e.altKey && (e.code === "NumpadAdd" || (k === "+" && !typingName))) return run(() => selectByPattern(pane, "add"));
+      if (!ctrl && !e.altKey && (e.code === "NumpadSubtract" || (k === "-" && !typingName))) return run(() => selectByPattern(pane, "remove"));
       if (ctrl && k.toLowerCase() === "i") return run(() => this.toggleInfo());
       if (ctrl && k === "1") return run(() => pane.setView("list"));
       if (ctrl && k === "2") return run(() => pane.setView("grid"));
       if (ctrl && k === "3") return run(() => pane.setView("columns"));
       if (ctrl && k.toLowerCase() === "a") return run(() => pane.selectAll());
+      if (ctrl && !e.shiftKey && k.toLowerCase() === "z") return run(() => undo());
       if (ctrl && e.shiftKey && k.toLowerCase() === "c") return run(() => this.copyPaths(pane.targets(), isRemote(pane.path) ? "smb" : "nas"));
       if (ctrl && k.toLowerCase() === "c") return run(() => this.setClipboard("copy", pane));
       if (ctrl && k.toLowerCase() === "x") return run(() => this.setClipboard("cut", pane));

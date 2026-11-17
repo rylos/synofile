@@ -47,6 +47,14 @@ Nine languages, following DSM.
   Each part can be switched off.
 - **Find things fast.** A ranked fuzzy filter of the folder as you type (`/`),
   and a search through subfolders by words or a glob (`*.mkv`, Ctrl+F).
+- **Tools of a power file manager**: rename many items
+  at once with a preview (F2); a flat view of every file under a folder
+  (Ctrl+Shift+F); select by pattern (`+` / `-`) or the differences between
+  the two panes; undo (Ctrl+Z) of renames, new folders, moves and copies;
+  a folder tree in the sidebar; checksums (SHA-256, SHA-1, MD5, XXH128) in
+  the info panel; a duplicate finder by contents; and synchronization of
+  the two panes' folders (update, mirror or both ways), with every change
+  shown first and what is replaced or removed kept in the Recycle Bin.
 - **Quick look** (Space): images with zoom and pan, **HEIC/HEIF photos**
   (decoded in the browser, the NAS does no work), video, audio, PDF, text.
 - **A text editor in micro's manner** (F4, or Edit in the right-click menu):

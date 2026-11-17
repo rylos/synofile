@@ -5,8 +5,8 @@ import { api, dsm } from "./api.js";
 import { sharePermissions } from "./perms.js";
 import { prefs, save } from "./prefs.js";
 import { t } from "./i18n.js";
-import { esc, size, baseName, isDirLike } from "./format.js";
-import { svg, glyph, shareGlyph, folderGlyphHTML } from "./icons.js";
+import { esc, size, baseName, isDirLike, collator } from "./format.js";
+import { svg, glyph, shareGlyph, folderGlyphHTML, isDsmFolder, isSystemFolder } from "./icons.js";
 import { $, toast, errorToast, openMenu, confirmBox, promptBox, copyText } from "./ui.js";
 import * as transfers from "./transfers.js";
 import { pickIcon } from "./iconpick.js";
@@ -181,13 +181,100 @@ export const sidebarMethods = {
     if (saved) pane.go(startPath(saved));
   },
 
+  // ---- the folder tree under each shared folder ----
+  // Opened with its arrow; it follows the folder the pane shows, inside an
+  // open shared folder. The subfolders are read when first opened.
+
+  treeState() {
+    if (!this.tree) {
+      let open = [];
+      try {
+        open = JSON.parse(localStorage.getItem("synofile.tree") || "[]");
+      } catch {}
+      this.tree = { open: new Set(open), closed: new Set(), kids: new Map(), loading: new Set() };
+    }
+    return this.tree;
+  },
+
+  treeOpen(path, cur) {
+    const tr = this.treeState();
+    if (tr.closed.has(path)) return false;
+    if (tr.open.has(path)) return true;
+    // the way down to the folder shown, when its shared folder is open
+    const top = "/" + path.split("/")[1];
+    return top !== path && tr.open.has(top) && !tr.closed.has(top) && (cur === path || cur.startsWith(path + "/"));
+  },
+
+  treeToggle(path) {
+    const tr = this.treeState();
+    if (this.treeOpen(path, this.pane?.path || "/")) {
+      tr.open.delete(path);
+      tr.closed.add(path);
+    } else {
+      tr.open.add(path);
+      tr.closed.delete(path);
+    }
+    try {
+      localStorage.setItem("synofile.tree", JSON.stringify([...tr.open].slice(-200)));
+    } catch {}
+    this.renderSidebar();
+  },
+
+  /** The subfolders of `path`, or undefined while they are read. */
+  treeKids(path) {
+    const tr = this.treeState();
+    if (tr.kids.has(path)) return tr.kids.get(path);
+    if (!tr.loading.has(path)) {
+      tr.loading.add(path);
+      api.list(path).then(
+        (data) => {
+          const dirs = data.entries.filter((e) => isDirLike(e) && !isDsmFolder(e) && !isSystemFolder(e.name));
+          tr.kids.set(path, dirs.map((e) => e.name).sort(collator.compare));
+        },
+        () => tr.kids.set(path, []),
+      ).finally(() => {
+        tr.loading.delete(path);
+        this.renderSidebar();
+      });
+    }
+    return undefined;
+  },
+
+  /** Folders changed on the NAS: their subfolders are read again. */
+  treeForget(paths) {
+    const tr = this.tree;
+    if (!tr) return;
+    let hit = false;
+    for (const p of paths) hit = tr.kids.delete(p) || hit;
+    if (hit) this.renderSidebar();
+  },
+
+  treeHTML(path, depth, cur) {
+    const kids = this.treeKids(path);
+    const pad = `style="padding-left:${10 + depth * 14}px"`;
+    if (kids === undefined) return `<div class="tree-wait" ${pad}>…</div>`;
+    const shown = kids.filter((n) => prefs.showHidden || !n.startsWith("."));
+    let html = "";
+    for (const name of shown.slice(0, 400)) {
+      const p = `${path}/${name}`;
+      const open = this.treeOpen(p, cur);
+      const known = this.tree.kids.get(p);
+      const leaf = known !== undefined && !known.some((n) => prefs.showHidden || !n.startsWith("."));
+      html += `<button class="side-item tree-item ${cur === p ? "active" : ""}" data-path="${esc(p)}" ${pad}><span class="si-tree ${open ? "open" : ""} ${leaf ? "leaf" : ""}" data-tree="${esc(p)}">${svg("chev")}</span><i class="gi">${folderGlyphHTML(p, name, glyph({ kind: "d", name }))}</i><span class="si-text"><span class="si-name">${esc(name)}</span></span></button>`;
+      if (open) html += this.treeHTML(p, depth + 1, cur);
+    }
+    if (shown.length > 400) html += `<div class="tree-wait" ${pad}>… ${t("e altri {n}", { n: shown.length - 400 })}</div>`;
+    return html;
+  },
+
   renderSidebar() {
     const el = $("#sidebar");
     const cur = this.pane?.path || "/";
-    const item = (path, name, gl, sub = "", extra = "", fav = null, gone = false) => {
-      const active = cur === path || (path !== "/" && cur.startsWith(path + "/") && !extra.includes("nested"));
+    const item = (path, name, gl, sub = "", extra = "", fav = null, gone = false, arrow = "") => {
+      // with its tree open, a shared folder is lit only when it is the folder shown
+      const active = cur === path || (path !== "/" && cur.startsWith(path + "/") && !extra.includes("nested") && !arrow.includes("open"));
       const favAttrs = fav === null ? "" : ` data-fav="${fav}" draggable="true"`;
-      return `<button class="side-item ${active ? "active" : ""} ${gone ? "gone" : ""}" data-path="${esc(path)}"${favAttrs}><i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
+      return `<button class="side-item ${active ? "active" : ""} ${gone ? "gone" : ""} ${arrow ? "has-tree" : ""}" data-path="${esc(path)}"${favAttrs}>${arrow}<i class="gi">${gl}</i><span class="si-text"><span class="si-name">${esc(name)}</span>${sub}</span>${extra.replace("nested", "")}</button>`;
     };
     let html = "";
     const favs = prefs.favorites || [];
@@ -217,7 +304,10 @@ export const sidebarMethods = {
       if (first.total && vol !== "home") html += `<div class="vol-bar ${used > 0.95 ? "full" : used > 0.85 ? "high" : ""}" style="margin:0 10px 6px"><div style="width:${(used * 100).toFixed(1)}%"></div></div>`;
       for (const s of list) {
         const badges = (s.encrypted ? `<span class="si-lock" title="${t("Cartella crittografata")}">${svg("lock")}</span>` : "") + (s.hidden ? `<span class="si-badge" title="${t("Nascosta in Rete")}">${t("nasc.")}</span>` : "") + this.ejectButton("/" + s.name);
-        html += item("/" + s.name, s.home ? t("Home ({u})", { u: this.user }) : s.name, folderGlyphHTML("/" + s.name, s.name, s.home ? shareGlyph("home") : shareGlyph(s.name)), s.comment ? `<span class="si-sub">${esc(s.comment)}</span>` : "", badges);
+        const top = "/" + s.name;
+        const open = this.treeOpen(top, cur);
+        html += item(top, s.home ? t("Home ({u})", { u: this.user }) : s.name, folderGlyphHTML(top, s.name, s.home ? shareGlyph("home") : shareGlyph(s.name)), s.comment ? `<span class="si-sub">${esc(s.comment)}</span>` : "", badges, null, false, `<span class="si-tree ${open ? "open" : ""}" data-tree="${esc(top)}" title="${t("Sottocartelle")}">${svg("chev")}</span>`);
+        if (open) html += this.treeHTML(top, 1, cur);
       }
     }
     html += `<div class="side-title conn-title"><span>${t("Connessioni")}</span><button class="side-add" title="${t("Nuova connessione")}">${svg("plus")}</button></div>`;
@@ -236,6 +326,12 @@ export const sidebarMethods = {
       if (saved) this.pane.go(startPath(saved));
     };
     this.bindConnDrag(el);
+    el.querySelectorAll(".si-tree").forEach((c) => {
+      c.onclick = (e) => {
+        e.stopPropagation();
+        if (!c.classList.contains("leaf")) this.treeToggle(c.dataset.tree);
+      };
+    });
     el.querySelectorAll(".si-eject").forEach((b) => {
       b.onclick = (e) => {
         e.stopPropagation();

@@ -9,6 +9,7 @@ import { baseName, parentOf, joinPath } from "./format.js";
 import { svg } from "./icons.js";
 import { $, toast } from "./ui.js";
 import * as transfers from "./transfers.js";
+import { initUndo } from "./undo.js";
 import { openSettings } from "./settings.js";
 import { moveFolderIcons } from "./iconpick.js";
 import { tabMethods } from "./tabs.js";
@@ -68,6 +69,7 @@ class App {
     this.bindGlobalDrop();
     this.bindUploadInputs();
     transfers.init(this);
+    initUndo(this);
     if (!init.shares) this.loadShares();
     if (!init.conns) this.loadConns();
     if (init.whoami) this.checkHealth(init.whoami);
@@ -181,6 +183,7 @@ class App {
 
   /** Reloads every pane showing one of these folders. */
   refreshFolders(paths) {
+    this.treeForget(paths);
     const set = new Set(paths);
     for (const p of this.allPanes()) if (set.has(p.path)) p.reload();
   }
@@ -191,6 +194,8 @@ class App {
     // a deletion fills or empties a bin: the share's top shows which
     if (job.op === "delete") for (const p of job.info.sources) dirs.add("/" + p.split("/")[1]);
     if (job.info.dest) dirs.add(job.info.dest);
+    // a synchronization wrote anywhere under its destination
+    if (job.op === "sync") for (const p of this.allPanes()) if (p.path.startsWith(job.info.dest + "/")) dirs.add(p.path);
     this.refreshFolders([...dirs]);
     this.loadShares();
   }

@@ -243,6 +243,7 @@ impl Engine {
         match self.spec.op {
             Op::Delete => self.delete(),
             Op::Copy | Op::Move => self.transfer(),
+            Op::Sync => self.sync(),
             Op::Compress => self.compress(),
             Op::Extract => self.extract(),
             Op::Cleanup => {
@@ -280,6 +281,16 @@ impl Engine {
                 stack.push(dest.join(name));
             }
         }
+        // a synchronization wrote at the paths of its items, deep in dest
+        // (the daemon keeps them only for a synchronization's cleanup)
+        let mut dirs: Vec<PathBuf> = self.spec.members.iter().filter_map(|m| Path::new(m).parent().map(|p| dest.join(p))).collect();
+        dirs.sort();
+        dirs.dedup();
+        for d in dirs {
+            clean(&d, false, &mut stack, &mut seen);
+        }
+        // and the folders it was copying, in full
+        stack.extend(self.spec.members.iter().map(|m| dest.join(m)).filter(|p| p.is_dir()));
         while let Some(dir) = stack.pop() {
             if seen > 500_000 {
                 return;
@@ -374,6 +385,110 @@ impl Engine {
         self.p.current_size = 0;
         self.p.current_done = 0;
         Ok(())
+    }
+
+    /// Folder synchronization: each of `members`, a path under the source,
+    /// copied to the same path under dest (its folders made as needed),
+    /// replacing a file there. Nothing is deleted here: what the other side
+    /// does not have goes to the recycle bin with a deletion job of its own.
+    fn sync(&mut self) -> Step<()> {
+        let (Some(dest), [root]) = (self.spec.dest.clone(), self.spec.sources.as_slice()) else {
+            self.fatal = Some(t!("sincronizzazione non valida", "invalid synchronization"));
+            return Ok(());
+        };
+        let root = root.clone();
+        if !self.can_write(&dest) {
+            return Ok(());
+        }
+        // plain relative paths only: nothing may lead out of either folder
+        let rels: Vec<PathBuf> = self
+            .spec
+            .members
+            .iter()
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty() && p.components().all(|c| matches!(c, std::path::Component::Normal(_))))
+            .collect();
+        let sources: Vec<PathBuf> = rels.iter().map(|r| root.join(r)).collect();
+        self.scan(&sources)?;
+        if !self.room_for(&sources, &dest) {
+            return Ok(());
+        }
+        self.p.phase = "copy".into();
+        let expect: std::collections::HashMap<String, super::protocol::Expect> =
+            self.spec.members.iter().cloned().zip(self.spec.expect.iter().copied()).collect();
+        for rel in rels {
+            let Some(name) = rel.file_name().map(OsStr::to_os_string) else { continue };
+            let src = root.join(&rel);
+            let dest_dir = rel.parent().map_or(dest.clone(), |p| dest.join(p));
+            if !self.sync_ready(&src, &dest_dir.join(&name), expect.get(rel.to_str().unwrap_or_default()))? {
+                match fs::symlink_metadata(&src) {
+                    Ok(meta) if meta.is_dir() => self.skip_tree(&src),
+                    Ok(meta) => self.skip(&meta),
+                    Err(_) => {}
+                }
+                continue;
+            }
+            if let Err(e) = fs::create_dir_all(&dest_dir) {
+                self.error(&dest_dir, &e);
+                match fs::symlink_metadata(&src) {
+                    Ok(meta) if meta.is_dir() => self.skip_tree(&src),
+                    Ok(meta) => self.skip(&meta),
+                    Err(_) => {}
+                }
+                continue;
+            }
+            self.item(&src, &dest_dir, &name, false, false)?;
+        }
+        self.p.current.clear();
+        self.p.current_size = 0;
+        self.p.current_done = 0;
+        Ok(())
+    }
+
+    /// Before a synchronized item is copied: both sides still as compared
+    /// (else it is skipped: a file changed meanwhile is never copied over),
+    /// and the file it replaces moved to the recycle bin first, when the
+    /// destination's shared folder has one. False: skip the item.
+    fn sync_ready(&mut self, src: &Path, target: &Path, expect: Option<&super::protocol::Expect>) -> Step<bool> {
+        self.checkpoint()?;
+        let changed = t!("cambiato dopo il confronto: saltato", "changed after the comparison: skipped");
+        let seen = |m: &Metadata| super::protocol::Seen { size: if m.is_dir() { 0 } else { m.len() }, mtime: m.mtime() };
+        let Ok(src_meta) = fs::symlink_metadata(src) else {
+            self.error_msg(src, changed);
+            return Ok(false);
+        };
+        let old = fs::symlink_metadata(target).ok();
+        if let Some(e) = expect {
+            let src_same = src_meta.is_dir() || e.src.is_none_or(|s| s == seen(&src_meta));
+            let dst_same = match (&e.dst, &old) {
+                (None, Some(_)) => false,
+                (Some(d), Some(m)) => m.is_dir() || *d == seen(m),
+                _ => true,
+            };
+            if !src_same || !dst_same {
+                self.error_msg(src, changed);
+                return Ok(false);
+            }
+        }
+        let Some(old) = old else { return Ok(true) };
+        if old.is_dir() || self.spec.recycle.is_empty() {
+            // a folder is merged into; without a bin the file is replaced as asked
+            return Ok(true);
+        }
+        match recycle_target(&self.spec.recycle, target) {
+            Bin::Recycle(root, rel) => match to_recycle(&root, &rel, target) {
+                Ok(()) => Ok(true),
+                Err(e) => {
+                    self.error_msg(target, t!("non va nel Cestino, quindi non viene sostituito: {}", "it cannot go to the recycle bin, so it is not replaced: {}", e));
+                    Ok(false)
+                }
+            },
+            Bin::Permanent => Ok(true),
+            Bin::Missing => {
+                self.error_msg(target, t!("il Cestino di DSM non può prenderlo, quindi non viene sostituito", "DSM's recycle bin cannot take it, so it is not replaced"));
+                Ok(false)
+            }
+        }
     }
 
     fn scan(&mut self, sources: &[PathBuf]) -> Step<()> {

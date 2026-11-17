@@ -7,7 +7,7 @@ import { t, count, LOCALE } from "./i18n.js";
 import { esc, size, sizeParts, ezaDate, relative, dateTime, duration, modeString, collator, joinPath, parentOf, baseName, int, isDirLike } from "./format.js";
 import { svg, iconHTML, glyph, colorClass, kindLabel, previewKind, shareGlyph, isDsmFolder } from "./icons.js";
 import { pickIcon } from "./iconpick.js";
-import { h, $, errorToast, toast } from "./ui.js";
+import { h, $, errorToast, toast, copyText } from "./ui.js";
 import { fuzzy, highlight } from "./fuzzy.js";
 import { isHeic, HEIC_LIMIT, fillHeic } from "./heic.js";
 import { rememberArchive } from "./archive.js";
@@ -28,6 +28,10 @@ const GRID_IMAGE_MAX = 8 * 1024 * 1024;
 const GRID_IMAGE_MAX_SLOW = 2 * 1024 * 1024;
 // the info panel waits for the selection to settle before reading the item
 const INFO_DELAY = 120;
+// [value, label]: the names of the algorithms are not translated
+const SUM_ALGOS = "sha256 SHA-256|sha1 SHA-1|md5 MD5|xxh128 XXH128".split("|").map((x) => x.split(" "));
+// the algorithm last chosen, for the next file
+let sumAlgo = "sha256";
 
 // camera RAW files: not shown as pictures, but their EXIF is worth reading
 const RAW_EXT = /\.(cr2|cr3|nef|nrw|arw|srf|sr2|dng|raf|orf|rw2|pef|srw|iiq|3fr|x3f)$/i;
@@ -82,12 +86,15 @@ export class Pane {
     this.entries = [];
     this.visible = [];
     this.sel = new Set();
+    // checksums computed in the info panel, by path, size, date and algorithm
+    this.sums = new Map();
     this.cursor = 0;
     this.cursorShown = false; // the cursor stays unseen on opening a folder, until moved
     this.anchor = 0;
     this.filter = "";
     this.searchMode = false;
-    this.search = null; // {query, results, partial, controller}
+    this.search = null; // {query, results, partial, controller}; flat: the flat view
+    this.flat = false;
     this.loading = false;
     this.error = null;
     this.writable = false;
@@ -220,6 +227,7 @@ export class Pane {
       this.view = own?.view || prefs.view;
       this.sort = { ...(own?.sort || prefs.sort) };
     }
+    this.flat = false;
     this.clearFilter(false);
     this.sel.clear();
     this.cursor = 0;
@@ -255,6 +263,7 @@ export class Pane {
     const keep = new Set(this.sel);
     const cursorPath = this.visible[this.cursor]?.path;
     await this.load();
+    if (this.flat) await this.runFlat();
     this.sel = new Set([...keep].filter((p) => this.visible.some((e) => e.path === p)));
     const i = this.visible.findIndex((e) => e.path === cursorPath);
     if (i >= 0) this.cursor = i;
@@ -399,7 +408,60 @@ export class Pane {
     this.render();
   }
 
+  /** Every file under this folder in one list, with the folder each is in (the flat view). */
+  setFlat(on) {
+    if (on && (this.path === "/" || this.archive || isRemote(this.path))) {
+      toast(t("La vista piatta funziona nelle cartelle del NAS"));
+      on = false;
+    }
+    if (on === this.flat) return;
+    this.flat = on;
+    this.searchMode = false;
+    $(".filter-box .mode", this.el).classList.remove("on");
+    this.filterInput.placeholder = t("Filtra");
+    this.search?.controller?.abort();
+    this.search = null;
+    this.sel.clear();
+    this.cursor = 0;
+    if (on) this.runFlat();
+    else {
+      this.refilter();
+      this.render();
+    }
+    this.app.paneChanged(this);
+  }
+
+  async runFlat() {
+    this.search?.controller?.abort();
+    const controller = new AbortController();
+    const flat = { flat: true, query: "", results: [], partial: false, controller, running: true };
+    this.search = flat;
+    this.loading = true;
+    this.refilter();
+    this.render();
+    try {
+      const r = await api.search(this.path, "*", controller.signal, { files: 1, limit: 50000, budget: 40 });
+      if (this.search !== flat) return;
+      flat.results = r.hits.map((hit) => {
+        const dir = hit.dir ? joinPath(this.path, hit.dir) : this.path;
+        return { ...hit, dir: hit.dir || ".", path: joinPath(dir, hit.name) };
+      });
+      flat.partial = r.partial;
+      flat.scanned = r.scanned;
+    } catch (e) {
+      if (e.name !== "AbortError") errorToast(e);
+    } finally {
+      if (this.search === flat) {
+        flat.running = false;
+        this.loading = false;
+        this.refilter();
+        this.render();
+      }
+    }
+  }
+
   setSearchMode(on) {
+    if (on) this.flat = false;
     if (on && isRemote(this.path)) {
       toast(t("Sulle connessioni remote c'è solo il filtro della cartella"));
       on = false;
@@ -450,6 +512,15 @@ export class Pane {
   }
 
   clearFilter(render = true) {
+    // the flat view: the filter goes first, the view at the next Escape
+    if (this.flat && this.filter && render) {
+      this.filterInput.value = "";
+      this.filter = "";
+      this.refilter();
+      this.render();
+      return;
+    }
+    if (this.flat && render) return this.setFlat(false);
     this.filterInput.value = "";
     this.filter = "";
     this.search?.controller?.abort();
@@ -830,7 +901,9 @@ export class Pane {
       const bytes = selList.reduce((a, e) => a + (isDirLike(e) ? this.dirSizes.get(e.path)?.bytes || 0 : e.size), 0);
       html += `<span><b>${count(selList.length, "selezionato", "selezionati", int)}</b> · ${size(bytes)}</span>`;
     }
-    if (this.search) {
+    if (this.search?.flat) {
+      html += `<span>${this.search.running ? t("lettura delle sottocartelle…") : t("vista piatta")}${this.search.partial ? " · " + t("risultati parziali") : ""}</span>`;
+    } else if (this.search) {
       html += `<span>${this.search.running ? t("ricerca in corso…") : t("{n} elementi esaminati", { n: int(this.search.scanned || 0) })}${this.search.partial ? " · " + t("risultati parziali") : ""}</span>`;
     }
     html += `<span class="grow"></span>`;
@@ -864,6 +937,8 @@ export class Pane {
     if (!prefs.info) return;
     // a folder just opened shows itself, not its first item
     const list = this.selected();
+    // a checksum being computed goes on only while its file is shown
+    if (this.sumRun && !(list.length === 1 && list[0].path === this.sumRun.path)) this.sumRun.controller.abort();
     if (!list.length) {
       const name = (this.path.split("/").length === 2 && isRemote(this.path) ? this.app.connName(this.path) : baseName(this.path)) || t("Cartelle condivise");
       const dirEntry = { name, kind: "d", mode: 0o755, path: this.path };
@@ -914,13 +989,17 @@ export class Pane {
         ${isDirLike(e) ? "" : `<button class="btn small dl">${svg("download")} ${t("Scarica")}</button><button class="btn small info-preview">${svg("eye")} ${t("Anteprima")}</button>`}
         ${this.app.editable(this, e) ? `<button class="btn small info-edit">${svg("rename")} ${t("Modifica")}</button>` : ""}
         <button class="btn small cp">${svg("link")} ${t("Copia percorso")}</button>
-      </div>`;
+      </div>
+      ${e.kind === "f" && !isRemote(e.path) && !this.archive ? `<div class="checksum"><div class="sum-row"><span class="sum-k">${t("Checksum")}</span>
+        <select class="input sum-algo" aria-label="${t("Algoritmo")}">${SUM_ALGOS.map(([v, l]) => `<option value="${v}"${v === sumAlgo ? " selected" : ""}>${l}</option>`).join("")}</select>
+        <button class="btn small sum-go">${t("Calcola")}</button></div><div class="sum-out"></div></div>` : ""}`;
     $(".calc", this.infoEl)?.addEventListener("click", () => this.app.computeSizes(this, [e]));
     if (pickable) $(".preview-box", this.infoEl).onclick = (ev) => pickIcon(ev.currentTarget, e.path);
     $(".dl", this.infoEl)?.addEventListener("click", () => this.app.download([e]));
     $(".info-preview", this.infoEl)?.addEventListener("click", () => this.app.quickLook(this));
     $(".info-edit", this.infoEl)?.addEventListener("click", () => this.app.edit(this, e));
     $(".cp", this.infoEl).onclick = () => this.app.copyPaths([e], "nas");
+    if ($(".checksum", this.infoEl)) this.bindChecksum(e);
     fillHeic(this.infoEl, () => e, 1024);
     if (e.share) {
       $(".owner", this.infoEl).textContent = e.share.comment || "—";
@@ -947,6 +1026,80 @@ export class Pane {
     } finally {
       if (this.infoAbort === controller) this.infoAbort = null;
     }
+  }
+
+  /**
+   * The info panel's checksum: computed on the NAS when asked (a big file
+   * takes a while, with a bar), kept for the file as long as it does not
+   * change, copied with a click, compared with a pasted one.
+   */
+  bindChecksum(e) {
+    const box = $(".checksum", this.infoEl);
+    const algoSel = $(".sum-algo", box);
+    const go = $(".sum-go", box);
+    const out = $(".sum-out", box);
+    const key = () => `${e.path}\n${e.size}\n${e.mtime}\n${algoSel.value}`;
+    const show = (hash) => {
+      out.innerHTML = `<button class="sum-hash" title="${t("Copia")}">${esc(hash)}</button>
+        <input class="input sum-cmp" placeholder="${t("Incolla un checksum da confrontare")}" spellcheck="false" autocomplete="off"><div class="sum-verdict" role="status"></div>`;
+      $(".sum-hash", out).onclick = () => copyText(hash).then(() => toast(t("Checksum copiato")));
+      const cmp = $(".sum-cmp", out);
+      cmp.oninput = () => {
+        const v = cmp.value.trim().toLowerCase().split(/\s/)[0];
+        const verdict = $(".sum-verdict", out);
+        verdict.className = "sum-verdict" + (v ? (v === hash ? " ok" : " bad") : "");
+        verdict.textContent = v ? (v === hash ? t("Uguale") : t("Diverso")) : "";
+      };
+    };
+    // the panel is drawn again often: what it shows comes from the pane's state
+    const refresh = () => {
+      if (!box.isConnected) return;
+      const known = this.sums.get(key());
+      const run = this.sumRun?.key === key() ? this.sumRun : null;
+      go.hidden = !!(known || run);
+      if (known) show(known);
+      else if (run) {
+        if (!$(".sum-prog", out)) {
+          out.innerHTML = `<div class="sum-prog"><div class="pbar thin"><div class="fill"></div></div><button class="icon-btn sum-stop" title="${t("Annulla")}" aria-label="${t("Annulla")}">${svg("stop")}</button></div>`;
+          $(".sum-stop", out).onclick = () => run.controller.abort();
+        }
+        $(".pbar", out).style.setProperty("--p", `${run.pct}%`);
+      } else out.innerHTML = "";
+    };
+    algoSel.onchange = () => {
+      sumAlgo = algoSel.value;
+      this.sumRun?.controller.abort();
+      refresh();
+    };
+    go.onclick = async () => {
+      const run = (this.sumRun = { key: key(), path: e.path, pct: 0, controller: new AbortController() });
+      run.refresh = refresh;
+      refresh();
+      try {
+        let hash = null;
+        let failed = null;
+        await api.checksum(e.path, algoSel.value, (line) => {
+          if (line.size) {
+            run.pct = (line.done / line.size) * 100;
+            run.refresh();
+          }
+          if (line.hash) hash = line.hash;
+          if (line.error) failed = line.error;
+        }, run.controller.signal);
+        if (failed) throw new Error(failed);
+        if (!hash) throw new Error(t("risposta incompleta"));
+        this.sums.set(run.key, hash);
+        if (this.sums.size > 200) this.sums.delete(this.sums.keys().next().value);
+      } catch (err) {
+        if (!run.controller.signal.aborted) errorToast(err);
+      } finally {
+        if (this.sumRun === run) this.sumRun = null;
+      }
+      run.refresh();
+    };
+    // a run started before this drawing reports to it from now on
+    if (this.sumRun?.key === key()) this.sumRun.refresh = refresh;
+    refresh();
   }
 
   // ---------- pointer ----------
@@ -1229,6 +1382,8 @@ export class Pane {
 
   // ---------- inline rename ----------
   rename() {
+    const many = this.targets().filter((x) => !x.share);
+    if (many.length > 1) return this.app.renameMany(this, many);
     const e = this.visible[this.cursor];
     if (!e || e.share) return;
     this.app.renamePrompt(this, e);

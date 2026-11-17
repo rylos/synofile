@@ -179,6 +179,10 @@ impl Engine {
                 self.fatal = Some(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first"));
                 Ok(())
             }
+            Op::Sync => {
+                self.fatal = Some(t!("la sincronizzazione è tra cartelle del NAS", "synchronization is between folders of the NAS"));
+                Ok(())
+            }
         }
     }
 

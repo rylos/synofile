@@ -229,6 +229,9 @@ pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
+/// Whether two paths name one file: on exFAT, FAT or a case-folding
+/// folder `a.jpg` and `A.JPG` do, and renaming one into the other only
+/// changes how the name is written.
 fn same_file(a: &Path, b: &Path) -> bool {
     match (fs::symlink_metadata(a), fs::symlink_metadata(b)) {
         (Ok(x), Ok(y)) => x.dev() == y.dev() && x.ino() == y.ino(),
@@ -236,10 +239,99 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// A rename that only changes the case of a name, where the file system
+/// ignores case: through a hidden temporary name, as NOREPLACE refuses it.
+fn rename_case(from: &Path, to: &Path) -> io::Result<()> {
+    let name = from.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let temp = from.with_file_name(crate::names::part_name(&name, &format!("synofile-ren-{}", std::process::id())));
+    rename_noreplace(from, &temp)?;
+    rename_noreplace(&temp, to).inspect_err(|_| {
+        let _ = rename_noreplace(&temp, from);
+    })
+}
+
 pub fn rename(from: &Path, to: &Path) -> Result<(), ApiError> {
+    if from != to && same_file(from, to) {
+        return Ok(rename_case(from, to)?);
+    }
     rename_noreplace(from, to).map_err(|e| {
         if e.kind() == io::ErrorKind::AlreadyExists { ApiError::conflict(t!("esiste già un elemento con questo nome", "an item with this name already exists")) } else { e.into() }
     })
+}
+
+/// One rename of a batch: the old name, the new one, why it failed.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Renamed {
+    pub from: String,
+    pub to: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Renames several items of `dir` at once. A new name may be the old name
+/// of another item of the batch (a swap, a shift of numbers): those go
+/// through a hidden temporary name first. A new name already taken by
+/// something outside the batch fails that item alone; nothing is ever
+/// overwritten.
+pub fn rename_many(dir: &Path, pairs: &[(String, String)]) -> Vec<Renamed> {
+    use std::collections::{HashMap, HashSet};
+    const MAX: usize = 10000;
+    if pairs.len() > MAX {
+        return pairs.iter().map(|(a, b)| Renamed { from: a.clone(), to: b.clone(), error: Some(t!("troppi elementi in una volta (al massimo 10000)", "too many items at once (10000 at most)")) }).collect();
+    }
+    let olds: HashSet<&str> = pairs.iter().map(|(a, _)| a.as_str()).collect();
+    let mut seen: HashMap<&str, usize> = HashMap::new();
+    for (_, b) in pairs {
+        *seen.entry(b.as_str()).or_default() += 1;
+    }
+    let mut out: Vec<Renamed> = pairs.iter().map(|(a, b)| Renamed { from: a.clone(), to: b.clone(), error: None }).collect();
+    for r in out.iter_mut() {
+        let problem = if crate::shares::valid_name(&r.from).is_err() || crate::shares::valid_name(&r.to).is_err() {
+            Some(t!("nome non valido", "invalid name"))
+        } else if seen[r.to.as_str()] > 1 {
+            Some(t!("due elementi avrebbero lo stesso nome", "two items would get the same name"))
+        } else if fs::symlink_metadata(dir.join(&r.from)).is_err() {
+            Some(t!("non esiste più", "no longer exists"))
+        } else if r.from != r.to && !olds.contains(r.to.as_str()) && fs::symlink_metadata(dir.join(&r.to)).is_ok() && !same_file(&dir.join(&r.from), &dir.join(&r.to)) {
+            Some(t!("esiste già un elemento con questo nome", "an item with this name already exists"))
+        } else {
+            None
+        };
+        r.error = problem;
+    }
+    // a name that stays taken (its item fails or keeps its name) cannot be given away
+    let staying: HashSet<String> = out.iter().filter(|r| r.error.is_some() || r.from == r.to).map(|r| r.from.clone()).collect();
+    for r in out.iter_mut().filter(|r| r.error.is_none() && r.from != r.to && staying.contains(&r.to)) {
+        r.error = Some(t!("esiste già un elemento con questo nome", "an item with this name already exists"));
+    }
+    let tag = format!("synofile-ren-{}", std::process::id());
+    let wanted: HashSet<String> = out.iter().filter(|r| r.error.is_none() && r.from != r.to).map(|r| r.to.clone()).collect();
+    // first out of the way: the items whose name another item of the batch is to take
+    let mut parked: HashMap<String, std::path::PathBuf> = HashMap::new();
+    for r in out.iter_mut().filter(|r| r.error.is_none() && r.from != r.to) {
+        // a change of case alone, where case is ignored, goes through the side too
+        if !wanted.contains(&r.from) && !same_file(&dir.join(&r.from), &dir.join(&r.to)) {
+            continue;
+        }
+        let temp = dir.join(crate::names::part_name(&r.from, &tag));
+        match rename_noreplace(&dir.join(&r.from), &temp) {
+            Ok(()) => {
+                parked.insert(r.from.clone(), temp);
+            }
+            Err(e) => r.error = Some(describe(&e)),
+        }
+    }
+    for r in out.iter_mut().filter(|r| r.error.is_none() && r.from != r.to) {
+        let src = parked.get(&r.from).cloned().unwrap_or_else(|| dir.join(&r.from));
+        if let Err(e) = rename_noreplace(&src, &dir.join(&r.to)) {
+            r.error = Some(if e.kind() == io::ErrorKind::AlreadyExists { t!("esiste già un elemento con questo nome", "an item with this name already exists") } else { describe(&e) });
+            // back under its own name, if that is still free
+            if parked.contains_key(&r.from) {
+                let _ = rename_noreplace(&src, &dir.join(&r.from));
+            }
+        }
+    }
+    out
 }
 
 #[derive(Serialize, Default)]
@@ -343,7 +435,8 @@ fn glob_match(p: &[char], s: &[char]) -> bool {
 
 /// Walks below `root` breadth first, so near results come first, and
 /// returns the matches with their directory relative to `root`.
-pub fn search(root: &Path, pattern: &Pattern, limit: usize, budget: Duration) -> SearchResult {
+/// `files_only`: folders are walked but not listed (the flat view).
+pub fn search(root: &Path, pattern: &Pattern, limit: usize, budget: Duration, files_only: bool) -> SearchResult {
     let deadline = Instant::now() + budget;
     let mut hits = Vec::new();
     let mut scanned = 0u64;
@@ -363,7 +456,7 @@ pub fn search(root: &Path, pattern: &Pattern, limit: usize, budget: Duration) ->
             if kind.is_dir() {
                 queue.push_back(rel.join(&name));
             }
-            if pattern.matches(&name) {
+            if pattern.matches(&name) && !(files_only && kind.is_dir()) {
                 let Ok(meta) = fs::symlink_metadata(item.path()) else { continue };
                 hits.push(Hit { dir: rel.to_string_lossy().into_owned(), entry: entry(&item.path(), name, &meta) });
             }
@@ -420,6 +513,33 @@ mod tests {
         assert!(!g.matches("IMG_0001.jpeg"));
         assert!(Pattern::new("img_00??.*").matches("IMG_0042.heic"));
         assert!(!Pattern::new("  ").matches("x"));
+    }
+
+    #[test]
+    fn renames_many_with_swaps_and_shifts() {
+        let dir = std::env::temp_dir().join(format!("synofile-many-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for n in ["a", "b", "1", "2", "3", "x", "taken"] {
+            fs::write(dir.join(n), n).unwrap();
+        }
+        let p = |a: &str, b: &str| (a.to_string(), b.to_string());
+        // a⇄b, 1→2→3→4, x onto a name outside the batch
+        let out = rename_many(&dir, &[p("a", "b"), p("b", "a"), p("1", "2"), p("2", "3"), p("3", "4"), p("x", "taken")]);
+        let read = |n: &str| fs::read_to_string(dir.join(n)).unwrap();
+        assert_eq!((read("a"), read("b")), ("b".into(), "a".into()));
+        assert_eq!((read("2"), read("3"), read("4")), ("1".into(), "2".into(), "3".into()));
+        assert!(!dir.join("1").exists());
+        assert_eq!(read("x"), "x");
+        assert_eq!(read("taken"), "taken");
+        assert_eq!(out.iter().filter(|r| r.error.is_some()).count(), 1);
+        // two onto one name: neither goes
+        let out = rename_many(&dir, &[p("a", "z"), p("b", "z")]);
+        assert!(out.iter().all(|r| r.error.is_some()));
+        assert!(dir.join("a").exists() && dir.join("b").exists());
+        // nothing hidden left behind
+        assert!(fs::read_dir(&dir).unwrap().flatten().all(|e| !e.file_name().to_string_lossy().starts_with('.')));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

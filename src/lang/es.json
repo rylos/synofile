@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "la papelera de reciclaje de DSM no puede aceptarlo (¿alcanzado a través de un enlace simbólico fuera de la carpeta compartida?): no se ha eliminado",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "la clave del servidor aún no está verificada: abre Editar conexión y guarda",
  "la chiave delle connessioni è danneggiata": "la clave de las conexiones está dañada",
- "pulizia dei file temporanei in corso: riprova tra poco": "se están limpiando los archivos temporales: inténtalo de nuevo en un momento"
+ "pulizia dei file temporanei in corso: riprova tra poco": "se están limpiando los archivos temporales: inténtalo de nuevo en un momento",
+ "il checksum si calcola solo sui file": "la suma de comprobación solo se calcula en archivos",
+ "il checksum non si calcola dentro un archivio": "la suma de comprobación no se calcula dentro de un archivo comprimido",
+ "due elementi avrebbero lo stesso nome": "dos elementos tendrían el mismo nombre",
+ "qui non si può rinominare": "aquí no se puede renombrar",
+ "i duplicati si cercano in una cartella": "los duplicados se buscan en una carpeta",
+ "i duplicati non si cercano dentro un archivio": "no se buscan duplicados dentro de un archivo comprimido",
+ "dentro un archivio non si sincronizza": "no se sincroniza dentro de un archivo comprimido",
+ "la sincronizzazione è tra cartelle del NAS": "la sincronización es entre carpetas del NAS",
+ "si confrontano due cartelle": "se comparan dos carpetas",
+ "sincronizzazione non valida": "sincronización no válida",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "una carpeta no se sincroniza con otra que contiene o que la contiene",
+ "troppi elementi in una volta (al massimo 10000)": "demasiados elementos a la vez (10000 como máximo)",
+ "cambiato dopo il confronto: saltato": "cambiado después de la comparación: omitido",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "la Papelera de DSM no puede tomarlo, así que no se reemplaza",
+ "non va nel Cestino, quindi non viene sostituito: {}": "no puede ir a la Papelera, así que no se reemplaza: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "el destino ya no está disponible: ¿disco desconectado o red caída?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "el origen ya no está disponible: ¿disco desconectado o red caída?"
 }

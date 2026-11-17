@@ -224,6 +224,9 @@ struct NewJob {
     /// extract: only these items (paths inside the archive), each into dest
     #[serde(default)]
     members: Vec<String>,
+    /// sync: each member's two sides as compared
+    #[serde(default)]
+    expect: Vec<crate::jobs::protocol::Expect>,
 }
 
 fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &NewJob) -> Result<Spec, ApiError> {
@@ -249,6 +252,14 @@ fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &
             Ok((crate::remote::join(&id, &parts), top))
         }))
     };
+    if body.op == Op::Sync {
+        if body.sources.len() != 1 || body.members.is_empty() {
+            return Err(ApiError::bad_request(t!("sincronizzazione non valida", "invalid synchronization")));
+        }
+        if body.sources.iter().chain(&body.dest).any(|p| crate::remote::split(p).is_some()) {
+            return Err(ApiError::bad_request(t!("la sincronizzazione è tra cartelle del NAS", "synchronization is between folders of the NAS")));
+        }
+    }
     if matches!(body.op, Op::Compress | Op::Extract) && body.sources.iter().chain(&body.dest).any(|p| crate::remote::split(p).is_some()) {
         return Err(ApiError::bad_request(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first")));
     }
@@ -262,7 +273,8 @@ fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &
             continue;
         }
         let r = shares::resolve(shares, vpath)?;
-        if r.is_root() {
+        // a synchronization reads a whole shared folder, it does not move it
+        if r.is_root() && body.op != Op::Sync {
             return Err(ApiError::bad_request(t!("una cartella condivisa non si copia, sposta o elimina da qui", "a shared folder cannot be copied, moved or deleted from here")));
         }
         if body.op == Op::Delete && !body.permanent && r.share.recycle {
@@ -292,6 +304,25 @@ fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &
     if let Some(name) = &body.name {
         shares::valid_name(name)?;
     }
+    if body.op == Op::Sync
+        && let Some(d) = &dest
+        && (d.starts_with(&sources[0]) || sources[0].starts_with(d))
+    {
+        return Err(ApiError::bad_request(t!("una cartella non si sincronizza con una che contiene o che sta dentro di lei", "a folder is not synchronized with one inside it or holding it")));
+    }
+    // a synchronization puts what it replaces into the destination's recycle bin
+    if body.op == Op::Sync
+        && let Some(d) = &body.dest
+    {
+        let r = shares::resolve(shares, d)?;
+        if r.share.recycle {
+            let root = match shares.iter().find(|s| s.name == "homes").filter(|_| r.share.home) {
+                Some(homes) => RecycleRoot { name: homes.name.clone(), path: homes.path.clone() },
+                None => RecycleRoot { name: r.share.name.clone(), path: r.share.path.clone() },
+            };
+            recycle.push(root);
+        }
+    }
     if body.op == Op::Extract && sources.len() != 1 {
         return Err(ApiError::bad_request(t!("si estrae un archivio alla volta", "one archive at a time")));
     }
@@ -309,6 +340,7 @@ fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &
         into_folder: body.into_folder,
         password: body.password.clone(),
         members: body.members.iter().map(|m| valid_member(m)).collect::<Result<_, _>>()?,
+        expect: body.expect.clone(),
         remotes,
     })
 }
@@ -379,6 +411,12 @@ struct Paths {
     paths: Vec<String>,
 }
 
+#[derive(serde::Deserialize)]
+struct Renames {
+    /// [old name, new name] of items of the folder `path`
+    pairs: Vec<(String, String)>,
+}
+
 fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], conns: &[crate::remote::Conn]) -> Result<(), ApiError> {
     let path_param = |name: &str| -> Result<PathBuf, ApiError> { Ok(shares::resolve(shares, req.require(name)?)?.real) };
     match req.route.as_str() {
@@ -419,6 +457,30 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
                 return reply(out, &json!({}));
             }
             reply(out, &crate::media::describe(&real))
+        }
+        "checksum" => {
+            let real = path_param("path")?;
+            // the archive itself is a file like any other; what is inside it is not
+            if archive::locate(&real).is_some_and(|(_, inner)| !inner.is_empty()) {
+                return Err(ApiError::bad_request(t!("il checksum non si calcola dentro un archivio", "a checksum is not computed inside an archive")));
+            }
+            crate::checksum::send(out, &real, req.require("algo")?)
+        }
+        "compare" => {
+            let a = shares::resolve(shares, req.require("a")?)?.real;
+            let b = shares::resolve(shares, req.require("b")?)?.real;
+            if archive::locate(&a).is_some() || archive::locate(&b).is_some() {
+                return Err(ApiError::bad_request(t!("dentro un archivio non si sincronizza", "nothing is synchronized inside an archive")));
+            }
+            crate::compare::send(out, &a, &b)
+        }
+        "duplicates" => {
+            let root = path_param("path")?;
+            if archive::locate(&root).is_some() {
+                return Err(ApiError::bad_request(t!("i duplicati non si cercano dentro un archivio", "duplicates are not looked for inside an archive")));
+            }
+            let min = req.param("min").and_then(|m| m.parse().ok()).unwrap_or(1);
+            crate::dupes::send(out, &root, req.param("by").unwrap_or("content"), min)
         }
         "usage" => {
             method(req, "POST")?;
@@ -469,15 +531,26 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
             fsops::rename(&r.real, &target)?;
             reply(out, &json!({ "ok": true }))
         }
+        "renames" => {
+            method(req, "POST")?;
+            let r = shares::resolve(shares, req.require("path")?)?;
+            if archive::locate(&r.real).is_some() {
+                return Err(ApiError::bad_request(t!("qui non si può rinominare", "nothing can be renamed here")));
+            }
+            let body: Renames = req.json()?;
+            reply(out, &json!({ "results": fsops::rename_many(&r.real, &body.pairs) }))
+        }
         "search" => {
             let root = path_param("path")?;
             if archive::locate(&root).is_some() {
                 return Err(ApiError::bad_request(t!("la ricerca nelle sottocartelle non funziona dentro un archivio", "subfolder search does not work inside an archive")));
             }
             let pattern = fsops::Pattern::new(req.require("q")?);
-            let limit = req.param("limit").and_then(|l| l.parse().ok()).unwrap_or(2000).min(10000);
+            let files_only = req.param("files") == Some("1");
+            // the flat view lists a whole tree: more rows than a search
+            let limit = req.param("limit").and_then(|l| l.parse().ok()).unwrap_or(2000).min(if files_only { 50000 } else { 10000 });
             let budget = req.param("budget").and_then(|b| b.parse().ok()).unwrap_or(15u64).clamp(1, 60);
-            reply(out, &fsops::search(&root, &pattern, limit, Duration::from_secs(budget)))
+            reply(out, &fsops::search(&root, &pattern, limit, Duration::from_secs(budget), files_only))
         }
         "download" => {
             if let Some(list) = req.param("paths") {

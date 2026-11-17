@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "a reciclagem do DSM não o pode aceitar (alcançado através de uma ligação simbólica fora da pasta partilhada?): não foi eliminado",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "a chave do servidor ainda não está verificada: abre Editar ligação e guarda",
  "la chiave delle connessioni è danneggiata": "a chave das ligações está danificada",
- "pulizia dei file temporanei in corso: riprova tra poco": "a limpeza dos ficheiros temporários está em curso: tenta novamente daqui a pouco"
+ "pulizia dei file temporanei in corso: riprova tra poco": "a limpeza dos ficheiros temporários está em curso: tenta novamente daqui a pouco",
+ "il checksum si calcola solo sui file": "a soma de verificação só se calcula em ficheiros",
+ "il checksum non si calcola dentro un archivio": "a soma de verificação não se calcula dentro de um arquivo",
+ "due elementi avrebbero lo stesso nome": "dois elementos ficariam com o mesmo nome",
+ "qui non si può rinominare": "aqui não se pode mudar nomes",
+ "i duplicati si cercano in una cartella": "os duplicados procuram-se numa pasta",
+ "i duplicati non si cercano dentro un archivio": "não se procuram duplicados dentro de um arquivo",
+ "dentro un archivio non si sincronizza": "não se sincroniza dentro de um arquivo",
+ "la sincronizzazione è tra cartelle del NAS": "a sincronização é entre pastas do NAS",
+ "si confrontano due cartelle": "comparam-se duas pastas",
+ "sincronizzazione non valida": "sincronização inválida",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "uma pasta não se sincroniza com outra que contém ou que a contém",
+ "troppi elementi in una volta (al massimo 10000)": "demasiados elementos de uma vez (10000 no máximo)",
+ "cambiato dopo il confronto: saltato": "alterado depois da comparação: ignorado",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "a Reciclagem do DSM não o pode receber, por isso não é substituído",
+ "non va nel Cestino, quindi non viene sostituito: {}": "não pode ir para a Reciclagem, por isso não é substituído: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "o destino já não está disponível: disco desligado ou rede em baixo?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "a origem já não está disponível: disco desligado ou rede em baixo?"
 }

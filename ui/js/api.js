@@ -158,6 +158,38 @@ export async function call(route, opts = {}) {
 }
 
 /**
+ * A call whose answer is JSON lines arriving over time: each goes to
+ * `onLine` as it comes. Errors before the stream starts throw as `call`'s.
+ */
+export async function stream(route, params, onLine, signal) {
+  const headers = token ? { "X-SYNO-TOKEN": token } : {};
+  const res = await fetch(url(route, params), { credentials: "same-origin", headers, signal });
+  const status = +res.headers.get("X-Synofile-Status") || res.status;
+  if (!res.ok) {
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {}
+    if (status === 401) notifyUnauth();
+    throw new ApiError(status, (data && data.error) || t("errore {n}", { n: status }), res.headers.get("X-Synofile-Auth") || "");
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let rest = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    rest += value;
+    let nl;
+    while ((nl = rest.indexOf("\n")) >= 0) {
+      const line = rest.slice(0, nl).trim();
+      rest = rest.slice(nl + 1);
+      if (line) onLine(JSON.parse(line));
+    }
+  }
+  if (rest.trim()) onLine(JSON.parse(rest));
+}
+
+/**
  * A call to DSM's own web API, with the user's session: what DSM's own
  * pages do (ejecting a USB drive). Resolves `data`, or throws with DSM's
  * error code.
@@ -191,12 +223,16 @@ export const api = {
   shares: () => call("shares"),
   list: (path) => call("list", { params: { path } }),
   stat: (path, signal) => call("stat", { params: { path }, signal }),
+  checksum: (path, algo, onLine, signal) => stream("checksum", { path, algo }, onLine, signal),
+  duplicates: (path, by, min, onLine, signal) => stream("duplicates", { path, by, min }, onLine, signal),
+  compare: (a, b, onLine, signal) => stream("compare", { a, b }, onLine, signal),
   media: (path, signal) => call("media", { params: { path }, signal }),
   usage: (paths) => call("usage", { body: { paths } }),
   space: (path) => call("space", { params: { path } }),
   mkdir: (path, name, parents) => call("mkdir", { params: { path, name, parents: parents ? 1 : undefined }, body: {} }),
   rename: (path, name) => call("rename", { params: { path, name }, body: {} }),
-  search: (path, q, signal) => call("search", { params: { path, q }, signal }),
+  renames: (path, pairs) => call("renames", { params: { path }, body: { pairs } }),
+  search: (path, q, signal, extra = {}) => call("search", { params: { path, q, ...extra }, signal }),
   text: (path) => call("text", { params: { path } }),
   editOpen: (path) => call("edit", { params: { path } }),
   editSave: (path, text, stamp, force) => call("edit/save", { params: { path, stamp, force: force ? 1 : undefined }, body: text, raw: true }),

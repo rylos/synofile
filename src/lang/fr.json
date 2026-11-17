@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "la corbeille de DSM ne peut pas le prendre (atteint par un lien symbolique hors du dossier partagé ?) : il n'a pas été supprimé",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "la clé du serveur n'est pas encore vérifiée : ouvre Modifier la connexion et enregistre",
  "la chiave delle connessioni è danneggiata": "la clé des connexions est endommagée",
- "pulizia dei file temporanei in corso: riprova tra poco": "nettoyage des fichiers temporaires en cours : réessaie dans un instant"
+ "pulizia dei file temporanei in corso: riprova tra poco": "nettoyage des fichiers temporaires en cours : réessaie dans un instant",
+ "il checksum si calcola solo sui file": "une somme de contrôle ne se calcule que sur des fichiers",
+ "il checksum non si calcola dentro un archivio": "pas de somme de contrôle à l'intérieur d'une archive",
+ "due elementi avrebbero lo stesso nome": "deux éléments auraient le même nom",
+ "qui non si può rinominare": "rien ne peut être renommé ici",
+ "i duplicati si cercano in una cartella": "les doublons se cherchent dans un dossier",
+ "i duplicati non si cercano dentro un archivio": "pas de recherche de doublons dans une archive",
+ "dentro un archivio non si sincronizza": "rien ne se synchronise à l'intérieur d'une archive",
+ "la sincronizzazione è tra cartelle del NAS": "la synchronisation se fait entre dossiers du NAS",
+ "si confrontano due cartelle": "on compare deux dossiers",
+ "sincronizzazione non valida": "synchronisation non valide",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "un dossier ne se synchronise pas avec un dossier qu'il contient ou qui le contient",
+ "troppi elementi in una volta (al massimo 10000)": "trop d'éléments à la fois (10000 au maximum)",
+ "cambiato dopo il confronto: saltato": "modifié après la comparaison : ignoré",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "la Corbeille de DSM ne peut pas le prendre, il n'est donc pas remplacé",
+ "non va nel Cestino, quindi non viene sostituito: {}": "impossible de le mettre dans la Corbeille, il n'est donc pas remplacé : {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "la destination n'est plus disponible : disque débranché ou réseau coupé ?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "la source n'est plus disponible : disque débranché ou réseau coupé ?"
 }

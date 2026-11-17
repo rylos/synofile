@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "kosz DSM nie może go przyjąć (osiągnięty przez dowiązanie symboliczne poza folderem współdzielonym?): nie został usunięty",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "klucz serwera nie jest jeszcze zweryfikowany: otwórz Edytuj połączenie i zapisz",
  "la chiave delle connessioni è danneggiata": "klucz połączeń jest uszkodzony",
- "pulizia dei file temporanei in corso: riprova tra poco": "trwa czyszczenie plików tymczasowych: spróbuj ponownie za chwilę"
+ "pulizia dei file temporanei in corso: riprova tra poco": "trwa czyszczenie plików tymczasowych: spróbuj ponownie za chwilę",
+ "il checksum si calcola solo sui file": "sumę kontrolną oblicza się tylko dla plików",
+ "il checksum non si calcola dentro un archivio": "sumy kontrolnej nie oblicza się wewnątrz archiwum",
+ "due elementi avrebbero lo stesso nome": "dwa elementy miałyby tę samą nazwę",
+ "qui non si può rinominare": "tutaj nie można zmieniać nazw",
+ "i duplicati si cercano in una cartella": "duplikatów szuka się w folderze",
+ "i duplicati non si cercano dentro un archivio": "duplikatów nie szuka się wewnątrz archiwum",
+ "dentro un archivio non si sincronizza": "wewnątrz archiwum nie można synchronizować",
+ "la sincronizzazione è tra cartelle del NAS": "synchronizacja działa między folderami NAS",
+ "si confrontano due cartelle": "porównuje się dwa foldery",
+ "sincronizzazione non valida": "nieprawidłowa synchronizacja",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "folderu nie synchronizuje się z folderem w nim ani z folderem nadrzędnym",
+ "troppi elementi in una volta (al massimo 10000)": "za dużo elementów naraz (najwyżej 10000)",
+ "cambiato dopo il confronto: saltato": "zmieniony po porównaniu: pominięty",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "Kosz DSM nie może go przyjąć, więc nie zostanie zastąpiony",
+ "non va nel Cestino, quindi non viene sostituito: {}": "nie może trafić do Kosza, więc nie zostanie zastąpiony: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "miejsce docelowe nie jest już dostępne: odłączony dysk lub awaria sieci?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "źródło nie jest już dostępne: odłączony dysk lub awaria sieci?"
 }

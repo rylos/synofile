@@ -539,14 +539,59 @@ fn follow(jobs: &Jobs, id: u64, stdout: std::process::ChildStdout) {
         }
     }
     if !done {
-        let mut list = jobs.lock().unwrap();
-        if let Some(job) = list.iter_mut().find(|j| j.view.id == id) {
-            job.sample(true);
-            job.view.msg = t!("il processo di copia si è interrotto inaspettatamente", "the copy process stopped unexpectedly");
-            job.set_state(State::Failed);
+        let mut cleanup = None;
+        {
+            let mut list = jobs.lock().unwrap();
+            if let Some(job) = list.iter_mut().find(|j| j.view.id == id) {
+                job.sample(true);
+                job.view.msg = stop_reason(&job.spec);
+                // like a job a restart cut short: its leftovers cleaned, Retry offered
+                job.view.interrupted = true;
+                let reachable = job.spec.dest.as_ref().is_some_and(|d| crate::remote::is_remote(d) || d.exists());
+                if job.spec.op != Op::Delete && reachable {
+                    let mut clean = job.spec.clone();
+                    clean.op = Op::Cleanup;
+                    if job.spec.op != Op::Sync {
+                        clean.members.clear();
+                    }
+                    job.cleaning = true;
+                    cleanup = Some((job.user.clone(), clean));
+                }
+                job.set_state(State::Failed);
+            }
+        }
+        if let Some((user, mut clean)) = cleanup {
+            if !clean.remotes.is_empty() {
+                clean.remotes = crate::remote::with_secrets(&user.name, &clean.remotes);
+            }
+            match start_worker(&user, &clean) {
+                Ok(mut child) => {
+                    drop(child.stdin.take());
+                    let _ = child.wait();
+                }
+                Err(err) => eprintln!("{} cleanup of job {id} failed: {err}", stamp()),
+            }
+            if let Some(job) = jobs.lock().unwrap().iter_mut().find(|j| j.view.id == id) {
+                job.cleaning = false;
+            }
+            // kept while cleaning, so a restart meanwhile would clean again
+            let _ = std::fs::remove_file(journal_path(id));
         }
     }
     schedule(jobs);
+}
+
+/// Why a worker ended without saying so: most often a disk that went away
+/// (DSM unmounts an unplugged USB drive and kills what writes to it).
+fn stop_reason(spec: &Spec) -> String {
+    let gone = |p: &std::path::Path| !crate::remote::is_remote(p) && !p.exists();
+    if spec.dest.as_deref().is_some_and(gone) {
+        return t!("la destinazione non è più disponibile: disco scollegato o rete caduta?", "the destination is no longer there: a drive unplugged or the network down?");
+    }
+    if !spec.sources.is_empty() && spec.sources.iter().all(|s| s.parent().is_some_and(gone)) {
+        return t!("l'origine non è più disponibile: disco scollegato o rete caduta?", "the source is no longer there: a drive unplugged or the network down?");
+    }
+    t!("il processo di copia si è interrotto inaspettatamente", "the copy process stopped unexpectedly")
 }
 
 // ---- the journal: jobs not finished yet, on disk ----
@@ -616,6 +661,10 @@ fn recover(jobs: &Jobs) {
             if needs_cleanup {
                 let mut clean = e.spec.clone();
                 clean.op = Op::Cleanup;
+                // an extraction's members are paths inside its archive, not under dest
+                if e.spec.op != Op::Sync {
+                    clean.members.clear();
+                }
                 cleanups.push((e.id, e.user.clone(), clean));
             }
             list.push_front(interrupted(e, needs_cleanup));

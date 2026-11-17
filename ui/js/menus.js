@@ -10,6 +10,10 @@ import { isBrowsable } from "./archive.js";
 import { openMenu, copyText } from "./ui.js";
 import { openSettings } from "./settings.js";
 import { isRemote } from "./conns.js";
+import { selectByPattern, selectDifferences } from "./select.js";
+import { undo, undoLabel } from "./undo.js";
+import { findDuplicates } from "./dupes.js";
+import { syncFolders } from "./sync.js";
 
 export const menuMethods = {
   contextMenu(pane, entry, x, y) {
@@ -31,6 +35,9 @@ export const menuMethods = {
         { label: t("Seleziona tutto"), key: "Ctrl+A", action: () => pane.selectAll() },
         { label: prefs.showHidden ? t("Nascondi i file nascosti") : t("Mostra i file nascosti"), icon: prefs.showHidden ? "eyeOff" : "eye", key: "Ctrl+H", action: () => this.toggleHidden() },
         { label: t("Calcola dimensione delle cartelle"), icon: "drive", action: () => this.computeSizes(pane, pane.visible) },
+        pane.path !== "/" && !pane.archive && !remote && { label: (pane.flat ? "✓ " : "") + t("Vista piatta (file delle sottocartelle)"), icon: "list", key: "Ctrl+Shift+F", action: () => pane.setFlat(!pane.flat) },
+        pane.path !== "/" && !pane.archive && !remote && { label: t("Trova duplicati…"), icon: "copy", action: () => findDuplicates(this, pane.path) },
+        this.canSync() && { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => syncFolders(this, ...this.current.panes) },
       pane.path !== "/" && !pane.archive && !remote && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(pane.path) },
         "-",
         !atRoot && { label: t("Copia percorso della cartella"), icon: "link", action: () => copyText(this.displayPath(pane.path)) },
@@ -77,12 +84,14 @@ export const menuMethods = {
       !share && other && { label: t("Scegli cartella…"), icon: "move", action: () => this.copyTo(pane, "copy") },
       "-",
       !many && !share && !ro && !fixed && { label: t("Rinomina"), icon: "rename", key: "F2", action: () => this.renamePrompt(pane, entry) },
+      many && !share && !ro && !bin && pane.writable !== false && { label: t("Rinomina {n}…", { n: count(list.length, "elemento", "elementi", int) }), icon: "rename", key: "F2", action: () => this.renameMany(pane, list) },
       !share && !bin && !ro && !fixed && { label: pane.recycle && !pane.path.includes("#recycle") ? t("Sposta nel Cestino") : t("Elimina"), icon: "trash", key: "Canc", danger: true, action: () => this.remove(pane) },
       !share && !bin && !ro && !fixed && pane.recycle && { label: t("Elimina definitivamente"), icon: "trash", key: "Shift+Canc", danger: true, action: () => this.remove(pane, true) },
       !many && entry.full !== undefined && !ro && !remote && { label: t("Svuota il Cestino"), icon: "trash", danger: true, action: () => this.emptyBin(entry.path) },
       "-",
       dir && { label: t("Calcola dimensione"), icon: "drive", action: () => this.computeSizes(pane, list) },
       !many && dir && !ro && !remote && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(entry.path) },
+      !many && dir && !ro && !remote && { label: t("Trova duplicati…"), icon: "copy", action: () => findDuplicates(this, entry.path) },
       !remote && { label: t("Copia percorso"), icon: "link", key: "Ctrl+Shift+C", action: () => this.copyPaths(list, "nas") },
       !remote && { label: t("Copia percorso di rete (\\\\NAS)"), icon: "link", action: () => this.copyPaths(list, "smb") },
       remote && { label: t("Copia indirizzo"), icon: "link", key: "Ctrl+Shift+C", action: () => this.copyPaths(list, "smb") },
@@ -108,12 +117,28 @@ export const menuMethods = {
     ]);
   },
 
+  /** Both panes on folders of the NAS, neither inside the other. */
+  canSync() {
+    const other = this.other();
+    if (!other) return false;
+    const ok = (p) => p.path !== "/" && !p.archive && !isRemote(p.path);
+    const [a, b] = [this.pane.path, other.path];
+    return ok(this.pane) && ok(other) && a !== b && !a.startsWith(b + "/") && !b.startsWith(a + "/");
+  },
+
   moreMenu(pane, anchor) {
     const r = anchor.getBoundingClientRect();
     const fav = (prefs.favorites || []).some((f) => f.path === pane.path);
+    const undoing = undoLabel();
     openMenu(r.right - 240, r.bottom + 4, [
+      { label: undoing ? t("Annulla: {s}", { s: undoing }) : t("Niente da annullare"), icon: "undo", key: "Ctrl+Z", disabled: !undoing, action: () => undo() },
+      "-",
       { label: t("Seleziona tutto"), key: "Ctrl+A", action: () => pane.selectAll() },
       { label: t("Inverti selezione"), key: "Ctrl+Shift+I", action: () => pane.invertSelection() },
+      { label: t("Seleziona per modello…"), icon: "filter", key: "+", action: () => selectByPattern(pane, "add") },
+      { label: t("Deseleziona per modello…"), key: "−", action: () => selectByPattern(pane, "remove") },
+      this.isSplit() && { label: t("Seleziona le differenze"), icon: "split", key: "Ctrl+Shift+D", action: () => selectDifferences(...this.current.panes) },
+      this.canSync() && { label: t("Sincronizza le cartelle…"), icon: "refresh", action: () => syncFolders(this, ...this.current.panes) },
       this.clipboard && { label: t("Incolla"), icon: "paste", key: "Ctrl+V", action: () => this.paste(pane) },
       this.clipboard && { label: t("Incolla con verifica"), icon: "shield", key: "Ctrl+Shift+V", action: () => this.paste(pane, pane.path, true) },
       "-",
@@ -126,6 +151,8 @@ export const menuMethods = {
       "-",
       { label: (prefs.sidebar ? "✓ " : "") + t("Barra laterale"), icon: "sidebar", key: "Ctrl+B", action: () => save({ sidebar: !prefs.sidebar }) },
       { label: t("Calcola dimensione delle cartelle"), icon: "drive", action: () => this.computeSizes(pane, pane.visible) },
+      pane.path !== "/" && !pane.archive && !isRemote(pane.path) && { label: (pane.flat ? "✓ " : "") + t("Vista piatta (file delle sottocartelle)"), icon: "list", key: "Ctrl+Shift+F", action: () => pane.setFlat(!pane.flat) },
+      pane.path !== "/" && !pane.archive && !isRemote(pane.path) && { label: t("Trova duplicati…"), icon: "copy", action: () => findDuplicates(this, pane.path) },
       pane.path !== "/" && !pane.archive && !isRemote(pane.path) && { label: t("Analisi spazio"), icon: "pie", action: () => this.analyseSpace(pane.path) },
       pane.path !== "/" && { label: fav ? t("Togli dai preferiti") : t("Aggiungi ai preferiti"), icon: "star", key: "Ctrl+D", action: () => this.toggleFavorite(pane.path) },
       pane.path !== "/" && !isRemote(pane.path) && { label: t("Apri in File Station"), icon: "external", action: () => this.fileStation(pane.path) },

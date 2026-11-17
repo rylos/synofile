@@ -11,7 +11,6 @@ import argparse
 import http.server
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -107,7 +106,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Connection", "close")
             self.close_connection = True
         self.end_headers()
-        shutil.copyfileobj(proc.stdout, self.wfile, 1 << 20)
+        # whatever the binary has written goes on at once: streamed answers
+        # (a checksum's progress) arrive as they do behind DSM's web server
+        while chunk := proc.stdout.read1(1 << 20):
+            self.wfile.write(chunk)
+            self.wfile.flush()
         proc.wait()
 
 

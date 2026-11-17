@@ -14,7 +14,9 @@ import { upload, fromInput } from "./uploads.js";
 import { quickLook } from "./preview.js";
 import { spaceAnalysis } from "./space.js";
 import { moveFolderIcons } from "./iconpick.js";
-import { serverAddress } from "./conns.js";
+import { serverAddress, isRemote } from "./conns.js";
+import { recordRename, recordNewFolder, recordTransfer } from "./undo.js";
+import { batchRename } from "./rename.js";
 
 export const actionMethods = {
   /** A text file the editor opens: not in an archive, 8 MB at most. */
@@ -148,7 +150,7 @@ export const actionMethods = {
   },
 
   /** `verify`: each file is read back and compared (xxHash3); a move deletes the originals only after that. */
-  transfer(op, paths, dest, verify = false) {
+  async transfer(op, paths, dest, verify = false) {
     if (!paths.length || !dest || dest === "/") return;
     if (archiveOf(dest)) return readOnlyToast();
     const from = archiveOf(paths[0]);
@@ -159,7 +161,17 @@ export const actionMethods = {
     }
     if (paths.some((p) => dest === p || dest.startsWith(p + "/"))) return toast(t("Una cartella non può finire dentro sé stessa"), { kind: "error" });
     if (op === "move" && paths.every((p) => parentOf(p) === dest)) return;
-    transfers.start({ op, sources: paths, dest, verify });
+    // for Ctrl+Z: only the names the destination did not have are undone
+    // (a folder merged into one already there would take its old contents back too)
+    let fresh = null;
+    if (!isRemote(dest)) {
+      try {
+        const taken = new Set((await api.exists(dest, paths.map(baseName))).taken.map((x) => x.name));
+        fresh = new Set(paths.map(baseName).filter((n) => !taken.has(n)));
+      } catch {}
+    }
+    const id = await transfers.start({ op, sources: paths, dest, verify });
+    if (fresh) recordTransfer(id, op, paths, dest, fresh);
   },
 
   async copyTo(pane, op, verify = false) {
@@ -224,6 +236,14 @@ export const actionMethods = {
     if (ok) transfers.start({ op: "delete", sources: entries.map((e) => joinPath(bin, e.name)), permanent: true });
   },
 
+  /** Several items: the batch rename dialog. */
+  renameMany(pane, list) {
+    if (pane.archive) return readOnlyToast();
+    list = list.filter((e) => !e.readonly && !isDsmFolder(e));
+    if (!list.length || pane.writable === false) return;
+    batchRename(this, pane, list);
+  },
+
   async renamePrompt(pane, e) {
     if (pane.archive) return readOnlyToast();
     if (e.readonly || isDsmFolder(e) || pane.writable === false) return;
@@ -241,6 +261,7 @@ export const actionMethods = {
     if (!name || name === e.name) return;
     try {
       await api.rename(e.path, name);
+      recordRename([[e.path, name]]);
       if (isDirLike(e)) moveFolderIcons(e.path, joinPath(parentOf(e.path), name));
       await pane.reload();
       pane.selectPath(joinPath(parentOf(e.path), name));
@@ -257,6 +278,7 @@ export const actionMethods = {
     if (!name) return;
     try {
       await api.mkdir(pane.path, name);
+      recordNewFolder(joinPath(pane.path, name));
       await pane.reload();
       pane.selectPath(joinPath(pane.path, name));
     } catch (err) {

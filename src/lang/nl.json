@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "de prullenbak van DSM kan het niet opnemen (bereikt via een symbolische koppeling buiten de gedeelde map?): het is niet verwijderd",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "de sleutel van de server is nog niet gecontroleerd: open Verbinding bewerken en sla op",
  "la chiave delle connessioni è danneggiata": "de sleutel van de verbindingen is beschadigd",
- "pulizia dei file temporanei in corso: riprova tra poco": "de tijdelijke bestanden worden nog opgeruimd: probeer het zo opnieuw"
+ "pulizia dei file temporanei in corso: riprova tra poco": "de tijdelijke bestanden worden nog opgeruimd: probeer het zo opnieuw",
+ "il checksum si calcola solo sui file": "een controlesom wordt alleen voor bestanden berekend",
+ "il checksum non si calcola dentro un archivio": "binnen een archief wordt geen controlesom berekend",
+ "due elementi avrebbero lo stesso nome": "twee items zouden dezelfde naam krijgen",
+ "qui non si può rinominare": "hier kan niets worden hernoemd",
+ "i duplicati si cercano in una cartella": "duplicaten worden in een map gezocht",
+ "i duplicati non si cercano dentro un archivio": "binnen een archief worden geen duplicaten gezocht",
+ "dentro un archivio non si sincronizza": "binnen een archief wordt niet gesynchroniseerd",
+ "la sincronizzazione è tra cartelle del NAS": "synchronisatie gaat tussen mappen van de NAS",
+ "si confrontano due cartelle": "er worden twee mappen vergeleken",
+ "sincronizzazione non valida": "ongeldige synchronisatie",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "een map wordt niet gesynchroniseerd met een map erin of eromheen",
+ "troppi elementi in una volta (al massimo 10000)": "te veel items tegelijk (hoogstens 10000)",
+ "cambiato dopo il confronto: saltato": "gewijzigd na de vergelijking: overgeslagen",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "de Prullenbak van DSM kan het niet opnemen, dus het wordt niet vervangen",
+ "non va nel Cestino, quindi non viene sostituito: {}": "kan niet naar de Prullenbak, dus het wordt niet vervangen: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "de bestemming is niet meer beschikbaar: schijf losgekoppeld of netwerk weg?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "de bron is niet meer beschikbaar: schijf losgekoppeld of netwerk weg?"
 }

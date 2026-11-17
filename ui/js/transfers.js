@@ -32,6 +32,7 @@ const OP = {
   upload: { icon: "upload", running: "Caricamento in corso", done: "Caricamento completato", noun: "Caricamento" },
   compress: { icon: "archive", running: "Compressione in corso", done: "Archivio creato", noun: "Compressione" },
   extract: { icon: "archive", running: "Estrazione in corso", done: "Estrazione completata", noun: "Estrazione" },
+  sync: { icon: "refresh", running: "Sincronizzazione in corso", done: "Sincronizzazione completata", noun: "Sincronizzazione" },
 };
 const STATE = {
   queued: "in coda", running: "in corso", paused: "in pausa", conflict: "da decidere",
@@ -44,6 +45,7 @@ const PHASES = {
   upload: [["copy", "Trasmissione"], ["end", "Fine"]],
   compress: [["scan", "Analisi"], ["compress", "Compressione"], ["end", "Fine"]],
   extract: [["extract", "Estrazione"], ["end", "Fine"]],
+  sync: [["scan", "Analisi"], ["copy", "Copia"], ["verify", "Verifica"], ["end", "Fine"]],
 };
 const LIMITS = [0, 5, 10, 25, 50, 100, 200, 500];
 // speed samples kept per job: past this the older ones are thinned out
@@ -100,7 +102,7 @@ function route(job) {
   const from = job.info.sources.length ? show(parentOf(job.info.sources[0])) : "";
   if (job.op === "delete") return { from, to: job.info.permanent ? t("eliminazione definitiva") : t("Cestino") };
   if (job.op === "upload") return { from: t("questo computer"), to: show(job.info.dest) };
-  if (job.op === "extract") return { from: show(job.info.sources[0]), to: show(job.info.dest) };
+  if (job.op === "extract" || job.op === "sync") return { from: show(job.info.sources[0]), to: show(job.info.dest) };
   return { from, to: show(job.info.dest) };
 }
 
@@ -152,8 +154,7 @@ export function stats(job) {
   const rate = smooth || avg;
   const remaining = Math.max(0, totalWork - doneWork);
   const eta = job.state === "running" && rate > 0 && !p.scanning ? (remaining / rate) * 1000 : null;
-  const filesRate = elapsed > 1000 ? (p.files_done / elapsed) * 1000 : 0;
-  return { pct, now, avg, peak, eta, elapsed, byBytes, verify, filesRate, totalWork, doneWork };
+  return { pct, now, avg, peak, eta, elapsed, byBytes, verify, totalWork, doneWork };
 }
 
 function merge(update) {
@@ -564,6 +565,7 @@ class JobDialog {
         <div class="xf-current"></div>
         <div class="xf-conflict" hidden></div>
         <details class="xf-errors" hidden><summary></summary><ul></ul></details>
+        <details class="xf-queue" hidden><summary></summary><ul></ul></details>
         <div class="xf-summary" role="status" hidden></div>
       </div>
       <div class="xf-foot">
@@ -598,6 +600,12 @@ class JobDialog {
     $(".limit", this.dlg).onchange = async (e) => {
       // not changed on the NAS: back to the limit in force
       if (!(await control(this.job, "limit", { bps: +e.target.value * 1024 * 1024 }))) e.target.value = String(Math.round((this.job.limit || 0) / 1024 / 1024));
+    };
+    // the jobs waiting for this one: started at once, or called off
+    $(".xf-queue ul", this.dlg).onclick = (e) => {
+      const b = e.target.closest("button[data-a]");
+      const other = b && jobs.get(+b.dataset.id);
+      if (other) control(other, b.dataset.a);
     };
     $(".axis-toggle", this.dlg).onclick = () => {
       this.axis = this.axis === "progress" ? "time" : "progress";
@@ -833,16 +841,13 @@ class JobDialog {
 
     // stats
     const end = st.eta != null ? Date.now() + st.eta : null;
-    const methods = methodLabels();
     const cells = [
       [t("Velocità"), job.state !== "running" ? "—" : st.byBytes ? speed(st.now) : t("{n}/s", { n: decimal(st.now) }), true],
       [t("Media"), st.byBytes ? speed(st.avg) : "—"],
       [t("Picco"), st.byBytes ? speed(st.peak) : "—"],
-      [t("File al secondo"), st.filesRate ? decimal(st.filesRate) : "—"],
       [t("Trascorso"), duration(st.elapsed)],
       [t("Rimanente"), finished(job) ? "—" : st.eta != null ? "~ " + duration(st.eta) : p.scanning ? t("calcolo…") : "—", true],
       [t("Fine prevista"), end ? clock(end) : finished(job) && job.finished ? clock(job.finished) : "—"],
-      [t("Metodo"), methods[p.method] || "—"],
     ];
     setHTML($(".xf-stats", d), cells.map(([k, v, hl]) => `<div class="stat ${hl ? "hl" : ""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join(""));
 
@@ -858,6 +863,7 @@ class JobDialog {
     if (!tickOnly) {
       this.renderConflict(job);
       this.renderErrors(job);
+      this.renderQueue(job);
     }
 
     // the end
@@ -965,6 +971,21 @@ class JobDialog {
     if (this.errorsShown === errs.length) return;
     this.errorsShown = errs.length;
     $("ul", box).innerHTML = errs.map((e) => `<li><span title="${esc(e.path)}">${esc(e.path)}</span><span>${esc(e.msg)}</span></li>`).join("");
+  }
+
+  /** The other transfers waiting their turn, folded away until asked for. */
+  renderQueue(job) {
+    const box = $(".xf-queue", this.dlg);
+    const waiting = [...jobs.values()].filter((j) => j.id !== job.id && j.state === "queued").sort((a, b) => (a.created || 0) - (b.created || 0) || a.id - b.id);
+    box.hidden = !waiting.length;
+    if (!waiting.length) return;
+    $("summary", box).textContent = count(waiting.length, "trasferimento in coda", "trasferimenti in coda", int);
+    setHTML($("ul", box), waiting.map((j) => {
+      const r = route(j);
+      const op = OP[j.op] || OP.copy;
+      const start = j.source === "local" ? "" : `<button type="button" class="icon-btn" data-a="start" data-id="${j.id}" title="${t("Avvia ora")}" aria-label="${t("Avvia ora")}">${svg("play")}</button>`;
+      return `<li>${svg(op.icon)}<div class="tt"><b>${esc(title(j))}</b><small>${esc(r.from)} → ${esc(r.to || "")}</small></div>${start}<button type="button" class="icon-btn" data-a="cancel" data-id="${j.id}" title="${t("Annulla")}" aria-label="${t("Annulla")}">${svg("stop")}</button></li>`;
+    }).join(""));
   }
 
   /** The speed chart: throughput against progress (or time), with the average. */

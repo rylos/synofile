@@ -1660,6 +1660,16 @@ dependencies = [
 
 [[package]]
 name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
+]
+
+[[package]]
+name = "md-5"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
@@ -2085,7 +2095,7 @@ dependencies = [
  "ed25519-dalek 3.0.0-rc.1",
  "hex",
  "inout 0.2.5",
- "md-5",
+ "md-5 0.11.0",
  "p256 0.14.0-rc.14",
  "p384 0.14.0-rc.14",
  "p521 0.14.0-rc.14",
@@ -3347,7 +3357,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "hmac 0.13.0",
- "md-5",
+ "md-5 0.11.0",
  "md4",
  "num-derive",
  "num-traits",
@@ -3446,17 +3456,19 @@ dependencies = [
 
 [[package]]
 name = "synofile"
-version = "0.8.19"
+version = "0.9.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "crc32fast",
  "flate2",
  "libc",
+ "md-5 0.10.6",
  "nom-exif",
  "russh",
  "russh-sftp",
  "serde",
  "serde_json",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "smb",
  "tokio",

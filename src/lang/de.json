@@ -96,5 +96,22 @@
  "il Cestino di DSM non può prenderlo (raggiunto da un collegamento simbolico fuori dalla cartella condivisa?): non è stato eliminato": "der DSM-Papierkorb kann es nicht aufnehmen (über eine symbolische Verknüpfung außerhalb des freigegebenen Ordners erreicht?): es wurde nicht gelöscht",
  "la chiave del server non è ancora verificata: apri Modifica connessione e salva": "der Schlüssel des Servers ist noch nicht überprüft: öffne „Verbindung bearbeiten“ und speichere",
  "la chiave delle connessioni è danneggiata": "der Schlüssel der Verbindungen ist beschädigt",
- "pulizia dei file temporanei in corso: riprova tra poco": "die temporären Dateien werden noch bereinigt: versuche es gleich noch einmal"
+ "pulizia dei file temporanei in corso: riprova tra poco": "die temporären Dateien werden noch bereinigt: versuche es gleich noch einmal",
+ "il checksum si calcola solo sui file": "eine Prüfsumme wird nur für Dateien berechnet",
+ "il checksum non si calcola dentro un archivio": "innerhalb eines Archivs wird keine Prüfsumme berechnet",
+ "due elementi avrebbero lo stesso nome": "zwei Elemente bekämen denselben Namen",
+ "qui non si può rinominare": "hier kann nichts umbenannt werden",
+ "i duplicati si cercano in una cartella": "Duplikate werden in einem Ordner gesucht",
+ "i duplicati non si cercano dentro un archivio": "innerhalb eines Archivs werden keine Duplikate gesucht",
+ "dentro un archivio non si sincronizza": "innerhalb eines Archivs wird nicht synchronisiert",
+ "la sincronizzazione è tra cartelle del NAS": "synchronisiert wird zwischen Ordnern des NAS",
+ "si confrontano due cartelle": "verglichen werden zwei Ordner",
+ "sincronizzazione non valida": "ungültige Synchronisierung",
+ "una cartella non si sincronizza con una che contiene o che sta dentro di lei": "ein Ordner wird nicht mit einem Ordner darin oder darüber synchronisiert",
+ "troppi elementi in una volta (al massimo 10000)": "zu viele Elemente auf einmal (höchstens 10000)",
+ "cambiato dopo il confronto: saltato": "nach dem Vergleich geändert: übersprungen",
+ "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "der DSM-Papierkorb kann es nicht aufnehmen, daher wird es nicht ersetzt",
+ "non va nel Cestino, quindi non viene sostituito: {}": "kann nicht in den Papierkorb, daher wird es nicht ersetzt: {}",
+ "la destinazione non è più disponibile: disco scollegato o rete caduta?": "das Ziel ist nicht mehr verfügbar: Laufwerk getrennt oder Netzwerk ausgefallen?",
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "die Quelle ist nicht mehr verfügbar: Laufwerk getrennt oder Netzwerk ausgefallen?"
 }
