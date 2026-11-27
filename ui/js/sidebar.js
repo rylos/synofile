@@ -339,7 +339,11 @@ export const sidebarMethods = {
       };
     });
     el.querySelectorAll(".side-item").forEach((b) => {
-      b.onclick = () => this.pane.go(b.dataset.path);
+      b.onclick = () => {
+        this.pane.go(b.dataset.path);
+        // the sidebar is drawn again and the button clicked goes with it: the keys go to the list
+        this.pane.focus();
+      };
       b.onauxclick = (e) => e.button === 1 && this.newTab(b.dataset.path, false);
       b.oncontextmenu = (e) => {
         e.preventDefault();

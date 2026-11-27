@@ -96,7 +96,8 @@ pub fn list(dir: &Path) -> Result<Listing, ApiError> {
             continue;
         }
         let path = item.path();
-        let Ok(meta) = fs::symlink_metadata(&path) else { continue };
+        // from the folder's descriptor: no walk of the whole path for every entry
+        let Ok(meta) = item.metadata() else { continue };
         let mut e = entry(&path, name, &meta);
         e.thumb = e.kind == 'f' && thumbs.contains(&item.file_name());
         if e.kind == 'd' && e.name == crate::shares::RECYCLE {

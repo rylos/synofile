@@ -50,7 +50,7 @@ function mediaFacts(m) {
   const add = (label, value) => value && rows.push(`<dt>${label}</dt><dd>${value}</dd>`);
   if (m.width && m.height) {
     const mp = (m.width * m.height) / 1e6;
-    add(t("Dimensioni"), `${int(m.width)} × ${int(m.height)}${!m.duration && mp >= 1 ? ` <span style="color:var(--faint)">(${num(mp, 1)} MP)</span>` : ""}`);
+    add(t(m.duration ? "Risoluzione" : "Dimensioni"), `${int(m.width)} × ${int(m.height)}${!m.duration && mp >= 1 ? ` <span style="color:var(--faint)">(${num(mp, 1)} MP)</span>` : ""}`);
   }
   if (m.duration) add(t("Durata"), esc(duration(m.duration * 1000)));
   if (m.video) add(t("Video"), esc([m.video.codec, m.video.fps && `${num(m.video.fps, 2)} fps`, m.video.hdr].filter(Boolean).join(" · ")));
@@ -249,6 +249,8 @@ export class Pane {
     this.cursorShown = false;
     this.scroller.scrollTop = 0;
     await this.load();
+    // another folder was asked for meanwhile: its own go() finishes the job
+    if (this.path !== path) return;
     // going up selects the folder we came from, as file managers do
     const want = select || (previous.startsWith(path + "/") ? path + "/" + previous.slice(path.length + 1).split("/")[0] : null);
     if (want) this.selectPath(want);
@@ -277,10 +279,16 @@ export class Pane {
     this.colKey = null;
     const keep = new Set(this.sel);
     const cursorPath = this.visible[this.cursor]?.path;
+    const path = this.path;
+    const seq = this.loadSeq + 1;
     await this.load();
+    // the pane went elsewhere (or was reloaded again) meanwhile: the old selection is not for it
+    if (seq !== this.loadSeq || path !== this.path) return;
     if (this.flat) await this.runFlat();
     await this.reloadTree();
-    this.sel = new Set([...keep].filter((p) => this.visible.some((e) => e.path === p)));
+    if (seq !== this.loadSeq || path !== this.path) return;
+    const shown = new Set(this.visible.map((e) => e.path));
+    this.sel = new Set([...keep].filter((p) => shown.has(p)));
     const i = this.visible.findIndex((e) => e.path === cursorPath);
     if (i >= 0) this.cursor = i;
     this.render();
@@ -480,7 +488,10 @@ export class Pane {
     this.refilter();
     const i = this.visible.findIndex((e) => e.path === cur);
     if (i >= 0) this.cursor = i;
-    this.sel = new Set([...this.sel].filter((p) => this.visible.some((e) => e.path === p)));
+    if (this.sel.size) {
+      const shown = new Set(this.visible.map((e) => e.path));
+      this.sel = new Set([...this.sel].filter((p) => shown.has(p)));
+    }
     this.render();
     this.ensureVisible();
     this.app.selectionChanged(this);
@@ -515,7 +526,10 @@ export class Pane {
   async reloadTree() {
     if (!this.tree.size) return;
     const paths = [...this.tree.keys()];
+    const seq = this.loadSeq;
     const lists = await Promise.all(paths.map((p) => api.list(p).then((d) => d.entries, () => null)));
+    // another folder was opened meanwhile: these are not its folders
+    if (seq !== this.loadSeq) return;
     paths.forEach((p, k) => {
       if (lists[k]) this.tree.set(p, lists[k].map((x) => ({ ...x, path: joinPath(p, x.name) })));
       else this.tree.delete(p);
@@ -847,7 +861,11 @@ export class Pane {
     }
     this.crumbsEl.innerHTML = html;
     this.crumbsEl.querySelectorAll(".crumb").forEach((b) => {
-      b.onclick = () => this.go(b.dataset.path);
+      b.onclick = () => {
+        this.go(b.dataset.path);
+        // the crumbs are drawn again and the one clicked goes with them: the keys go to the list
+        this.focus();
+      };
       this.app.makeDropTarget(b, () => b.dataset.path);
     });
     // keep the end in sight when the path is long
@@ -1501,11 +1519,18 @@ export class Pane {
         const hit = new Set(base);
         if (this.view === "grid") {
           const cw = (s.clientWidth - 16) / this.perRow;
-          this.visible.forEach((e, i) => {
-            const cx = 8 + (i % this.perRow) * cw;
-            const cy = 4 + Math.floor(i / this.perRow) * this.tileH;
-            if (cx < r && cx + cw > l && cy < b && cy + this.tileH > tp) hit.add(e.path);
-          });
+          // only the rows of tiles the band crosses, not every item of the folder
+          const a = Math.max(0, Math.floor((tp - 4) / this.tileH));
+          const z = Math.min(Math.ceil(this.visible.length / this.perRow) - 1, Math.floor((b - 4) / this.tileH));
+          for (let row = a; row <= z; row++) {
+            for (let c = 0; c < this.perRow; c++) {
+              const e = this.visible[row * this.perRow + c];
+              if (!e) break;
+              const cx = 8 + c * cw;
+              const cy = 4 + row * this.tileH;
+              if (cx < r && cx + cw > l && cy < b && cy + this.tileH > tp) hit.add(e.path);
+            }
+          }
         } else {
           const rh = this.rowHeight();
           const a = Math.max(0, Math.floor(tp / rh));

@@ -83,11 +83,16 @@ export function openMenu(x, y, items) {
   const onDown = (e) => {
     if (!menu.contains(e.target)) closeMenu();
   };
+  // closed before the listeners went on (two menus asked for in a row): they never go on,
+  // or they would stay for good and take every key of the page
+  let closed = false;
   setTimeout(() => {
+    if (closed) return;
     document.addEventListener("mousedown", onDown, true);
     document.addEventListener("keydown", onKey, true);
   });
   menuClose = () => {
+    closed = true;
     document.removeEventListener("mousedown", onDown, true);
     document.removeEventListener("keydown", onKey, true);
     menu.hidden = true;

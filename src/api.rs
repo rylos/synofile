@@ -260,6 +260,12 @@ fn job_spec(shares: &[Share], conns: &[crate::remote::Conn], user: &str, body: &
             return Err(ApiError::bad_request(t!("la sincronizzazione è tra cartelle del NAS", "synchronization is between folders of the NAS")));
         }
     }
+    // one side reads all the sources: the NAS, or one server (a path of another side would
+    // be read as a path of the first one's)
+    let side = |p: &String| crate::remote::split(p).map(|r| r.ok().map(|(id, _)| id));
+    if body.sources.iter().any(|p| side(p) != side(&body.sources[0])) {
+        return Err(ApiError::bad_request(t!("gli elementi di un'operazione stanno tutti sul NAS o tutti su un server", "the items of one job are all on the NAS or all on one server")));
+    }
     if matches!(body.op, Op::Compress | Op::Extract) && body.sources.iter().chain(&body.dest).any(|p| crate::remote::split(p).is_some()) {
         return Err(ApiError::bad_request(t!("archivi: copia prima i file sul NAS", "archives: copy the files to the NAS first")));
     }
@@ -555,6 +561,9 @@ fn as_user(req: &Request, out: &mut impl Write, user: &User, shares: &[Share], c
         "download" => {
             if let Some(list) = req.param("paths") {
                 let paths: Vec<String> = serde_json::from_str(list).map_err(|_| ApiError::bad_request("paths"))?;
+                if paths.is_empty() {
+                    return Err(ApiError::bad_request("paths"));
+                }
                 let real = paths.iter().map(|p| Ok(shares::resolve(shares, p)?.real)).collect::<Result<Vec<_>, ApiError>>()?;
                 if real.len() == 1 && send_member(out, &real[0], false)? {
                     return Ok(());

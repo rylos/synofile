@@ -4,7 +4,7 @@
 import { t } from "./i18n.js";
 import { baseName } from "./format.js";
 import { archiveOf, readOnlyToast } from "./archive.js";
-import { $, openMenu } from "./ui.js";
+import { $, openMenu, errorToast } from "./ui.js";
 import { upload, fromDataTransfer } from "./uploads.js";
 
 const shareOf = (path) => path.split("/").filter(Boolean)[0] || "";
@@ -53,7 +53,13 @@ export const dndMethods = {
         this.transfer(op, paths, d);
       } else if (ev.dataTransfer.types.includes("Files")) {
         if (archiveOf(d)) return readOnlyToast();
-        const items = await fromDataTransfer(ev.dataTransfer);
+        let items;
+        try {
+          items = await fromDataTransfer(ev.dataTransfer);
+        } catch (e) {
+          // a file or a folder the browser could not read
+          return errorToast(e);
+        }
         upload(d, items, () => this.refreshFolders([d]));
       }
     });
@@ -101,7 +107,9 @@ export const dndMethods = {
     addEventListener("drop", (e) => {
       depth = 0;
       overlay.hidden = true;
-      e.preventDefault();
+      // files that missed every target are not opened by the browser; anything else (text
+      // dragged into a field) is left to its target
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
     });
   },
 };

@@ -158,7 +158,8 @@ fn ffmpeg(path: &Path) -> Option<String> {
     let mut input = std::ffi::OsString::from("file:");
     input.push(path.as_os_str());
     let mut child = Command::new(FFMPEG)
-        .args(["-hide_banner", "-nostdin", "-i"])
+        // the file alone: one that is really a playlist opens nothing on the network
+        .args(["-hide_banner", "-nostdin", "-protocol_whitelist", "file,crypto,data", "-i"])
         .arg(input)
         .env("PATH", "/usr/bin:/bin")
         .stdin(Stdio::null())

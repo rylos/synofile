@@ -113,5 +113,9 @@
  "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "Kosz DSM nie może go przyjąć, więc nie zostanie zastąpiony",
  "non va nel Cestino, quindi non viene sostituito: {}": "nie może trafić do Kosza, więc nie zostanie zastąpiony: {}",
  "la destinazione non è più disponibile: disco scollegato o rete caduta?": "miejsce docelowe nie jest już dostępne: odłączony dysk lub awaria sieci?",
- "l'origine non è più disponibile: disco scollegato o rete caduta?": "źródło nie jest już dostępne: odłączony dysk lub awaria sieci?"
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "źródło nie jest już dostępne: odłączony dysk lub awaria sieci?",
+ "al suo posto c'è un file con lo stesso nome": "na jego miejscu jest plik o tej samej nazwie",
+ "gli elementi di un'operazione stanno tutti sul NAS o tutti su un server": "elementy jednej operacji są wszystkie na NAS albo wszystkie na jednym serwerze",
+ "troppi trasferimenti in attesa: lasciane finire qualcuno prima": "za dużo transferów czeka: najpierw pozwól kilku się skończyć",
+ "un collegamento a una cartella non si segue: copia o sposta la cartella a cui porta": "dowiązanie do folderu nie jest śledzone: skopiuj lub przenieś folder, do którego prowadzi"
 }

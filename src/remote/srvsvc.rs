@@ -79,8 +79,13 @@ pub fn stub(resp: &[u8]) -> Result<Vec<u8>, String> {
     while at + 24 <= resp.len() {
         let ptype = resp[at + 2];
         let flen = u16::from_le_bytes([resp[at + 8], resp[at + 9]]) as usize;
+        // a fragment shorter than its own header: a broken answer (and it would never end)
+        if flen < 24 {
+            return Err("malformed rpc answer".into());
+        }
         if ptype == 3 {
-            return Err(format!("rpc fault 0x{:08x}", u32::from_le_bytes(resp[at + 24..at + 28].try_into().unwrap())));
+            let status = resp.get(at + 24..at + 28).map_or(0, |b| u32::from_le_bytes(b.try_into().unwrap()));
+            return Err(format!("rpc fault 0x{status:08x}"));
         }
         if ptype == 13 {
             return Err("bind refused".into());
@@ -130,6 +135,8 @@ pub fn parse(stub: &[u8]) -> Result<Vec<(String, u32, String)>, String> {
         return Ok(vec![]);
     }
     r.u32()?; // max count
+    // the server's count, never more than its answer can hold (12 bytes a share)
+    let n = n.min(stub.len() / 12);
     let mut heads = Vec::with_capacity(n);
     for _ in 0..n {
         heads.push((r.u32()?, r.u32()?, r.u32()?));
@@ -146,6 +153,22 @@ pub fn parse(stub: &[u8]) -> Result<Vec<(String, u32, String)>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_broken_answer_is_an_error_not_a_crash() {
+        // a fragment that says it is 4 bytes long
+        let mut short = pdu(2, 2, &[0; 8]);
+        short[8] = 4;
+        assert!(stub(&short).is_err());
+        // a fault cut before its status
+        assert!(stub(&pdu(3, 2, &[0; 8])).is_err());
+        // four thousand million shares in six words
+        let mut s = Vec::new();
+        for v in [1u32, 1, 0x20000, u32::MAX, 0x20004, u32::MAX] {
+            s.extend(v.to_le_bytes());
+        }
+        assert!(parse(&s).is_err());
+    }
 
     #[test]
     fn reads_a_share_list() {

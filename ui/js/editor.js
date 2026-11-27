@@ -17,16 +17,21 @@ import { svg } from "./icons.js";
 import { detect, loadSyntax, injectColors, Highlighter } from "./highlight.js";
 
 let open = null;
+// the file is being read for an editor about to open (F4 pressed twice opens one)
+let opening = false;
 
 /** Opens `path` in the editor; resolves when it closes, true if it was saved. */
 export async function editFile(path, { label = path } = {}) {
-  if (open) return false;
+  if (open || opening) return false;
+  opening = true;
   let data;
   try {
     data = await api.editOpen(path);
   } catch (e) {
     errorToast(e);
     return false;
+  } finally {
+    opening = false;
   }
   return new Promise((resolve) => (open = new Editor(path, label, data, resolve)));
 }
@@ -128,6 +133,9 @@ const indentTabs = ViewPlugin.fromClass(
 // ---------- micro's syntax colours ----------
 
 const marks = new Map();
+// a longer line (minified code, a dump on one line) keeps the text's colour: the rules go over
+// what is left of the line once for each string or comment in it, minutes on a megabyte
+const MAX_COLOR_LINE = 20000;
 const mark = (cls) => marks.get(cls) || marks.set(cls, Decoration.mark({ class: cls })).get(cls);
 
 /** Colours the visible lines; the state each line ends in is kept from the top down. */
@@ -151,7 +159,9 @@ function syntaxColors(def) {
       before(doc, n) {
         while (this.states.length < n - 1) {
           const k = this.states.length + 1;
-          this.states.push(hl.line(doc.line(k).text, k > 1 ? this.states[k - 2] : null, true).end);
+          const text = doc.line(k).text;
+          const prev = k > 1 ? this.states[k - 2] : null;
+          this.states.push(text.length > MAX_COLOR_LINE ? prev : hl.line(text, prev, true).end);
         }
         return n > 1 ? this.states[n - 2] : null;
       }
@@ -161,7 +171,13 @@ function syntaxColors(def) {
         for (const { from, to } of view.visibleRanges) {
           for (let pos = from; pos <= to; ) {
             const line = doc.lineAt(pos);
-            const { hl: changes, end } = hl.line(line.text, this.before(doc, line.number));
+            const prev = this.before(doc, line.number);
+            if (line.length > MAX_COLOR_LINE) {
+              if (this.states.length === line.number - 1) this.states.push(prev);
+              pos = line.to + 1;
+              continue;
+            }
+            const { hl: changes, end } = hl.line(line.text, prev);
             if (this.states.length === line.number - 1) this.states.push(end);
             const points = [...changes.entries()].sort((a, c) => a[0] - c[0]);
             for (let i = 0; i < points.length; i++) {
@@ -437,8 +453,13 @@ class Editor {
       for (const c = new SearchCursor(doc, query, a, b, norm); !c.next().done; ) out.push(c.value);
       return out;
     };
+    // forwards the first match is enough: never every match of a big file at each key typed
+    const first = (a, b) => {
+      const c = new SearchCursor(doc, query, a, b, norm);
+      return c.next().done ? null : c.value;
+    };
     let m;
-    if (dir > 0) m = all(from, doc.length)[0] || all(0, from)[0];
+    if (dir > 0) m = first(from, doc.length) || first(0, from);
     else m = all(0, from).pop() || all(from, doc.length).pop();
     if (!m) {
       this.message(t("«{q}» non trovato", { q: query }), true);

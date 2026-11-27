@@ -35,7 +35,12 @@ export function parseAddress(text) {
   let domain = "";
   const at = auth.lastIndexOf("@");
   if (at >= 0) {
-    user = decodeURIComponent(auth.slice(0, at));
+    user = auth.slice(0, at);
+    try {
+      user = decodeURIComponent(user);
+    } catch {
+      // a "%" that is no escape: the name as typed
+    }
     auth = auth.slice(at + 1);
     // smb://DOMAIN;user@host
     const semi = user.indexOf(";");

@@ -356,6 +356,8 @@ export function updateLocal(job) {
   if (job.samples.length > MAX_SAMPLES) job.samples = thin(job.samples);
   if (finished(job) && !seenFinished.has(job.id)) {
     seenFinished.add(job.id);
+    // nothing more to ask of it: its controller (and the files it holds) can go
+    local.delete(job.id);
     announce(job);
   }
   renderAll();

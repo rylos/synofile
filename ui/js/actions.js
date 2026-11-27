@@ -32,6 +32,15 @@ function sameNames(paths) {
   return false;
 }
 
+/** The archive an item is inside, or null: the archive file itself (once opened, its path is a root) is an ordinary file. */
+const insideArchive = (path) => {
+  const a = archiveOf(path);
+  return a && a.inner ? a : null;
+};
+
+// what cutPaths answers with nothing cut: only ever read
+const NOTHING_CUT = new Set();
+
 export const actionMethods = {
   /** A text file the editor opens: not in an archive, 8 MB at most. */
   editable(pane, entry) {
@@ -66,7 +75,7 @@ export const actionMethods = {
   download(entries) {
     if (!entries.length) return;
     // out of an archive only single files: the rest is extracted
-    if (archiveOf(entries[0].path) && (entries.length > 1 || isDirLike(entries[0]))) return toast(t("Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»"), { kind: "error" });
+    if (insideArchive(entries[0].path) && (entries.length > 1 || isDirLike(entries[0]))) return toast(t("Dentro un archivio si scaricano solo file singoli: per il resto usa «Copia in…»"), { kind: "error" });
     const a = document.createElement("a");
     a.href = api.download(entries.map((e) => e.path));
     a.download = "";
@@ -140,7 +149,10 @@ export const actionMethods = {
   },
 
   cutPaths() {
-    return this.clipboard?.op === "cut" ? new Set(this.clipboard.paths) : new Set();
+    const cb = this.clipboard;
+    if (cb?.op !== "cut") return NOTHING_CUT;
+    // made once for a clipboard: every paint of every pane asks (each scroll, each arrow key)
+    return (cb.set ??= new Set(cb.paths));
   },
 
   setClipboard(op, pane) {
@@ -167,11 +179,11 @@ export const actionMethods = {
   async transfer(op, paths, dest, verify = false) {
     if (!paths.length || !dest || dest === "/") return;
     if (archiveOf(dest)) return readOnlyToast();
-    const from = archiveOf(paths[0]);
+    const from = insideArchive(paths[0]);
     if (from) {
       // out of an archive: those items are extracted, never moved
-      if (paths.some((p) => archiveOf(p)?.root !== from.root)) return;
-      return transfers.start({ op: "extract", sources: [from.root], members: paths.map((p) => archiveOf(p).inner), dest, conflict: prefs.conflict === "ask" ? "rename" : prefs.conflict });
+      if (paths.some((p) => insideArchive(p)?.root !== from.root)) return;
+      return transfers.start({ op: "extract", sources: [from.root], members: paths.map((p) => insideArchive(p).inner), dest, conflict: prefs.conflict === "ask" ? "rename" : prefs.conflict });
     }
     if (paths.some((p) => dest === p || dest.startsWith(p + "/"))) return toast(t("Una cartella non può finire dentro sé stessa"), { kind: "error" });
     if (op === "move" && paths.every((p) => parentOf(p) === dest)) return;

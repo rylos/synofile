@@ -121,6 +121,11 @@ pub struct Entry {
     pub size: u64,
     pub mtime: i64,
     pub mode: u32,
+    /// reached through a link (a symbolic link, a junction) and listed as what it leads to:
+    /// a job never goes into such a folder (it may lead back above itself, and its items
+    /// are another folder's)
+    #[serde(skip)]
+    pub link: bool,
 }
 
 impl Entry {
@@ -159,6 +164,20 @@ pub trait Fs: Send {
         let _ = path;
         false
     }
+    /// Whether the item itself is a link (a symbolic link, a junction) rather than what it
+    /// leads to: listings show a link to a folder as a folder, and a deletion or a move must
+    /// not empty the folder it leads to.
+    fn is_link(&self, path: &[String]) -> bool {
+        let _ = path;
+        false
+    }
+}
+
+/// Whether a name a server lists is one a path can be made of: a single plain component.
+/// A server is not trusted with more: `../x` or `/etc/x`, joined to the folder a copy lands
+/// in, would lead out of it (and out of the archive a download is zipped into).
+pub fn plain_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\0'])
 }
 
 /// A remote path: `/:<id>/a/b` → ("id", ["a", "b"]).
@@ -538,6 +557,16 @@ fn other_err(e: impl std::fmt::Display) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_servers_names_are_single_components() {
+        for good in ["a.txt", "a b", ".hidden", "a\\b", "..."] {
+            assert!(plain_name(good), "{good:?}");
+        }
+        for bad in ["", ".", "..", "../x", "a/b", "/etc/passwd", "a\0b"] {
+            assert!(!plain_name(bad), "{bad:?}");
+        }
+    }
 
     #[test]
     fn splits_paths() {

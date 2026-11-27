@@ -690,4 +690,5 @@ export default {
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "In de detailweergave opent een pijl de map ter plekke (→ opent, ← sluit)",
   "Date sempre complete": "Altijd volledige datums",
   "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Dag, maand, jaar en tijd voor elk bestand (‘7 apr 2026 10:00’), in plaats van de tijd voor de laatste zes maanden en het jaar voor oudere",
+  "Risoluzione": "Resolutie",
 };

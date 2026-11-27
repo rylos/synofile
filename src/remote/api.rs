@@ -89,6 +89,9 @@ impl Edit {
         c.path = self.path.trim().replace('\\', "/").trim_matches('/').to_string();
         if !self.password.is_empty() {
             c.password = self.password;
+        } else if !same_server {
+            // the saved password was the other server's: never sent to this one
+            c.password.clear();
         }
         if self.forget_key || !same_server {
             c.host_key.clear();
@@ -403,7 +406,10 @@ pub fn usage(out: &mut impl Write, conns: &[Conn], paths: &[String]) -> Result<(
         match fs.list(&dir) {
             Ok(items) => {
                 for e in items {
-                    if e.is_dir() {
+                    if e.is_dir() && e.link {
+                        // a link to a folder: not gone into (it may lead back above)
+                        dirs += 1;
+                    } else if e.is_dir() {
                         stack.push(child(&dir, &e.name));
                     } else {
                         files += 1;
@@ -418,7 +424,8 @@ pub fn usage(out: &mut impl Write, conns: &[Conn], paths: &[String]) -> Result<(
 }
 
 fn download(req: &Request, out: &mut impl Write, conns: &[Conn], paths: &[String]) -> Result<(), ApiError> {
-    let (_, fs, first) = open(conns, &paths[0])?;
+    let Some(p0) = paths.first() else { return Err(ApiError::bad_request("paths")) };
+    let (_, fs, first) = open(conns, p0)?;
     let mut all = Vec::new();
     for p in paths {
         let (_, parts) = super::split(p).ok_or_else(|| ApiError::bad_request("invalid path"))??;
@@ -503,6 +510,10 @@ fn zip(out: &mut impl Write, fs: &dyn Fs, roots: &[Vec<String>]) -> Result<(), A
             let rel = path[base..].join("/");
             if e.is_dir() {
                 zip.add_dir(&rel, e.mtime, 0o40755)?;
+                // a link to a folder inside the tree is not gone into: it may lead back above
+                if e.link {
+                    continue;
+                }
                 let Ok(mut items) = fs.list(&path) else { continue };
                 items.sort_by(|a, b| b.name.cmp(&a.name));
                 stack.extend(items.into_iter().map(|i| (child(&path, &i.name), i)));

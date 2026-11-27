@@ -239,6 +239,14 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
     match request {
         Request::Ping => serde_json::json!({ "ok": true, "can_switch_user": crate::caps::effective() || crate::identity::dev() }),
         Request::Submit { user, spec, info } => {
+            // the table's cap holds when none of its jobs is finished too: no more are queued
+            {
+                let mut list = jobs.lock().unwrap();
+                prune(&mut list);
+                if list.len() >= MAX_JOBS {
+                    return serde_json::json!({ "error": t!("troppi trasferimenti in attesa: lasciane finire qualcuno prima", "too many transfers are waiting: let some of them finish first") });
+                }
+            }
             // the clean-up of a job a restart cut short removes every
             // temporary file in its destination: a new job writing there
             // now would lose its own
@@ -383,6 +391,15 @@ fn handle(request: Request, jobs: &Jobs, new_id: u64) -> serde_json::Value {
                     return serde_json::json!({ "error": t!("pulizia dei file temporanei in corso: riprova tra poco", "the temporary files are still being cleaned up: try again shortly") });
                 }
                 "retry" if job.view.state.finished() => {
+                    // refused while another job's clean-up works in its destination (as Submit
+                    // would), before the job leaves the list: it stays there for another Retry
+                    let dest = job.view.info.dest.clone();
+                    if let Some(dest) = &dest
+                        && list.iter().any(|j| j.cleaning && j.view.info.dest.as_deref().is_some_and(|d| overlaps(d, dest)))
+                    {
+                        return serde_json::json!({ "error": t!("pulizia dei file temporanei in corso: riprova tra poco", "the temporary files are still being cleaned up: try again shortly") });
+                    }
+                    let job = &list[index];
                     // the same job again, with the archive's password
                     let mut spec = job.spec.clone();
                     if password.is_some() {
@@ -479,9 +496,16 @@ fn start_worker(user: &User, spec: &Spec) -> io::Result<std::process::Child> {
         }
     }
     let mut child = cmd.spawn()?;
-    let mut line = serde_json::to_vec(spec).map_err(io::Error::other)?;
-    line.push(b'\n');
-    child.stdin.as_mut().ok_or_else(|| io::Error::other("no stdin"))?.write_all(&line)?;
+    let sent = serde_json::to_vec(spec).map_err(io::Error::other).and_then(|mut line| {
+        line.push(b'\n');
+        child.stdin.as_mut().ok_or_else(|| io::Error::other("no stdin"))?.write_all(&line)
+    });
+    if let Err(e) = sent {
+        // a worker that never got its job: ended and reaped, not left as a zombie
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(e);
+    }
     Ok(child)
 }
 

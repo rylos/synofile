@@ -1,3 +1,27 @@
+v0.9.5
+- Safer with servers (SMB, SFTP):
+  - A name a server lists can no longer lead a copy outside the destination folder.
+  - Copying, moving or deleting a folder on a server no longer goes into the links inside it: a move could empty the folder a link led to, and a link to its own parent went round for ever.
+  - Editing a connection to point at another server forgets the saved password instead of sending it there.
+  - A broken answer from a server is an error, not a crash.
+- Transfers:
+  - A temporary file of a running transfer is never removed by another one writing the same name.
+  - An extraction goes on after an item that fails, and says so when a file stands where a folder should go.
+  - Too many transfers waiting, or a Retry while temporary files are being cleaned up, answer "try again shortly".
+  - Archives with very large user ids and progress on archives past 4 GiB are right.
+- Undo of a move never overwrites what appeared at the origin since: it asks.
+- The interface:
+  - Answers for a folder already left are ignored (listing, opened folders, preview, comparison).
+  - Two menus opened in a row no longer take the keyboard for good.
+  - A setting changed just before a reload is kept.
+  - Files named like "constructor" get their icon.
+  - Text can be dropped into fields.
+  - In batch rename, plain-text replace takes "$" as it is.
+  - Long lines no longer freeze the editor.
+  - The rubber band and the cut marks stay fast in big folders.
+  - An archive file can be copied after it was opened.
+  - Videos show "Resolution" instead of "Dimensions".
+
 v0.9.4
 - NEW — Always full dates (Settings › List): day, month, year and time for every file ("7 Apr 2026 10:00"), instead of the time for the last six months and the year for older ones; the Modified column widens to fit.
 - The dates of the Modified column line up again: the spaces that align them were lost on the page, and month names now take one width in every language.

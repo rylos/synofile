@@ -113,5 +113,9 @@
  "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "la Corbeille de DSM ne peut pas le prendre, il n'est donc pas remplacé",
  "non va nel Cestino, quindi non viene sostituito: {}": "impossible de le mettre dans la Corbeille, il n'est donc pas remplacé : {}",
  "la destinazione non è più disponibile: disco scollegato o rete caduta?": "la destination n'est plus disponible : disque débranché ou réseau coupé ?",
- "l'origine non è più disponibile: disco scollegato o rete caduta?": "la source n'est plus disponible : disque débranché ou réseau coupé ?"
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "la source n'est plus disponible : disque débranché ou réseau coupé ?",
+ "al suo posto c'è un file con lo stesso nome": "un fichier du même nom est à sa place",
+ "gli elementi di un'operazione stanno tutti sul NAS o tutti su un server": "les éléments d'une opération sont tous sur le NAS ou tous sur un même serveur",
+ "troppi trasferimenti in attesa: lasciane finire qualcuno prima": "trop de transferts en attente : laissez-en d'abord quelques-uns se terminer",
+ "un collegamento a una cartella non si segue: copia o sposta la cartella a cui porta": "un lien vers un dossier n'est pas suivi : copiez ou déplacez le dossier vers lequel il mène"
 }

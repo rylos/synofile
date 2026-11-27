@@ -168,6 +168,7 @@ impl Sftp {
             size: if dir { 0 } else { a.size.unwrap_or(0) },
             mtime: a.mtime.unwrap_or(0) as i64,
             mode: a.permissions.unwrap_or(0o644) & 0o7777,
+            link: false,
         }
     }
 
@@ -183,7 +184,7 @@ impl Fs for Sftp {
         let mut out = Vec::new();
         for item in items {
             let name = item.file_name();
-            if name == "." || name == ".." {
+            if !super::plain_name(&name) {
                 continue;
             }
             let meta = item.metadata();
@@ -192,6 +193,7 @@ impl Fs for Sftp {
                 // a link to a folder opens like one
                 if let Ok(target) = self.rt.block_on(self.sftp.metadata(format!("{}/{}", path.trim_end_matches('/'), name))) {
                     e = Self::entry(name, &target);
+                    e.link = true;
                 }
             }
             out.push(e);
@@ -271,7 +273,12 @@ impl Fs for Sftp {
 
     fn space(&self, path: &[String]) -> Option<(u64, u64)> {
         let s = self.rt.block_on(self.sftp.fs_info(Self::path(path))).ok()??;
-        Some((s.blocks_avail * s.fragment_size, s.blocks * s.fragment_size))
+        // the server's numbers: never trusted to fit when multiplied
+        Some((s.blocks_avail.saturating_mul(s.fragment_size), s.blocks.saturating_mul(s.fragment_size)))
+    }
+
+    fn is_link(&self, path: &[String]) -> bool {
+        self.rt.block_on(self.sftp.symlink_metadata(Self::path(path))).is_ok_and(|a| a.is_symlink())
     }
 
     fn set_mtime(&self, path: &[String], mtime: i64) {

@@ -69,9 +69,13 @@ export function quickLook(pane, onDownload) {
       }
     } else if (kind === "image") {
       const img = stage(src);
+      // once: a path with "thumb" in it must not pass for the thumbnail's address
+      let fallback = !!e.thumb;
       img.onerror = () => {
-        if (e.thumb && !img.src.includes("thumb")) img.src = api.thumb(e.path, true);
-        else nothing(e);
+        if (fallback) {
+          fallback = false;
+          img.src = api.thumb(e.path, true);
+        } else nothing(e);
       };
     } else if (kind === "video") {
       body.append(h(`<video src="${src}" controls autoplay></video>`));
@@ -121,6 +125,8 @@ export function quickLook(pane, onDownload) {
     } else nothing(e);
   };
   const nothing = (e, why) => {
+    // a file left behind (its picture or its text failed late): the one shown now stays
+    if (files[index] !== e) return;
     viewer?.destroy();
     viewer = null;
     zoomBar.hidden = true;

@@ -690,4 +690,5 @@ export default {
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "Na visualização de detalhes uma seta abre a pasta no lugar (→ abre, ← fecha)",
   "Date sempre complete": "Datas sempre completas",
   "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Dia, mês, ano e hora para cada arquivo (“7 abr 2026 10:00”), em vez da hora para os últimos seis meses e do ano para os mais antigos",
+  "Risoluzione": "Resolução",
 };

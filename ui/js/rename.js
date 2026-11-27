@@ -65,7 +65,8 @@ export function newNames(list, o) {
     let stem = fill(o.name, e, i, o);
     let ext = isDirLike(e) ? "" : fill(o.ext, e, i, o);
     let name = ext ? `${stem}.${ext}` : stem;
-    if (re) name = name.replace(re, o.repl);
+    // plain text is put in as it is: "$&" and "$1" mean something in a regular expression only
+    if (re) name = o.regex ? name.replace(re, o.repl) : name.replace(re, () => o.repl);
     // initials for the name, not for the extension (Report.Pdf)
     const dot = name.lastIndexOf(".");
     if (o.kase === "title" && !isDirLike(e) && dot > 0) return (changeCase(name.slice(0, dot), "title") + name.slice(dot)).trim();

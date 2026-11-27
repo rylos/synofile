@@ -214,6 +214,16 @@ fn write_zeros(out: &mut impl Write, mut count: u64) -> io::Result<()> {
 
 fn octal(field: &mut [u8], value: u64) {
     let width = field.len() - 1;
+    if width < 21 && value >> (3 * width) != 0 {
+        // too big for the octal digits (a uid or gid past 2097151, of a directory service):
+        // base-256 (GNU extension), not the low digits of another number
+        let bytes = value.to_be_bytes();
+        let n = width.min(bytes.len());
+        field.fill(0);
+        field[0] = 0x80;
+        field[width + 1 - n..].copy_from_slice(&bytes[bytes.len() - n..]);
+        return;
+    }
     let text = format!("{value:0width$o}");
     let text = text.as_bytes();
     field[..width].copy_from_slice(&text[text.len() - width..]);
@@ -764,5 +774,15 @@ mod tests {
         assert_eq!(fs::read_to_string(unpack.join("b.txt")).unwrap().len(), 700);
         assert!(!unpack.join("Foto/2026/@eaDir").exists());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn tar_numbers_too_big_for_octal_go_base_256() {
+        let mut field = [0u8; 8];
+        octal(&mut field, 0o644);
+        assert_eq!(&field, b"0000644\0");
+        // a uid past seven octal digits: whole, not its low digits
+        octal(&mut field, 3_000_000);
+        assert_eq!(field, [0x80, 0, 0, 0, 0, 0x2d, 0xc6, 0xc0]);
     }
 }

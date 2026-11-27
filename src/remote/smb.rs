@@ -91,8 +91,8 @@ impl Smb {
         // disk shares only: no printers, no IPC$, no C$ and ADMIN$
         Ok(list
             .into_iter()
-            .filter(|(_, kind, _)| *kind == 0)
-            .map(|(name, _, _)| Entry { name, kind: 'd', size: 0, mtime: 0, mode: 0o755 })
+            .filter(|(name, kind, _)| *kind == 0 && super::plain_name(name))
+            .map(|(name, _, _)| Entry { name, kind: 'd', size: 0, mtime: 0, mode: 0o755, link: false })
             .collect())
     }
 }
@@ -104,7 +104,7 @@ fn entry(name: String, attrs: &FileAttributes, size: u64, mtime: FileTime) -> En
         (false, true) => 0o444,
         (false, false) => 0o644,
     };
-    Entry { name, kind: if dir { 'd' } else { 'f' }, size: if dir { 0 } else { size }, mtime: unix(mtime), mode }
+    Entry { name, kind: if dir { 'd' } else { 'f' }, size: if dir { 0 } else { size }, mtime: unix(mtime), mode, link: false }
 }
 
 fn unix(t: FileTime) -> i64 {
@@ -165,7 +165,7 @@ impl Fs for Smb {
         for item in items {
             let item = item.map_err(map)?;
             let name = item.file_name.to_string();
-            if name == "." || name == ".." {
+            if !super::plain_name(&name) {
                 continue;
             }
             out.push(entry(name, &item.file_attributes, item.end_of_file, item.last_write_time));
@@ -179,7 +179,7 @@ impl Fs for Smb {
             if let Some(share) = path.first() {
                 self.tree(share)?;
             }
-            return Ok(Entry { name: path.first().cloned().unwrap_or_else(|| self.server.clone()), kind: 'd', size: 0, mtime: 0, mode: 0o755 });
+            return Ok(Entry { name: path.first().cloned().unwrap_or_else(|| self.server.clone()), kind: 'd', size: 0, mtime: 0, mode: 0o755, link: false });
         }
         // the parent's listing, for this one name: one round trip
         let (name, parent) = path.split_last().unwrap();
@@ -281,7 +281,8 @@ impl Fs for Smb {
         close(r);
         let i = info?;
         let unit = i.sectors_per_allocation_unit as u64 * i.bytes_per_sector as u64;
-        Some((i.caller_available_allocation_units * unit, i.total_allocation_units * unit))
+        // the server's numbers: never trusted to fit when multiplied
+        Some((i.caller_available_allocation_units.saturating_mul(unit), i.total_allocation_units.saturating_mul(unit)))
     }
 
     fn set_mtime(&self, path: &[String], mtime: i64) {
@@ -304,6 +305,25 @@ impl Fs for Smb {
 
     fn is_top(&self, path: &[String]) -> bool {
         path.is_empty()
+    }
+
+    /// A reparse point (a symbolic link, a junction, a mount point), from the parent's listing.
+    fn is_link(&self, path: &[String]) -> bool {
+        let Some((name, parent)) = path.split_last() else { return false };
+        if parent.is_empty() {
+            return false;
+        }
+        let Ok(r) = self.open(parent, &FileCreateArgs::make_open_existing(FileAccessMask::new().with_generic_read(true))) else { return false };
+        let Resource::Directory(d) = r else {
+            close(r);
+            return false;
+        };
+        let found = d.query::<FileDirectoryInformation>(name).map_err(map).and_then(|mut it| match it.next() {
+            Some(item) => item.map_err(map),
+            None => Err(errno(libc::ENOENT)),
+        });
+        let _ = d.close();
+        found.is_ok_and(|item| item.file_attributes.reparse_point())
     }
 }
 

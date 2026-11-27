@@ -272,7 +272,7 @@ impl Engine {
                 *seen += 1;
                 let name = item.file_name();
                 let Ok(kind) = item.file_type() else { continue };
-                if leftover(&name, &kind, || item.metadata().ok(), std::time::SystemTime::now()) {
+                if leftover(&name, &kind, || item.metadata().ok(), std::time::SystemTime::now()) && !(kind.is_file() && in_use(&item.path())) {
                     let _ = if kind.is_dir() { fs::remove_dir_all(item.path()) } else { fs::remove_file(item.path()) };
                 } else if deep && kind.is_dir() {
                     stack.push(item.path());
@@ -839,8 +839,14 @@ impl Engine {
         let dir = target.parent().unwrap_or(Path::new("/"));
         let part = dir.join(part_name(target.file_name().unwrap_or_default()));
         let input = File::open(src)?;
+        // a leftover goes; the temporary file another live job holds (the same name copied
+        // into the same folder at once) is that job's, never taken away
+        if in_use(&part) {
+            return Err(io::Error::from_raw_os_error(libc::EBUSY));
+        }
         let _ = fs::remove_file(&part);
         let output = OpenOptions::new().write(true).create_new(true).mode(0o666).open(&part)?;
+        hold(&output);
         let result = self.fill(&input, &output, meta.len(), &part);
         let result = result.and_then(|()| {
             set_file_times(&output, meta);
@@ -999,7 +1005,10 @@ impl Engine {
         }
         let part = dest.join(part_name(target.file_name().unwrap_or_default()));
         let file = match OpenOptions::new().write(true).create_new(true).mode(0o666).open(&part) {
-            Ok(f) => f,
+            Ok(f) => {
+                hold(&f);
+                f
+            }
             Err(e) => {
                 self.fatal = Some(describe(&e));
                 return Ok(());
@@ -1276,7 +1285,12 @@ impl Engine {
             }
             {
                 let s = seen.lock().unwrap();
-                self.p.bytes_done = if tar { fed.load(Ordering::Relaxed).min(size) * self.p.bytes_total.max(1) / size.max(1) } else { self.p.bytes_total * s.percent / 100 };
+                // in 128 bits: the product of two sizes passes 64 from a 4 GiB archive on
+                self.p.bytes_done = if tar {
+                    (u128::from(fed.load(Ordering::Relaxed).min(size)) * u128::from(self.p.bytes_total.max(1)) / u128::from(size.max(1))) as u64
+                } else {
+                    (u128::from(self.p.bytes_total) * u128::from(s.percent) / 100) as u64
+                };
                 self.p.files_done = s.files;
                 self.p.current = s.last.clone();
             }
@@ -1739,6 +1753,24 @@ pub fn archive_stem(name: &str) -> &str {
     }
 }
 
+/// Marks a temporary file as this live job's: an exclusive lock held as long as the file
+/// is open, so another job copying the same name, or a clean-up, leaves it alone ([`in_use`]).
+pub(super) fn hold(file: &File) {
+    // SAFETY: a valid descriptor; a filesystem without locks just leaves it unmarked
+    unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+}
+
+/// Whether a temporary file is held by a job still running ([`hold`]).
+pub(super) fn in_use(path: &Path) -> bool {
+    let Ok(file) = OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(path) else { return false };
+    if !file.metadata().is_ok_and(|m| m.is_file()) {
+        return false;
+    }
+    // SAFETY: a valid descriptor; the lock (if taken) goes with the descriptor
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    rc != 0 && io::Error::last_os_error().raw_os_error() == Some(libc::EWOULDBLOCK)
+}
+
 /// Hidden name a copy is written under before the rename into place.
 fn part_name(name: &OsStr) -> OsString {
     crate::names::part_os(name, PART_TAG)
@@ -1753,10 +1785,22 @@ fn merge(from: &Path, to: &Path, policy: Policy) -> io::Result<()> {
     let Ok(old) = fs::symlink_metadata(to) else { return fs::rename(from, to) };
     let new = fs::symlink_metadata(from)?;
     if old.is_dir() && new.is_dir() {
+        // one item that fails does not keep the others out: the first error is the answer
+        let mut failed = None;
         for item in fs::read_dir(from)?.flatten() {
-            merge(&item.path(), &to.join(item.file_name()), policy)?;
+            if let Err(e) = merge(&item.path(), &to.join(item.file_name()), policy) {
+                failed.get_or_insert(e);
+            }
         }
-        return Ok(());
+        return failed.map_or(Ok(()), Err);
+    }
+    // a file where a folder is (or the other way round) is never replaced: said, not dropped
+    if policy == Policy::Overwrite && old.is_dir() != new.is_dir() {
+        return Err(io::Error::other(if old.is_dir() {
+            t!("al suo posto c'è una cartella con lo stesso nome", "a folder with the same name is in its place")
+        } else {
+            t!("al suo posto c'è un file con lo stesso nome", "a file with the same name is in its place")
+        }));
     }
     let replace = !old.is_dir()
         && !new.is_dir()

@@ -11,7 +11,7 @@ use std::io::{self, Read, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
-use super::{CHUNK, Cancelled, ConflictInfo, Decision, Engine, Op, Policy, Side, Step, part_name};
+use super::{CHUNK, Cancelled, ConflictInfo, Decision, Engine, Op, Policy, Side, Step, hold, in_use, part_name};
 use crate::fsops::describe;
 use crate::remote::{self, Fs};
 
@@ -22,6 +22,8 @@ struct Meta {
     file: bool,
     size: u64,
     mtime: i64,
+    /// a server's folder reached through a link (`remote::Entry::link`): never gone into
+    link: bool,
 }
 
 impl Meta {
@@ -40,12 +42,21 @@ fn parts(path: &Path) -> Vec<String> {
     remote::split_path(path).map(|(_, p)| p).unwrap_or_default()
 }
 
+/// Whether a job stays out of a server's folder because it is a link to one. Inside a tree,
+/// when the listing says so (`Meta::link`: it may lead back above itself). Where going into
+/// it removes things (`removing`: a move, a deletion) the server is asked too (one request a
+/// folder), for the item picked itself as well: an SMB listing does not tell a junction, and
+/// what it leads to is another folder's. A link picked itself to be copied is followed.
+fn linked(end: &End, path: &Path, meta: Meta, top: bool, removing: bool) -> bool {
+    meta.dir && ((!top && meta.link) || (removing && end.is_link(path)))
+}
+
 fn local_meta(m: &fs::Metadata) -> Meta {
-    Meta { dir: m.is_dir(), file: m.is_file(), size: if m.is_file() { m.len() } else { 0 }, mtime: m.mtime() }
+    Meta { dir: m.is_dir(), file: m.is_file(), size: if m.is_file() { m.len() } else { 0 }, mtime: m.mtime(), link: false }
 }
 
 fn remote_meta(e: &remote::Entry) -> Meta {
-    Meta { dir: e.kind == 'd', file: e.kind == 'f', size: e.size, mtime: e.mtime }
+    Meta { dir: e.kind == 'd', file: e.kind == 'f', size: e.size, mtime: e.mtime, link: e.link }
 }
 
 impl End {
@@ -60,6 +71,19 @@ impl End {
             End::Local => fs::symlink_metadata(p).map(|m| local_meta(&m)),
             End::Remote(fs) => fs.stat(&parts(p)).map(|e| remote_meta(&e)),
         }
+    }
+
+    /// Whether a folder of a server is a link to one (`Fs::is_link`): its items are the other
+    /// folder's, never removed through it. Local listings never follow a link.
+    fn is_link(&self, p: &Path) -> bool {
+        match self {
+            End::Local => false,
+            End::Remote(fs) => fs.is_link(&parts(p)),
+        }
+    }
+
+    fn is_remote(&self) -> bool {
+        matches!(self, End::Remote(_))
     }
 
     /// The items of a folder, sorted by name.
@@ -84,7 +108,12 @@ impl End {
 
     fn writer(&self, p: &Path) -> io::Result<Box<dyn remote::Writer>> {
         Ok(match self {
-            End::Local => Box::new(LocalWriter(OpenOptions::new().write(true).create_new(true).mode(0o666).open(p)?)),
+            End::Local => {
+                let file = OpenOptions::new().write(true).create_new(true).mode(0o666).open(p)?;
+                // this live job's: another job copying the same name into the same folder leaves it
+                hold(&file);
+                Box::new(LocalWriter(file))
+            }
             End::Remote(fs) => fs.writer(&parts(p), None)?,
         })
     }
@@ -203,7 +232,9 @@ impl Engine {
         };
         let sources = self.spec.sources.clone();
         let moving = self.spec.op == Op::Move;
-        let Some(src) = self.connect(&sources[0]) else { return Ok(()) };
+        // no source left (each refused one said so already): nothing to copy
+        let Some(first) = sources.first() else { return Ok(()) };
+        let Some(src) = self.connect(first) else { return Ok(()) };
         let Some(dst) = self.connect(&dest) else { return Ok(()) };
         let ends = Ends { src, dst };
 
@@ -290,8 +321,12 @@ impl Engine {
             if seen.is_multiple_of(64) {
                 self.checkpoint()?;
             }
+            let top = meta.is_none();
             let Some(meta) = meta.or_else(|| ends.src.stat(&path).ok()) else { continue };
-            if meta.dir {
+            if linked(&ends.src, &path, meta, top, self.spec.op == Op::Move) {
+                // not gone into: one item, refused when its turn comes (`r_item`)
+                self.p.files_total += 1;
+            } else if meta.dir {
                 self.p.dirs += 1;
                 if let Ok(items) = ends.src.list(&path) {
                     stack.extend(items.into_iter().map(|(n, m)| (path.join(n), Some(m))));
@@ -325,6 +360,15 @@ impl Engine {
         self.p.current_done = 0;
         let existing = ends.dst.stat(&target).ok();
         if meta.dir {
+            // a link to a folder inside the tree may lead back above itself (a copy without
+            // end), and a move removes what it copied: through a link that would empty the
+            // folder the link leads to. A link picked itself is copied as the folder it shows
+            if linked(&ends.src, src, meta, top, moving) {
+                self.error_msg(src, t!("un collegamento a una cartella non si segue: copia o sposta la cartella a cui porta", "a link to a folder is not followed: copy or move the folder it leads to"));
+                self.p.skipped += 1;
+                self.p.files_done += 1;
+                return Ok(());
+            }
             return self.r_dir(ends, src, meta, &target, existing, moving);
         }
         if !meta.file {
@@ -378,7 +422,11 @@ impl Engine {
         let mut stack = vec![root.to_path_buf()];
         while let Some(dir) = stack.pop() {
             for (n, m) in ends.src.list(&dir).unwrap_or_default() {
-                if m.dir {
+                if m.dir && m.link {
+                    // counted as one item by the scan, never gone into
+                    self.p.skipped += 1;
+                    self.p.files_done += 1;
+                } else if m.dir {
                     stack.push(dir.join(n));
                 } else {
                     self.r_skip(m);
@@ -474,6 +522,10 @@ impl Engine {
         let dir = target.parent().unwrap_or(Path::new("/"));
         let part = dir.join(part_name(target.file_name().unwrap_or_default()));
         let mut input = ends.src.reader(src)?;
+        // the temporary file another live job holds is that job's, never taken away
+        if !ends.dst.is_remote() && in_use(&part) {
+            return Err(io::Error::from_raw_os_error(libc::EBUSY));
+        }
         let _ = ends.dst.remove(&part, false);
         let mut output = ends.dst.writer(&part)?;
         let result = self.r_fill(&mut input, &mut output);
@@ -545,7 +597,8 @@ impl Engine {
 
     fn r_delete(&mut self) -> Step<()> {
         let sources = self.spec.sources.clone();
-        let Some(end) = self.connect(&sources[0]) else { return Ok(()) };
+        let Some(first) = sources.first() else { return Ok(()) };
+        let Some(end) = self.connect(first) else { return Ok(()) };
         self.p.phase = "delete".into();
         self.p.method = "delete".into();
         self.p.scanning = true;
@@ -560,9 +613,12 @@ impl Engine {
                 self.p.files_total = total;
                 self.checkpoint()?;
             }
+            let top = meta.is_none();
             let Some(meta) = meta.or_else(|| end.stat(&path).ok()) else { continue };
-            todo.push((path.clone(), meta.dir, false));
-            if meta.dir {
+            // a link to a folder goes as the link it is: what it leads to is not this job's
+            let folder = meta.dir && !linked(&end, &path, meta, top, true);
+            todo.push((path.clone(), folder, false));
+            if folder {
                 match end.list(&path) {
                     Ok(items) => stack.extend(items.into_iter().map(|(n, m)| (path.join(n), Some(m)))),
                     Err(e) => self.error(&path, &e),

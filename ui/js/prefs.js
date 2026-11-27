@@ -90,6 +90,20 @@ export async function loadRemote(remote) {
 }
 
 let timer = 0;
+// a change not sent to the NAS yet
+let pending = false;
+/** Sends the preferences now; `leaving`: the page is going away, the request must outlive it. */
+function push(leaving = false) {
+  clearTimeout(timer);
+  pending = false;
+  // a keepalive body over the browser's limit is refused: sent the usual way then
+  const keepalive = leaving && new TextEncoder().encode(JSON.stringify(prefs)).length < 60000;
+  api.savePrefs(prefs, keepalive).catch(() => {});
+}
+// a reload or a closed tab right after a change: without this the NAS keeps the old value,
+// and gives it back at the next start
+addEventListener("pagehide", () => pending && push(true));
+document.addEventListener("visibilitychange", () => document.hidden && pending && push(true));
 /**
  * Changes and keeps preferences. Listeners hear only the keys whose value
  * really changed, so remembering the tabs after each folder opened does
@@ -107,7 +121,8 @@ export function save(patch) {
     localStorage.setItem(LOCAL, JSON.stringify(prefs));
   } catch {}
   clearTimeout(timer);
-  timer = setTimeout(() => api.savePrefs(prefs).catch(() => {}), 700);
+  pending = true;
+  timer = setTimeout(push, 700);
   if (keys.length || !patch) listeners.forEach((fn) => fn(patch ? keys : null));
 }
 

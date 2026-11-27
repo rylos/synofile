@@ -690,4 +690,5 @@ export default {
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "W widoku szczegółów strzałka rozwija folder w miejscu (→ rozwija, ← zwija)",
   "Date sempre complete": "Zawsze pełne daty",
   "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Dzień, miesiąc, rok i godzina dla każdego pliku („7 kwi 2026 10:00”), zamiast godziny dla ostatnich sześciu miesięcy i roku dla starszych",
+  "Risoluzione": "Rozdzielczość",
 };

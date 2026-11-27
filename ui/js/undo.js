@@ -2,6 +2,7 @@
 // first. What a deletion threw away is in DSM's Recycle Bin instead.
 
 import { api } from "./api.js";
+import { prefs } from "./prefs.js";
 import { t, tn, count } from "./i18n.js";
 import { int, baseName, parentOf, joinPath } from "./format.js";
 import { toast, errorToast, confirmBox } from "./ui.js";
@@ -75,7 +76,10 @@ export function recordTransfer(id, op, sources, dest, fresh) {
           if (!byParent.has(parent)) byParent.set(parent, []);
           byParent.get(parent).push(now);
         }
-        for (const [parent, list] of byParent) await transfers.start({ op: "move", sources: list, dest: parent });
+        // never over what appeared at the origin since, whatever the usual answer to a name
+        // taken: "overwrite" and "newer" ask here
+        const conflict = prefs.conflict === "overwrite" || prefs.conflict === "newer" ? "ask" : prefs.conflict;
+        for (const [parent, list] of byParent) await transfers.start({ op: "move", sources: list, dest: parent, conflict });
         return;
       }
       // a copy: its new items go to the Recycle Bin, never those that were there before

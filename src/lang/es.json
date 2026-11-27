@@ -113,5 +113,9 @@
  "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "la Papelera de DSM no puede tomarlo, así que no se reemplaza",
  "non va nel Cestino, quindi non viene sostituito: {}": "no puede ir a la Papelera, así que no se reemplaza: {}",
  "la destinazione non è più disponibile: disco scollegato o rete caduta?": "el destino ya no está disponible: ¿disco desconectado o red caída?",
- "l'origine non è più disponibile: disco scollegato o rete caduta?": "el origen ya no está disponible: ¿disco desconectado o red caída?"
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "el origen ya no está disponible: ¿disco desconectado o red caída?",
+ "al suo posto c'è un file con lo stesso nome": "en su lugar hay un archivo con el mismo nombre",
+ "gli elementi di un'operazione stanno tutti sul NAS o tutti su un server": "los elementos de una operación están todos en el NAS o todos en un servidor",
+ "troppi trasferimenti in attesa: lasciane finire qualcuno prima": "demasiadas transferencias en espera: deja que terminen algunas primero",
+ "un collegamento a una cartella non si segue: copia o sposta la cartella a cui porta": "un enlace a una carpeta no se sigue: copia o mueve la carpeta a la que lleva"
 }

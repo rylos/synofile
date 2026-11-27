@@ -113,5 +113,9 @@
  "il Cestino di DSM non può prenderlo, quindi non viene sostituito": "de Prullenbak van DSM kan het niet opnemen, dus het wordt niet vervangen",
  "non va nel Cestino, quindi non viene sostituito: {}": "kan niet naar de Prullenbak, dus het wordt niet vervangen: {}",
  "la destinazione non è più disponibile: disco scollegato o rete caduta?": "de bestemming is niet meer beschikbaar: schijf losgekoppeld of netwerk weg?",
- "l'origine non è più disponibile: disco scollegato o rete caduta?": "de bron is niet meer beschikbaar: schijf losgekoppeld of netwerk weg?"
+ "l'origine non è più disponibile: disco scollegato o rete caduta?": "de bron is niet meer beschikbaar: schijf losgekoppeld of netwerk weg?",
+ "al suo posto c'è un file con lo stesso nome": "op die plek staat een bestand met dezelfde naam",
+ "gli elementi di un'operazione stanno tutti sul NAS o tutti su un server": "de items van één bewerking staan allemaal op de NAS of allemaal op één server",
+ "troppi trasferimenti in attesa: lasciane finire qualcuno prima": "te veel overdrachten wachten: laat er eerst een paar klaar zijn",
+ "un collegamento a una cartella non si segue: copia o sposta la cartella a cui porta": "een koppeling naar een map wordt niet gevolgd: kopieer of verplaats de map waarnaar ze leidt"
 }

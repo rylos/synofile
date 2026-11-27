@@ -690,4 +690,5 @@ export default {
   "Nella vista dettagli una freccia apre la cartella sul posto (→ apre, ← chiude)": "In der Detailansicht öffnet ein Pfeil den Ordner an Ort und Stelle (→ öffnet, ← schließt)",
   "Date sempre complete": "Immer vollständige Daten",
   "Giorno, mese, anno e ora per ogni file («7 apr 2026 10:00»), invece dell'ora per gli ultimi sei mesi e dell'anno per i più vecchi": "Tag, Monat, Jahr und Uhrzeit für jede Datei („7. Apr. 2026 10:00“), statt der Uhrzeit für die letzten sechs Monate und des Jahres für ältere",
+  "Risoluzione": "Auflösung",
 };
